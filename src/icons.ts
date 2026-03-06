@@ -1,22 +1,17 @@
-// Contact icon (address-book) — dark fill for light backgrounds
-const CONTACT_LIGHT =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%2342526e'%3E%3Cpath d='M384 48c8.8 0 16 7.2 16 16l0 384c0 8.8-7.2 16-16 16L96 464c-8.8 0-16-7.2-16-16L80 64c0-8.8 7.2-16 16-16l288 0zM96 0C60.7 0 32 28.7 32 64l0 384c0 35.3 28.7 64 64 64l288 0c35.3 0 64-28.7 64-64l0-384c0-35.3-28.7-64-64-64L96 0zM240 248a56 56 0 1 0 0-112 56 56 0 1 0 0 112zm-32 40c-44.2 0-80 35.8-80 80 0 8.8 7.2 16 16 16l192 0c8.8 0 16-7.2 16-16 0-44.2-35.8-80-80-80l-64 0zM512 80c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64zM496 192c-8.8 0-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64c0-8.8-7.2-16-16-16zm16 144c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64z'/%3E%3C/svg%3E";
+const BASE = 'https://miquelferrerllompart.github.io/trello-link-holded-power-up/icons';
 
-// Contact icon — white fill for dark backgrounds
-const CONTACT_DARK =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' fill='%23ffffff'%3E%3Cpath d='M384 48c8.8 0 16 7.2 16 16l0 384c0 8.8-7.2 16-16 16L96 464c-8.8 0-16-7.2-16-16L80 64c0-8.8 7.2-16 16-16l288 0zM96 0C60.7 0 32 28.7 32 64l0 384c0 35.3 28.7 64 64 64l288 0c35.3 0 64-28.7 64-64l0-384c0-35.3-28.7-64-64-64L96 0zM240 248a56 56 0 1 0 0-112 56 56 0 1 0 0 112zm-32 40c-44.2 0-80 35.8-80 80 0 8.8 7.2 16 16 16l192 0c8.8 0 16-7.2 16-16 0-44.2-35.8-80-80-80l-64 0zM512 80c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64zM496 192c-8.8 0-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64c0-8.8-7.2-16-16-16zm16 144c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64z'/%3E%3C/svg%3E";
+// Contact icon (address-book)
+// light = dark fill for light backgrounds, dark = white fill for dark backgrounds
+export const CONTACT_ICON = {
+  dark: `${BASE}/contact-dark.svg`,
+  light: `${BASE}/contact-light.svg`,
+};
 
-// Project icon (diagram-subtask) — dark fill for light backgrounds
-const PROJECT_LIGHT =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512' fill='%2342526e'%3E%3Cpath d='M384 80c8.8 0 16 7.2 16 16l0 64c0 8.8-7.2 16-16 16L64 176c-8.8 0-16-7.2-16-16l0-64c0-8.8 7.2-16 16-16l320 0zM64 32C28.7 32 0 60.7 0 96l0 64c0 35.3 28.7 64 64 64l8 0 0 96c0 48.6 39.4 88 88 88l32 0 0 8c0 35.3 28.7 64 64 64l128 0c35.3 0 64-28.7 64-64l0-64c0-35.3-28.7-64-64-64l-128 0c-35.3 0-64 28.7-64 64l0 8-32 0c-22.1 0-40-17.9-40-40l0-96 264 0c35.3 0 64-28.7 64-64l0-64c0-35.3-28.7-64-64-64L64 32zM384 336c8.8 0 16 7.2 16 16l0 64c0 8.8-7.2 16-16 16l-128 0c-8.8 0-16-7.2-16-16l0-64c0-8.8 7.2-16 16-16l128 0z'/%3E%3C/svg%3E";
+// Project icon (diagram-subtask)
+export const PROJECT_ICON = {
+  dark: `${BASE}/project-dark.svg`,
+  light: `${BASE}/project-light.svg`,
+};
 
-// Project icon — white fill for dark backgrounds
-const PROJECT_DARK =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 448 512' fill='%23ffffff'%3E%3Cpath d='M384 80c8.8 0 16 7.2 16 16l0 64c0 8.8-7.2 16-16 16L64 176c-8.8 0-16-7.2-16-16l0-64c0-8.8 7.2-16 16-16l320 0zM64 32C28.7 32 0 60.7 0 96l0 64c0 35.3 28.7 64 64 64l8 0 0 96c0 48.6 39.4 88 88 88l32 0 0 8c0 35.3 28.7 64 64 64l128 0c35.3 0 64-28.7 64-64l0-64c0-35.3-28.7-64-64-64l-128 0c-35.3 0-64 28.7-64 64l0 8-32 0c-22.1 0-40-17.9-40-40l0-96 264 0c35.3 0 64-28.7 64-64l0-64c0-35.3-28.7-64-64-64L64 32zM384 336c8.8 0 16 7.2 16 16l0 64c0 8.8-7.2 16-16 16l-128 0c-8.8 0-16-7.2-16-16l0-64c0-8.8 7.2-16 16-16l128 0z'/%3E%3C/svg%3E";
-
-export const CONTACT_ICON = { dark: CONTACT_DARK, light: CONTACT_LIGHT };
-export const PROJECT_ICON = { dark: PROJECT_DARK, light: PROJECT_LIGHT };
-
-// Holded logo — for card-back-section (requires plain string, not { dark, light })
-export const HOLDED_ICON_URL =
-  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='19' height='18' viewBox='0 0 19 18' fill='%2342526e'%3E%3Cpath d='M13.863 11.545L5.377 1.557C5.275 1.448 5.217 1.304 5.217 1.155C5.217 0.995 5.276 0.863 5.393 0.765C5.51 0.667 5.663 0.617 5.863 0.617H13.782C13.941 0.612 14.099 0.643 14.244 0.708C14.388 0.773 14.517 0.869 14.619 0.991L18.794 5.767C18.904 5.911 18.962 6.098 18.97 6.332C18.978 6.566 18.919 6.753 18.794 6.897L14.725 11.462C14.616 11.591 14.462 11.673 14.295 11.692C14.115 11.719 13.974 11.669 13.865 11.544L13.863 11.545ZM9.043 16.968L0.177 6.738C0.052 6.594-0.007 6.407 0.001 6.177C0.002 5.971 0.074 5.772 0.204 5.612L3.06 2.282C3.205 2.122 3.357 2.04 3.518 2.04C3.714 2.04 3.878 2.122 4.003 2.282L12.924 12.754C13.03 12.879 13.084 13.011 13.084 13.144C13.084 13.277 13.033 13.409 12.924 13.534L9.907 16.969C9.86 17.036 9.797 17.091 9.724 17.128C9.651 17.166 9.57 17.184 9.488 17.183C9.402 17.183 9.318 17.164 9.241 17.127C9.163 17.09 9.095 17.036 9.042 16.969L9.043 16.968Z'/%3E%3C/svg%3E";
+// Holded logo — for card-back-section (requires plain string)
+export const HOLDED_ICON_URL = `${BASE}/holded-light.svg`;
