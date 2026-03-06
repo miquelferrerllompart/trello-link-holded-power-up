@@ -25,15 +25,28 @@ export default {
 
     const response = await fetch(`${HOLDED_BASE}${path}`, {
       method: 'GET',
-      headers: { key: apiKey },
+      headers: {
+        key: apiKey,
+        'Accept': 'application/json',
+      },
     });
 
     const body = await response.text();
+    const contentType = response.headers.get('Content-Type') || '';
+
+    // Holded returns HTML when auth fails — detect and return a proper JSON error
+    if (contentType.includes('text/html')) {
+      return new Response(JSON.stringify({ error: 'Invalid API key or unauthorized' }), {
+        status: 401,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(body, {
       status: response.status,
       headers: {
         ...CORS_HEADERS,
-        'Content-Type': response.headers.get('Content-Type') || 'application/json',
+        'Content-Type': contentType || 'application/json',
       },
     });
   },
