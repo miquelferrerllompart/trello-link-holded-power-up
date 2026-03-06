@@ -38,6 +38,8 @@ export interface TrelloContext {
   closePopup(): void;
   sizeTo(selector: string | HTMLElement): Promise<void>;
   arg(name: string, defaultValue?: string): string;
+  filterCards(filter: unknown): void;
+  signUrl(url: string): string;
 }
 
 declare global {
