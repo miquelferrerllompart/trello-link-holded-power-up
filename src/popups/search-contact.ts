@@ -47,7 +47,7 @@ function renderResults(contacts: HoldedContact[]) {
       <div class="result-avatar">${initials}</div>
       <div class="result-info">
         <div class="result-name">${c.name}</div>
-        ${c.email ? `<div class="result-email">${c.email}</div>` : ''}
+        ${c.email || c.vatnumber ? `<div class="result-email">${[c.vatnumber, c.email].filter(Boolean).join(' · ')}</div>` : ''}
       </div>
     </div>`;
       }
