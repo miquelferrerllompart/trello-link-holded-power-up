@@ -15,7 +15,8 @@
       "Bash(git commit -m \"Add GitHub Pages deploy workflow and configure base path:*)",
       "Bash(git push)",
       "Bash(npx wrangler --version)",
-      "Bash(npx wrangler deploy)"
+      "Bash(npx wrangler deploy)",
+      "Bash(npx wrangler pages deploy dist --project-name trello-link-holded-power-up --commit-dirty=true)"
     ]
   }
 }

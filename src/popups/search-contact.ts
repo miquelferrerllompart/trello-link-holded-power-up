@@ -1,5 +1,7 @@
 import { searchContacts } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
+import { addTag } from '../description-tags';
+import { updateCardDescription } from '../trello-api';
 import type { HoldedContact, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe() as unknown as TrelloContext;
@@ -57,6 +59,11 @@ function renderResults(contacts: HoldedContact[]) {
       data.contactId = id;
       data.contactName = name;
       await setCardData(t, data);
+      try {
+        const card = await t.card('id', 'desc');
+        const newDesc = addTag(card.desc || '', 'contact', name);
+        await updateCardDescription(t, newDesc);
+      } catch { /* description sync is best-effort */ }
       t.closePopup();
     });
   });

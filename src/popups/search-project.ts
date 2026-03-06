@@ -1,5 +1,7 @@
 import { getProjects } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
+import { addTag } from '../description-tags';
+import { updateCardDescription } from '../trello-api';
 import type { HoldedProject, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe() as unknown as TrelloContext;
@@ -54,6 +56,11 @@ function renderResults(projects: HoldedProject[]) {
       data.projectId = id;
       data.projectName = name;
       await setCardData(t, data);
+      try {
+        const card = await t.card('id', 'desc');
+        const newDesc = addTag(card.desc || '', 'project', name);
+        await updateCardDescription(t, newDesc);
+      } catch { /* description sync is best-effort */ }
       t.closePopup();
     });
   });

@@ -38,8 +38,15 @@ export interface TrelloContext {
   closePopup(): void;
   sizeTo(selector: string | HTMLElement): Promise<void>;
   arg(name: string, defaultValue?: string): string;
-  filterCards(filter: unknown): void;
   signUrl(url: string): string;
+  card(...fields: string[]): Promise<{ id: string; desc: string; [key: string]: unknown }>;
+  getRestApi(): TrelloRestApi;
+}
+
+export interface TrelloRestApi {
+  authorize(opts: { expiration: string; scope: string }): Promise<void>;
+  isAuthorized(): Promise<boolean>;
+  getToken(): Promise<string | null>;
 }
 
 declare global {
