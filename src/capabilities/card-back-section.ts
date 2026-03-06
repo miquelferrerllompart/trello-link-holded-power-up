@@ -1,4 +1,4 @@
-export async function getCardBackSection(t: any, icon: string) {
+export async function getCardBackSection(t: any, icon: { dark: string; light: string }) {
   const data = await t.get('card', 'shared', 'holdedData');
 
   if (!data || (!data.contactName && !data.projectName)) return null;

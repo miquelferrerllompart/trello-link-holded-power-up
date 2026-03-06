@@ -1,9 +1,10 @@
 import type { TrelloContext } from '../types';
+import { CONTACT_ICON } from '../icons';
 
-export function getBoardButtons(t: unknown, icon: string) {
+export function getBoardButtons(t: unknown) {
   return [
     {
-      icon,
+      icon: CONTACT_ICON,
       text: 'Configurar Holded',
       callback: (ctx: TrelloContext) => {
         ctx.popup({
