@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buscar cliente</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 8px; }
+    .search-box { width: 100%; padding: 8px; border: 1px solid #dfe1e6; border-radius: 4px; font-size: 14px; box-sizing: border-box; }
+    .results { margin-top: 8px; max-height: 300px; overflow-y: auto; }
+    .result-item { padding: 8px; border-bottom: 1px solid #f0f0f0; cursor: pointer; border-radius: 4px; }
+    .result-item:hover { background: #e4f0f6; }
+    .result-name { font-weight: 500; }
+    .result-email { font-size: 12px; color: #6b778c; }
+    .loading, .error, .empty { padding: 16px; text-align: center; color: #6b778c; font-size: 14px; }
+    .error { color: #de350b; }
+  </style>
+</head>
+<body>
+  <input type="text" class="search-box" id="search" placeholder="Buscar cliente por nombre, email o NIF..." autofocus />
+  <div class="results" id="results"></div>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+  <script type="module" src="./search-contact.ts"></script>
+</body>
+</html>
