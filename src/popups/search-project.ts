@@ -2,6 +2,7 @@ import { getProjects } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
+import { fuzzyFilter } from '../search-utils';
 import type { HoldedProject, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: '81d86f6c21c827e54947d36746561233', appName: 'Holded' }) as unknown as TrelloContext;
@@ -19,17 +20,18 @@ async function loadProjects(): Promise<HoldedProject[]> {
 }
 
 function filterProjects(projects: HoldedProject[], query: string): HoldedProject[] {
-  if (!query) return projects;
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  return projects.filter((p) => {
-    const text = [p.name, p.status].filter(Boolean).join(' ').toLowerCase();
-    return words.every((w) => text.includes(w));
-  });
+  return fuzzyFilter(projects, query, (p) =>
+    [p.name, p.status].filter(Boolean).join(' ')
+  );
 }
 
 function renderResults(projects: HoldedProject[]) {
   if (projects.length === 0) {
-    resultsDiv.innerHTML = '<div class="empty">No se encontraron proyectos.</div>';
+    resultsDiv.innerHTML = '<div class="empty">No se encontraron proyectos.</div>' +
+      '<button class="create-btn" id="create-project-btn">+ Crear proyecto en Holded</button>';
+    document.getElementById('create-project-btn')!.addEventListener('click', () => {
+      window.open('https://app.holded.com/projects/view', '_blank');
+    });
     return;
   }
   resultsDiv.innerHTML = projects
@@ -47,6 +49,14 @@ function renderResults(projects: HoldedProject[]) {
       }
     )
     .join('');
+
+  if (projects.length <= 3) {
+    resultsDiv.insertAdjacentHTML('beforeend',
+      '<button class="create-btn" id="create-project-btn">+ Crear proyecto en Holded</button>');
+    document.getElementById('create-project-btn')!.addEventListener('click', () => {
+      window.open('https://app.holded.com/projects/view', '_blank');
+    });
+  }
 
   resultsDiv.querySelectorAll('.result-item').forEach((el) => {
     el.addEventListener('click', async () => {

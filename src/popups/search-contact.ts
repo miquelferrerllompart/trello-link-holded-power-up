@@ -2,6 +2,7 @@ import { searchContacts } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
+import { fuzzyFilter } from '../search-utils';
 import type { HoldedContact, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: '81d86f6c21c827e54947d36746561233', appName: 'Holded' }) as unknown as TrelloContext;
@@ -19,20 +20,18 @@ async function loadContacts(): Promise<HoldedContact[]> {
 }
 
 function filterContacts(contacts: HoldedContact[], query: string): HoldedContact[] {
-  if (!query) return contacts;
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  return contacts.filter((c) => {
-    const text = [c.name, c.email, c.code, c.tradeName, c.vatnumber]
-      .filter(Boolean)
-      .join(' ')
-      .toLowerCase();
-    return words.every((w) => text.includes(w));
-  });
+  return fuzzyFilter(contacts, query, (c) =>
+    [c.name, c.email, c.code, c.tradeName, c.vatnumber].filter(Boolean).join(' ')
+  );
 }
 
 function renderResults(contacts: HoldedContact[]) {
   if (contacts.length === 0) {
-    resultsDiv.innerHTML = '<div class="empty">No se encontraron clientes.</div>';
+    resultsDiv.innerHTML = '<div class="empty">No se encontraron clientes.</div>' +
+      '<button class="create-btn" id="create-contact-btn">+ Crear contacto en Holded</button>';
+    document.getElementById('create-contact-btn')!.addEventListener('click', () => {
+      window.open('https://app.holded.com/contacts', '_blank');
+    });
     return;
   }
   resultsDiv.innerHTML = contacts
@@ -50,6 +49,14 @@ function renderResults(contacts: HoldedContact[]) {
       }
     )
     .join('');
+
+  if (contacts.length <= 3) {
+    resultsDiv.insertAdjacentHTML('beforeend',
+      '<button class="create-btn" id="create-contact-btn">+ Crear contacto en Holded</button>');
+    document.getElementById('create-contact-btn')!.addEventListener('click', () => {
+      window.open('https://app.holded.com/contacts', '_blank');
+    });
+  }
 
   resultsDiv.querySelectorAll('.result-item').forEach((el) => {
     el.addEventListener('click', async () => {

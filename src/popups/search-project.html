@@ -81,6 +81,21 @@
       font-size: 14px;
     }
     .error { color: #ae2e24; }
+    .create-btn {
+      display: block;
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+      border: 1px dashed #091e4224;
+      border-radius: 3px;
+      background: transparent;
+      color: #0079bf;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.1s;
+    }
+    .create-btn:hover { background: #091e420f; }
 
     @media (prefers-color-scheme: dark) {
       body { color: #b6c2cf; }
@@ -98,6 +113,8 @@
       .result-status { color: #8c9bab; }
       .loading, .empty { color: #8c9bab; }
       .error { color: #f87168; }
+      .create-btn { color: #579dff; border-color: #a6c5e229; }
+      .create-btn:hover { background: #a6c5e229; }
     }
   </style>
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
