@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Crear contacto</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 8px;
+      background: transparent;
+      color: #172b4d;
+    }
+    .form-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-row {
+      display: flex;
+      gap: 6px;
+    }
+    .form-row > * { flex: 1; min-width: 0; }
+    label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #626f86;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input, select {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #091e4224;
+      border-radius: 3px;
+      font-size: 14px;
+      box-sizing: border-box;
+      background: #fff;
+      color: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus {
+      border-color: #0079bf;
+    }
+    input::placeholder { color: #626f86; }
+    .required input, .required select { border-color: #091e4240; }
+    .required-one input { border-color: #091e4240; }
+    input.invalid { border-color: #ae2e24; }
+    .toggle-group {
+      display: flex;
+      border-radius: 3px;
+      overflow: hidden;
+      border: 1px solid #091e4224;
+    }
+    .toggle-group button {
+      flex: 1;
+      padding: 6px 8px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      cursor: pointer;
+      color: #626f86;
+      transition: background 0.1s, color 0.1s;
+    }
+    .toggle-group button.active {
+      background: #0079bf;
+      color: #fff;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: #626f86;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-top: 6px;
+      padding-bottom: 2px;
+      border-bottom: 1px solid #091e420f;
+    }
+    .submit-btn {
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+      border: none;
+      border-radius: 3px;
+      background: #0079bf;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .submit-btn:hover { background: #026aa7; }
+    .submit-btn:disabled {
+      background: #091e4224;
+      color: #626f86;
+      cursor: not-allowed;
+    }
+    .error-msg {
+      margin-top: 6px;
+      padding: 6px 8px;
+      background: #ffeceb;
+      color: #ae2e24;
+      border-radius: 3px;
+      font-size: 13px;
+      display: none;
+    }
+    .success-msg {
+      margin-top: 6px;
+      padding: 6px 8px;
+      background: #e3fcef;
+      color: #1b7742;
+      border-radius: 3px;
+      font-size: 13px;
+      display: none;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body { color: #b6c2cf; }
+      input, select {
+        background: #22272b;
+        color: #b6c2cf;
+        border-color: #a6c5e229;
+      }
+      input:focus, select:focus { border-color: #579dff; }
+      input::placeholder { color: #8c9bab; }
+      .required input, .required select { border-color: #a6c5e240; }
+      .required-one input { border-color: #a6c5e240; }
+      input.invalid { border-color: #f87168; }
+      label { color: #8c9bab; }
+      .section-title { color: #8c9bab; border-bottom-color: #a6c5e229; }
+      .toggle-group { border-color: #a6c5e229; }
+      .toggle-group button { color: #8c9bab; }
+      .toggle-group button.active { background: #579dff; color: #1d2125; }
+      .submit-btn { background: #579dff; color: #1d2125; }
+      .submit-btn:hover { background: #85b8ff; }
+      .submit-btn:disabled { background: #a6c5e229; color: #8c9bab; }
+      .error-msg { background: #42221f; color: #f87168; }
+      .success-msg { background: #1c3329; color: #4bce97; }
+    }
+  </style>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+</head>
+<body>
+  <div class="form-grid" id="form">
+    <div class="form-row">
+      <div class="required">
+        <label>Nombre *</label>
+        <input type="text" id="name" placeholder="Nombre completo o razón social" autofocus />
+      </div>
+      <div class="required">
+        <label>DNI / CIF *</label>
+        <input type="text" id="code" placeholder="12345678A / B12345678" />
+      </div>
+    </div>
+
+    <div class="required">
+      <label>Tipo *</label>
+      <div class="toggle-group" id="type-toggle">
+        <button type="button" data-value="empresa">Empresa</button>
+        <button type="button" data-value="persona">Persona</button>
+      </div>
+    </div>
+
+    <div class="section-title">Contacto (al menos uno) *</div>
+
+    <div class="form-row">
+      <div class="required-one">
+        <label>Email</label>
+        <input type="email" id="email" placeholder="email@ejemplo.com" />
+      </div>
+      <div class="required-one">
+        <label>Teléfono</label>
+        <input type="tel" id="phone" placeholder="971 000 000" />
+      </div>
+    </div>
+
+    <div class="section-title">Dirección</div>
+
+    <div class="required">
+      <label>Dirección *</label>
+      <input type="text" id="address" placeholder="Calle, número, piso..." />
+    </div>
+    <div class="form-row">
+      <div class="required">
+        <label>Población *</label>
+        <input type="text" id="city" placeholder="Población" />
+      </div>
+      <div class="required">
+        <label>Código postal *</label>
+        <input type="text" id="postalCode" placeholder="07000" />
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="required">
+        <label>Provincia *</label>
+        <input type="text" id="province" placeholder="Provincia" />
+      </div>
+      <div>
+        <label>País</label>
+        <input type="text" id="country" value="España" />
+      </div>
+    </div>
+
+    <button type="button" class="submit-btn" id="submit-btn">Crear contacto</button>
+    <div class="error-msg" id="error-msg"></div>
+    <div class="success-msg" id="success-msg"></div>
+  </div>
+  <script type="module" src="./create-contact.ts"></script>
+</body>
+</html>

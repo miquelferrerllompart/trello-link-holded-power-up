@@ -6,7 +6,7 @@ const HOLDED_BASE = 'https://api.holded.com';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
@@ -23,16 +23,31 @@ export default {
       });
     }
 
+    const method = request.method;
+    if (method !== 'GET' && method !== 'POST' && method !== 'PUT') {
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405,
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+      });
+    }
+
     const url = new URL(request.url);
     const path = url.pathname + url.search;
 
-    const response = await fetch(`${HOLDED_BASE}${path}`, {
-      method: 'GET',
+    const fetchOptions: RequestInit = {
+      method,
       headers: {
         key: env.HOLDED_API_KEY,
         Accept: 'application/json',
       },
-    });
+    };
+
+    if (method === 'POST' || method === 'PUT') {
+      (fetchOptions.headers as Record<string, string>)['Content-Type'] = 'application/json';
+      fetchOptions.body = await request.text();
+    }
+
+    const response = await fetch(`${HOLDED_BASE}${path}`, fetchOptions);
 
     const body = await response.text();
     const contentType = response.headers.get('Content-Type') || '';

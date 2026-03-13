@@ -3,9 +3,10 @@ const TAG_REGEX: Record<string, RegExp> = {
   project: /\{\{\s*project:\s*[^}]*\}\}/g,
 };
 
-export function addTag(desc: string, type: 'contact' | 'project', name: string): string {
+export function addTag(desc: string, type: 'contact' | 'project', name: string, addressLabel?: string): string {
   const cleaned = removeTag(desc, type);
-  const tag = `{{ ${type}: ${name} }}`;
+  const value = addressLabel ? `${name} | ${addressLabel}` : name;
+  const tag = `{{ ${type}: ${value} }}`;
   return cleaned ? `${cleaned}\n\n\n${tag}` : tag;
 }
 

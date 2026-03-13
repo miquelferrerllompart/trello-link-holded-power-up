@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Seleccionar dirección</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 8px;
+      background: transparent;
+      color: #172b4d;
+    }
+    .address-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .address-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 8px;
+      cursor: pointer;
+      border-radius: 3px;
+      transition: background 0.1s;
+    }
+    .address-item:hover { background: #091e420f; }
+    .address-item:active { background: #091e4224; }
+    .address-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #0079bf;
+      color: #fff;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .address-info { min-width: 0; }
+    .address-name {
+      font-size: 14px;
+      font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .address-detail {
+      font-size: 12px;
+      color: #626f86;
+      margin-top: 2px;
+      line-height: 1.3;
+    }
+    .loading {
+      padding: 16px;
+      text-align: center;
+      color: #626f86;
+      font-size: 14px;
+    }
+    .create-btn {
+      display: block;
+      width: 100%;
+      padding: 8px;
+      margin-top: 8px;
+      border: 1px dashed #091e4224;
+      border-radius: 3px;
+      background: transparent;
+      color: #0079bf;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.1s;
+    }
+    .create-btn:hover { background: #091e420f; }
+
+    /* Create form */
+    .create-form {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .form-field label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: #626f86;
+      margin-bottom: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .form-field input {
+      width: 100%;
+      padding: 6px 8px;
+      border: 1px solid #091e4224;
+      border-radius: 3px;
+      font-size: 14px;
+      box-sizing: border-box;
+      background: #fff;
+      color: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .form-field input:focus { border-color: #0079bf; }
+    .form-field input::placeholder { color: #626f86; }
+    .form-row {
+      display: flex;
+      gap: 6px;
+    }
+    .form-row > * { flex: 1; min-width: 0; }
+    .form-actions {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .btn-secondary {
+      flex: 0 0 auto;
+      padding: 8px 12px;
+      border: 1px solid #091e4224;
+      border-radius: 3px;
+      background: transparent;
+      color: #626f86;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .btn-secondary:hover { background: #091e420f; }
+    .btn-primary {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 3px;
+      background: #0079bf;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .btn-primary:hover { background: #026aa7; }
+    .btn-primary:disabled {
+      background: #091e4224;
+      color: #626f86;
+      cursor: not-allowed;
+    }
+    .error-msg {
+      margin-top: 4px;
+      padding: 6px 8px;
+      background: #ffeceb;
+      color: #ae2e24;
+      border-radius: 3px;
+      font-size: 13px;
+      display: none;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      body { color: #b6c2cf; }
+      .address-item:hover { background: #a6c5e229; }
+      .address-item:active { background: #a6c5e238; }
+      .address-detail { color: #8c9bab; }
+      .loading { color: #8c9bab; }
+      .create-btn { color: #579dff; border-color: #a6c5e229; }
+      .create-btn:hover { background: #a6c5e229; }
+      .form-field label { color: #8c9bab; }
+      .form-field input {
+        background: #22272b;
+        color: #b6c2cf;
+        border-color: #a6c5e229;
+      }
+      .form-field input:focus { border-color: #579dff; }
+      .form-field input::placeholder { color: #8c9bab; }
+      .btn-secondary { color: #8c9bab; border-color: #a6c5e229; }
+      .btn-secondary:hover { background: #a6c5e229; }
+      .btn-primary { background: #579dff; color: #1d2125; }
+      .btn-primary:hover { background: #85b8ff; }
+      .btn-primary:disabled { background: #a6c5e229; color: #8c9bab; }
+      .error-msg { background: #42221f; color: #f87168; }
+    }
+  </style>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+</head>
+<body>
+  <div class="address-list" id="addresses">
+    <div class="loading">Cargando direcciones...</div>
+  </div>
+  <script type="module" src="./select-address.ts"></script>
+</body>
+</html>

@@ -57,6 +57,12 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .tag-address {
+      color: #5e6c84;
+      font-weight: 400;
+      font-size: 12px;
+      cursor: help;
+    }
     .tag-close {
       display: none;
       align-items: center;
@@ -98,6 +104,7 @@
       .tag-contact .tag-icon { fill: #579dff; }
       .tag-project .tag-icon { fill: #4bce97; }
       .tag-close-icon { fill: currentColor; }
+      .tag-address { color: #8c9bab; }
       .empty { color: #8c9bab; }
     }
   </style>
@@ -153,10 +160,17 @@
           if (data.contactName) {
             var href = data.contactId ? HOLDED_CONTACT_URL + data.contactId : '#';
             var target = data.contactId ? ' target="_blank"' : '';
+            var addrHtml = '';
+            if (data.addressLabel) {
+              var truncated = data.addressLabel.length > 8
+                ? data.addressLabel.substring(0, 8) + '…'
+                : data.addressLabel;
+              addrHtml = ' <span class="tag-address" title="' + data.addressLabel.replace(/"/g, '&quot;') + '">| ' + truncated + '</span>';
+            }
             tags.push(
               '<a class="tag tag-contact" href="' + href + '"' + target + '>' +
                 CONTACT_SVG +
-                '<span class="tag-name">' + data.contactName + '</span>' +
+                '<span class="tag-name">' + data.contactName + addrHtml + '</span>' +
                 '<span class="tag-close" data-field="contact">' + CLOSE_SVG + '</span>' +
               '</a>'
             );
@@ -193,6 +207,7 @@
                 if (field === 'contact') {
                   delete current.contactId;
                   delete current.contactName;
+                  delete current.addressLabel;
                 } else {
                   delete current.projectId;
                   delete current.projectName;
