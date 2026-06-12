@@ -3,6 +3,7 @@ import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
 import { addShippingAddress } from '../holded-api';
 import { TRELLO_APP_KEY } from '../config';
+import { formatSpanishTextCase } from '../spanish-text-case';
 import type { PendingContactSelection, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
@@ -18,19 +19,23 @@ function formatAddress(address: string | null, city: string | null, postalCode: 
 }
 
 function buildAddressLabel(address: string | null, city: string | null): string {
-  return [address, city].filter(Boolean).join(', ') || 'Sin dirección';
+  return [
+    formatSpanishTextCase(address || ''),
+    formatSpanishTextCase(city || ''),
+  ].filter(Boolean).join(', ') || 'Sin dirección';
 }
 
 async function selectAddress(pending: PendingContactSelection, addressLabel: string) {
+  const contactName = formatSpanishTextCase(pending.contactName);
   const data = await getCardData(t);
   data.contactId = pending.contactId;
-  data.contactName = pending.contactName;
+  data.contactName = contactName;
   data.addressLabel = addressLabel;
   await setCardData(t, data);
 
   try {
     const card = await t.card('id', 'desc');
-    const newDesc = addTag(card.desc || '', 'contact', pending.contactName, addressLabel);
+    const newDesc = addTag(card.desc || '', 'contact', contactName, addressLabel);
     await updateCardDescription(t, newDesc);
   } catch (err) { console.error('Holded: error syncing description', err); }
 
@@ -102,12 +107,12 @@ function showCreateForm(pending: PendingContactSelection) {
 
     try {
       const newAddr = {
-        name: nameInput.value.trim(),
-        address: addressInput.value.trim(),
-        city: cityInput.value.trim(),
+        name: formatSpanishTextCase(nameInput.value),
+        address: formatSpanishTextCase(addressInput.value),
+        city: formatSpanishTextCase(cityInput.value),
         postalCode: postalCodeInput.value.trim(),
-        province: provinceInput.value.trim(),
-        country: countryInput.value.trim(),
+        province: formatSpanishTextCase(provinceInput.value),
+        country: formatSpanishTextCase(countryInput.value),
       };
 
       await addShippingAddress(pending.contactId, pending.shippingAddresses, newAddr);
@@ -165,7 +170,7 @@ async function render() {
       if (index === 0) {
         addressLabel = buildAddressLabel(bill.address, bill.city);
       } else {
-        addressLabel = pending.shippingAddresses[index - 1].name;
+        addressLabel = formatSpanishTextCase(pending.shippingAddresses[index - 1].name);
       }
 
       await selectAddress(pending, addressLabel);

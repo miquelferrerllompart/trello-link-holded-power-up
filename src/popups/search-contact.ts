@@ -3,6 +3,7 @@ import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
 import { TRELLO_APP_KEY } from '../config';
+import { formatSpanishTextCase } from '../spanish-text-case';
 import type { HoldedContact, PendingContactSelection, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
@@ -66,27 +67,31 @@ function renderResults(contacts: HoldedContact[], query: string) {
     el.addEventListener('click', async () => {
       const id = (el as HTMLElement).dataset.id!;
       const contact = contacts.find((c) => c.id === id)!;
+      const contactName = formatSpanishTextCase(contact.name);
 
       if (contact.shippingAddresses && contact.shippingAddresses.length > 0) {
         const pending: PendingContactSelection = {
           contactId: contact.id,
-          contactName: contact.name,
+          contactName,
           billAddress: contact.billAddress,
           shippingAddresses: contact.shippingAddresses,
         };
         await t.set('card', 'shared', 'holdedPendingContact', pending);
         t.popup({ title: 'Seleccionar dirección', url: './select-address.html', height: 300 });
       } else {
-        const addressLabel = [contact.billAddress?.address, contact.billAddress?.city]
+        const addressLabel = [
+          formatSpanishTextCase(contact.billAddress?.address || ''),
+          formatSpanishTextCase(contact.billAddress?.city || ''),
+        ]
           .filter(Boolean).join(', ') || undefined;
         const data = await getCardData(t);
         data.contactId = contact.id;
-        data.contactName = contact.name;
+        data.contactName = contactName;
         data.addressLabel = addressLabel;
         await setCardData(t, data);
         try {
           const card = await t.card('id', 'desc');
-          const newDesc = addTag(card.desc || '', 'contact', contact.name, addressLabel);
+          const newDesc = addTag(card.desc || '', 'contact', contactName, addressLabel);
           await updateCardDescription(t, newDesc);
         } catch (err) { console.error('Holded: error syncing description', err); }
         t.closePopup();
