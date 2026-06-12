@@ -3,6 +3,7 @@ import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
 import { TRELLO_APP_KEY } from '../config';
+import { formatSpanishTextCase } from '../spanish-text-case';
 import type { TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
@@ -133,20 +134,23 @@ submitBtn.addEventListener('click', async () => {
       t.board('name').catch(() => ({ name: 'Desconocido' })),
     ]);
 
+    const contactName = formatSpanishTextCase(nameInput.value);
+    const billAddress = {
+      address: formatSpanishTextCase(addressInput.value),
+      city: formatSpanishTextCase(cityInput.value),
+      postalCode: postalCodeInput.value.trim(),
+      province: formatSpanishTextCase(provinceInput.value),
+      country: formatSpanishTextCase(countryInput.value),
+    };
+
     const payload = {
-      name: nameInput.value.trim(),
+      name: contactName,
       code: codeInput.value.trim(),
       isperson,
       type: 'lead',
       email: emailInput.value.trim() || undefined,
       phone: phoneInput.value.trim() || undefined,
-      billAddress: {
-        address: addressInput.value.trim(),
-        city: cityInput.value.trim(),
-        postalCode: postalCodeInput.value.trim(),
-        province: provinceInput.value.trim(),
-        country: countryInput.value.trim(),
-      },
+      billAddress,
       defaults: {
         salesTax: ['s_iva_21'],
         purchasesTax: ['s_iva_21'],
@@ -157,9 +161,8 @@ submitBtn.addEventListener('click', async () => {
 
     // Auto-assign contact to card
     const contactId = result.id;
-    const contactName = nameInput.value.trim();
 
-    const addressLabel = [addressInput.value.trim(), cityInput.value.trim()]
+    const addressLabel = [billAddress.address, billAddress.city]
       .filter(Boolean).join(', ') || undefined;
 
     const data = await getCardData(t);
