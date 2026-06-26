@@ -221,30 +221,25 @@
       '</div>';
     }
 
+    function setImportantMessage(contactId, message) {
+      var container = document.getElementById('important-message');
+      if (!container || container.getAttribute('data-contact-id') !== contactId) return;
+
+      container.innerHTML = renderImportantMessage(message);
+      t.sizeTo(contentDiv).catch(function() {});
+    }
+
     function refreshTrelloMessage(data) {
       if (!data.contactId) return;
+      var contactId = data.contactId;
 
-      fetch(HOLDED_PROXY_URL + '/api/invoicing/v1/contacts/' + encodeURIComponent(data.contactId))
+      fetch(HOLDED_PROXY_URL + '/api/invoicing/v1/contacts/' + encodeURIComponent(contactId))
         .then(function(response) {
           if (!response.ok) throw new Error('Holded API error: ' + response.status);
           return response.json();
         })
         .then(function(contact) {
-          var message = extractTrelloCustomField(contact.customFields);
-          if ((data.contactTrelloMessage || '') === message) return;
-
-          var updated = {};
-          for (var key in data) updated[key] = data[key];
-
-          if (message) {
-            updated.contactTrelloMessage = message;
-          } else {
-            delete updated.contactTrelloMessage;
-          }
-
-          t.set('card', 'shared', 'holdedData', updated).then(function() {
-            render();
-          });
+          setImportantMessage(contactId, extractTrelloCustomField(contact.customFields));
         })
         .catch(function(err) {
           console.warn('Holded: error loading Trello custom field', err);
@@ -297,7 +292,7 @@
           } else {
             contentDiv.innerHTML =
               '<div class="tags">' + tags.join('') + '</div>' +
-              renderImportantMessage(data.contactTrelloMessage);
+              '<div id="important-message" data-contact-id="' + escapeHtml(data.contactId || '') + '"></div>';
           }
 
           var closeBtns = contentDiv.querySelectorAll('.tag-close');
@@ -313,7 +308,6 @@
                 if (field === 'contact') {
                   delete current.contactId;
                   delete current.contactName;
-                  delete current.contactTrelloMessage;
                   delete current.addressLabel;
                 } else {
                   delete current.projectId;

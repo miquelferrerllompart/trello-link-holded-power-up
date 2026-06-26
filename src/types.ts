@@ -46,13 +46,6 @@ export interface HoldedContactDefaults {
   accumulateInForm347: string;
 }
 
-export interface HoldedCustomField {
-  field?: string;
-  key?: string;
-  name?: string;
-  value?: unknown;
-}
-
 /** Full contact as returned by GET /api/invoicing/v1/contacts */
 export interface HoldedContact {
   id: string;
@@ -71,7 +64,7 @@ export interface HoldedContact {
   clientRecord: HoldedRecord | number;
   supplierRecord: HoldedRecord | number;
   billAddress: HoldedAddress;
-  customFields: HoldedCustomField[];
+  customFields: unknown[];
   defaults: HoldedContactDefaults;
   socialNetworks: { website: string } | unknown[];
   tags: string[];
@@ -134,7 +127,6 @@ export interface HoldedProject {
 export interface CardHoldedData {
   contactId?: string;
   contactName?: string;
-  contactTrelloMessage?: string;
   /** Short label for the selected address (shipping name or "street, city") */
   addressLabel?: string;
   projectId?: string;
@@ -148,7 +140,6 @@ export type PendingShippingAddress = Pick<HoldedShippingAddress, 'name' | 'addre
 export interface PendingContactSelection {
   contactId: string;
   contactName: string;
-  contactTrelloMessage?: string;
   billAddress: PendingBillAddress;
   shippingAddresses: PendingShippingAddress[];
 }

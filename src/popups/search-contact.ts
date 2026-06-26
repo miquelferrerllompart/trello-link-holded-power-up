@@ -5,7 +5,6 @@ import { updateCardDescription } from '../trello-api';
 import { TRELLO_APP_KEY } from '../config';
 import { formatSpanishTextCase } from '../spanish-text-case';
 import { buildPendingContactSelection, savePendingContactSelection } from '../pending-contact';
-import { extractTrelloCustomField } from '../holded-custom-fields';
 import type { HoldedContact, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
@@ -84,12 +83,6 @@ function renderResults(contacts: HoldedContact[], query: string) {
         const data = await getCardData(t);
         data.contactId = contact.id;
         data.contactName = contactName;
-        const trelloMessage = extractTrelloCustomField(contact.customFields);
-        if (trelloMessage) {
-          data.contactTrelloMessage = trelloMessage;
-        } else {
-          delete data.contactTrelloMessage;
-        }
         data.addressLabel = addressLabel;
         await setCardData(t, data);
         try {
