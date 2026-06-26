@@ -1,4 +1,4 @@
-import type { HoldedContact, HoldedProject, HoldedShippingAddress, CreateContactPayload, CreateContactResponse } from './types';
+import type { HoldedContact, HoldedProject, PendingShippingAddress, CreateContactPayload, CreateContactResponse } from './types';
 import { HOLDED_PROXY_URL } from './config';
 
 const PROXY_BASE = HOLDED_PROXY_URL;
@@ -91,7 +91,7 @@ export interface NewShippingAddress {
 /** Adds a shipping address to an existing contact via PUT */
 export async function addShippingAddress(
   contactId: string,
-  existing: HoldedShippingAddress[],
+  existing: PendingShippingAddress[],
   newAddr: NewShippingAddress,
 ): Promise<void> {
   const shippingAddresses = [

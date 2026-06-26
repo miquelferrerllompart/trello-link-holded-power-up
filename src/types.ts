@@ -134,11 +134,14 @@ export interface CardHoldedData {
 }
 
 /** Temporary data stored while the address selection popup is open */
+export type PendingBillAddress = Pick<HoldedAddress, 'address' | 'city' | 'postalCode' | 'province'>;
+export type PendingShippingAddress = Pick<HoldedShippingAddress, 'name' | 'address' | 'city' | 'postalCode' | 'province' | 'country'>;
+
 export interface PendingContactSelection {
   contactId: string;
   contactName: string;
-  billAddress: HoldedAddress;
-  shippingAddresses: HoldedShippingAddress[];
+  billAddress: PendingBillAddress;
+  shippingAddresses: PendingShippingAddress[];
 }
 
 // ── Trello Power-Up SDK types ──

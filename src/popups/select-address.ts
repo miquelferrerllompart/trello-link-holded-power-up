@@ -4,6 +4,7 @@ import { updateCardDescription } from '../trello-api';
 import { addShippingAddress } from '../holded-api';
 import { TRELLO_APP_KEY } from '../config';
 import { formatSpanishTextCase } from '../spanish-text-case';
+import { getPendingContactSelection, removePendingContactSelection } from '../pending-contact';
 import type { PendingContactSelection, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
@@ -39,7 +40,7 @@ async function selectAddress(pending: PendingContactSelection, addressLabel: str
     await updateCardDescription(t, newDesc);
   } catch (err) { console.error('Holded: error syncing description', err); }
 
-  await t.remove('card', 'shared', 'holdedPendingContact');
+  await removePendingContactSelection(t);
   t.closePopup();
 }
 
@@ -127,7 +128,7 @@ function showCreateForm(pending: PendingContactSelection) {
 }
 
 async function render() {
-  const pending = await t.get('card', 'shared', 'holdedPendingContact') as PendingContactSelection | null;
+  const pending = await getPendingContactSelection(t);
   if (!pending) {
     addressesDiv.innerHTML = '<div class="loading">No hay datos de contacto.</div>';
     return;

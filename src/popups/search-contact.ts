@@ -4,7 +4,8 @@ import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
 import { TRELLO_APP_KEY } from '../config';
 import { formatSpanishTextCase } from '../spanish-text-case';
-import type { HoldedContact, PendingContactSelection, TrelloContext } from '../types';
+import { buildPendingContactSelection, savePendingContactSelection } from '../pending-contact';
+import type { HoldedContact, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
 const searchInput = document.getElementById('search') as HTMLInputElement;
@@ -70,13 +71,8 @@ function renderResults(contacts: HoldedContact[], query: string) {
       const contactName = formatSpanishTextCase(contact.name);
 
       if (contact.shippingAddresses && contact.shippingAddresses.length > 0) {
-        const pending: PendingContactSelection = {
-          contactId: contact.id,
-          contactName,
-          billAddress: contact.billAddress,
-          shippingAddresses: contact.shippingAddresses,
-        };
-        await t.set('card', 'shared', 'holdedPendingContact', pending);
+        const pending = buildPendingContactSelection(contact, contactName);
+        await savePendingContactSelection(t, pending);
         t.popup({ title: 'Seleccionar dirección', url: './select-address.html', height: 300 });
       } else {
         const addressLabel = [
