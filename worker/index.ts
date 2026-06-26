@@ -45,6 +45,7 @@ interface ContactRecord {
   type: string;
   isperson: number;
   billAddress: unknown;
+  customFields: unknown[];
   shippingAddresses: unknown[];
 }
 
@@ -98,6 +99,7 @@ async function getContacts(env: Env, force: boolean): Promise<ContactRecord[]> {
     type: c.type,
     isperson: c.isperson,
     billAddress: c.billAddress,
+    customFields: c.customFields,
     shippingAddresses: c.shippingAddresses,
   }));
 

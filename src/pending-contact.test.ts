@@ -6,6 +6,7 @@ describe('buildPendingContactSelection', () => {
   it('keeps only the address fields needed by the address popup', () => {
     const contact = {
       id: 'contact-1',
+      customFields: [{ field: 'Trello', value: 'Cliente Moroso' }],
       billAddress: {
         address: '  C/ Mayor 1  ',
         city: '  Palma  ',
@@ -36,6 +37,7 @@ describe('buildPendingContactSelection', () => {
     expect(pending).toEqual({
       contactId: 'contact-1',
       contactName: 'Cliente',
+      contactTrelloMessage: 'Cliente Moroso',
       billAddress: {
         address: 'C/ Mayor 1',
         city: 'Palma',

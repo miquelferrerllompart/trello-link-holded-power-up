@@ -1,4 +1,5 @@
 import type { HoldedContact, PendingContactSelection, TrelloContext } from './types';
+import { extractTrelloCustomField } from './holded-custom-fields';
 
 const TRELLO_PENDING_KEY = 'holdedPendingContact';
 const LOCAL_PENDING_PREFIX = 'holdedPendingContact';
@@ -28,6 +29,7 @@ export function buildPendingContactSelection(contact: HoldedContact, contactName
   return {
     contactId: contact.id,
     contactName,
+    contactTrelloMessage: extractTrelloCustomField(contact.customFields),
     billAddress: {
       address: clean(contact.billAddress?.address),
       city: clean(contact.billAddress?.city),
