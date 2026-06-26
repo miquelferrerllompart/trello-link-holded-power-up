@@ -21,6 +21,9 @@ describe('connector capabilities', () => {
       'card-back-section',
       'card-badges',
       'card-buttons',
+      'card-detail-badges',
     ]);
+    expect(capabilities['card-detail-badges']).toBeInstanceOf(Function);
+    expect((capabilities['card-detail-badges'] as () => unknown)()).toEqual([]);
   });
 });
