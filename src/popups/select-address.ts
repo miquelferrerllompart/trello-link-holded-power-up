@@ -31,6 +31,11 @@ async function selectAddress(pending: PendingContactSelection, addressLabel: str
   const data = await getCardData(t);
   data.contactId = pending.contactId;
   data.contactName = contactName;
+  if (pending.contactTrelloMessage) {
+    data.contactTrelloMessage = pending.contactTrelloMessage;
+  } else {
+    delete data.contactTrelloMessage;
+  }
   data.addressLabel = addressLabel;
   await setCardData(t, data);
 

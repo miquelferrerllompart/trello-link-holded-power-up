@@ -88,6 +88,26 @@
       font-size: 13px;
       padding: 4px 0;
     }
+    .important-message {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border-left: 3px solid #f5cd47;
+      border-radius: 6px;
+      background: #fff7d6;
+      color: #7f5f01;
+      font-size: 13px;
+      line-height: 18px;
+      white-space: pre-line;
+    }
+    .important-label {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 11px;
+      line-height: 14px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
 
     /* Dark mode */
     @media (prefers-color-scheme: dark) {
@@ -106,6 +126,11 @@
       .tag-close-icon { fill: currentColor; }
       .tag-address { color: #8c9bab; }
       .empty { color: #8c9bab; }
+      .important-message {
+        background: rgba(245, 205, 71, 0.14);
+        color: #f5cd47;
+        border-left-color: #f5cd47;
+      }
     }
   </style>
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
@@ -115,6 +140,7 @@
   <script>
     var HOLDED_CONTACT_URL = 'https://app.holded.com/contacts/';
     var HOLDED_PROJECT_URL = 'https://app.holded.com/projects/p/';
+    var HOLDED_PROXY_URL = 'https://holded-proxy.electricaferrer.workers.dev';
 
     var CONTACT_SVG = '<svg class="tag-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M384 48c8.8 0 16 7.2 16 16l0 384c0 8.8-7.2 16-16 16L96 464c-8.8 0-16-7.2-16-16L80 64c0-8.8 7.2-16 16-16l288 0zM96 0C60.7 0 32 28.7 32 64l0 384c0 35.3 28.7 64 64 64l288 0c35.3 0 64-28.7 64-64l0-384c0-35.3-28.7-64-64-64L96 0zM240 248a56 56 0 1 0 0-112 56 56 0 1 0 0 112zm-32 40c-44.2 0-80 35.8-80 80 0 8.8 7.2 16 16 16l192 0c8.8 0 16-7.2 16-16 0-44.2-35.8-80-80-80l-64 0zM512 80c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64zM496 192c-8.8 0-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64c0-8.8-7.2-16-16-16zm16 144c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64z"/></svg>';
 
@@ -147,6 +173,82 @@
           });
         });
       }).catch(function() {});
+    }
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, function(char) {
+        return ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#39;'
+        })[char];
+      });
+    }
+
+    function extractTrelloCustomField(customFields) {
+      if (!Array.isArray(customFields)) return '';
+
+      var values = [];
+      for (var i = 0; i < customFields.length; i++) {
+        var field = customFields[i];
+        if (!field || typeof field !== 'object') continue;
+
+        var key = String(field.field || field.key || field.name || '').trim().toLowerCase();
+        if (key !== 'trello') continue;
+
+        var value = field.value;
+        if (Array.isArray(value)) {
+          value = value.map(function(item) { return String(item || '').trim(); }).filter(Boolean).join(', ');
+        } else if (value && typeof value === 'object') {
+          value = JSON.stringify(value);
+        } else {
+          value = String(value || '').trim();
+        }
+
+        if (value) values.push(value);
+      }
+
+      return values.join('\n');
+    }
+
+    function renderImportantMessage(message) {
+      if (!message) return '';
+      return '<div class="important-message">' +
+        '<span class="important-label">Importante</span> ' +
+        '<span class="important-body">' + escapeHtml(message) + '</span>' +
+      '</div>';
+    }
+
+    function refreshTrelloMessage(data) {
+      if (!data.contactId) return;
+
+      fetch(HOLDED_PROXY_URL + '/api/invoicing/v1/contacts/' + encodeURIComponent(data.contactId))
+        .then(function(response) {
+          if (!response.ok) throw new Error('Holded API error: ' + response.status);
+          return response.json();
+        })
+        .then(function(contact) {
+          var message = extractTrelloCustomField(contact.customFields);
+          if ((data.contactTrelloMessage || '') === message) return;
+
+          var updated = {};
+          for (var key in data) updated[key] = data[key];
+
+          if (message) {
+            updated.contactTrelloMessage = message;
+          } else {
+            delete updated.contactTrelloMessage;
+          }
+
+          t.set('card', 'shared', 'holdedData', updated).then(function() {
+            render();
+          });
+        })
+        .catch(function(err) {
+          console.warn('Holded: error loading Trello custom field', err);
+        });
     }
 
     var contentDiv = document.getElementById('content');
@@ -193,7 +295,9 @@
           if (tags.length === 0) {
             contentDiv.innerHTML = '<div class="empty">No hay datos vinculados.</div>';
           } else {
-            contentDiv.innerHTML = '<div class="tags">' + tags.join('') + '</div>';
+            contentDiv.innerHTML =
+              '<div class="tags">' + tags.join('') + '</div>' +
+              renderImportantMessage(data.contactTrelloMessage);
           }
 
           var closeBtns = contentDiv.querySelectorAll('.tag-close');
@@ -209,6 +313,7 @@
                 if (field === 'contact') {
                   delete current.contactId;
                   delete current.contactName;
+                  delete current.contactTrelloMessage;
                   delete current.addressLabel;
                 } else {
                   delete current.projectId;
@@ -222,6 +327,7 @@
             });
           }
 
+          refreshTrelloMessage(data);
           t.sizeTo(contentDiv).catch(function() {});
         })
         .catch(function(err) {
