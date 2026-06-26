@@ -11,10 +11,6 @@ window.TrelloPowerUp.initialize(
     'card-badges': (t: unknown) => getCardBadges(t),
     'card-detail-badges': (t: unknown) => getCardDetailBadges(t),
     'card-back-section': (t: unknown) => getCardBackSection(t, HOLDED_ICON_URL),
-    'list-sorters': () => [],
-    'save-attachment': () => ({
-      callback: () => undefined,
-    }),
   },
   {
     appKey: TRELLO_APP_KEY,
