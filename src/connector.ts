@@ -6,10 +6,15 @@ import { TRELLO_APP_KEY } from './config';
 
 window.TrelloPowerUp.initialize(
   {
+    'board-buttons': () => [],
     'card-buttons': (t: unknown) => getCardButtons(t),
     'card-badges': (t: unknown) => getCardBadges(t),
     'card-detail-badges': () => [],
     'card-back-section': (t: unknown) => getCardBackSection(t, HOLDED_ICON_URL),
+    'list-sorters': () => [],
+    'save-attachment': () => ({
+      callback: () => undefined,
+    }),
   },
   {
     appKey: TRELLO_APP_KEY,
