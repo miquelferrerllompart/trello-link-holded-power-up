@@ -5,7 +5,7 @@ const BASE = 'https://trello-link-holded-power-up.pages.dev/icons';
 export const CONTACT_ICON_URL = `${BASE}/contact.svg`;
 export const PROJECT_ICON_URL = `${BASE}/project.svg`;
 
-// { dark, light } format — used by board-buttons and card-badges
+// { dark, light } format — used by Trello badge icon fields
 export const CONTACT_ICON = {
   dark: `${BASE}/contact-dark.svg`,
   light: `${BASE}/contact-light.svg`,
