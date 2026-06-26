@@ -6,6 +6,7 @@ import { TRELLO_APP_KEY } from './config';
 
 window.TrelloPowerUp.initialize(
   {
+    'board-buttons': () => [],
     'card-buttons': (t: unknown) => getCardButtons(t),
     'card-badges': (t: unknown) => getCardBadges(t),
     'card-detail-badges': (t: unknown) => getCardDetailBadges(t),
