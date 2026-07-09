@@ -207,7 +207,7 @@ describe('card-back document status rendering', () => {
     expect(documentFetches).toBe(1);
   });
 
-  it('renders estimates as a fourth document tab with already-loaded other estimates', async () => {
+  it('renders estimates as a document tab with already-loaded other estimates', async () => {
     const dom = loadCardBackWithDocuments({
       salesOrders: [],
       purchaseOrders: [],
@@ -244,5 +244,56 @@ describe('card-back document status rendering', () => {
 
     text = dom.window.document.querySelector('#content')?.textContent || '';
     expect(text).toContain('#PRE-2');
+  });
+
+  it('does not render purchase orders in the customer document tabs or count', async () => {
+    const dom = loadCardBackWithDocuments({
+      salesOrders: [
+        { id: 'sales-order-1', type: 'sales-orders', documentNumber: 'PV-1', shippedItems: { count: 0, fields: [], items: [] } },
+      ],
+      purchaseOrders: [
+        { id: 'purchase-order-1', type: 'purchase-orders', documentNumber: 'PC-1', status: 'completed' },
+      ],
+      waybills: [],
+      estimates: [],
+    });
+
+    await waitForRender();
+    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    await waitForRender();
+
+    const text = dom.window.document.querySelector('#content')?.textContent || '';
+    const tabs = Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.documents-tab'))
+      .map((tab) => tab.textContent?.trim());
+    const count = dom.window.document.querySelector('.documents-count')?.textContent;
+
+    expect(tabs).toEqual(['Pedidos venta 1', 'Albaranes 0', 'Presupuestos 0']);
+    expect(count).toBe('1');
+    expect(text).not.toContain('Pedidos Compra');
+    expect(text).not.toContain('#PC-1');
+  });
+
+  it('renders estimate completion and cancellation with estimate wording', async () => {
+    const dom = loadCardBackWithDocuments({
+      salesOrders: [],
+      purchaseOrders: [],
+      waybills: [],
+      estimates: [
+        { id: 'estimate-1', type: 'estimates', documentNumber: 'PRE-1', status: 'completed' },
+        { id: 'estimate-2', type: 'estimates', documentNumber: 'PRE-2', status: 'cancelled' },
+      ],
+    });
+
+    await waitForRender();
+    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    await waitForRender();
+    dom.window.document.querySelector<HTMLButtonElement>('[data-tab="estimates"]')?.click();
+    await waitForRender();
+
+    const text = dom.window.document.querySelector('#content')?.textContent || '';
+    expect(text).toContain('Aceptado');
+    expect(text).toContain('Denegado');
+    expect(text).not.toContain('Completado');
+    expect(text).not.toContain('Cancelado');
   });
 });

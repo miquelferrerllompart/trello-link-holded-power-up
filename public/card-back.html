@@ -531,15 +531,21 @@
       return { label: getStatusLabel(status), className: getStatusClass(status) };
     }
 
+    function getEstimateStatusPill(status) {
+      if (status === 'completed') return { label: 'Aceptado', className: 'served' };
+      if (status === 'cancelled') return { label: 'Denegado', className: 'cancelled' };
+      return { label: getStatusLabel(status), className: getStatusClass(status) };
+    }
+
     function getDocumentPills(documentItem) {
       if (documentItem.type === 'sales-orders') return [getSalesOrderShipmentPill(documentItem)];
       if (documentItem.type === 'waybills') return [getWaybillStatusPill(documentItem.status)];
+      if (documentItem.type === 'estimates') return [getEstimateStatusPill(documentItem.status)];
       return [{ label: getStatusLabel(documentItem.status), className: getStatusClass(documentItem.status) }];
     }
 
     var DOCUMENT_TABS = [
       { key: 'salesOrders', label: 'Pedidos venta', empty: 'No hay pedidos de venta para este cliente.' },
-      { key: 'purchaseOrders', label: 'Pedidos Compra', empty: 'No hay pedidos de compra para este cliente.' },
       { key: 'waybills', label: 'Albaranes', empty: 'No hay albaranes para este cliente.' },
       { key: 'estimates', label: 'Presupuestos', empty: 'No hay presupuestos para este cliente.' },
     ];
@@ -631,15 +637,14 @@
         '</button>';
       }).join('');
 
+      var visibleCount = DOCUMENT_TABS.reduce(function(total, tab) {
+        return total + (Array.isArray(results[tab.key]) ? results[tab.key].length : 0);
+      }, 0);
+
       container.innerHTML =
         '<div class="documents-header">' +
           '<div class="section-label">Documentos Holded</div>' +
-          '<div class="documents-count">' + (
-            (results.salesOrders || []).length +
-            (results.purchaseOrders || []).length +
-            (results.waybills || []).length +
-            (results.estimates || []).length
-          ) + '</div>' +
+          '<div class="documents-count">' + visibleCount + '</div>' +
         '</div>' +
         '<div class="documents-tabs" role="tablist">' + tabs + '</div>' +
         renderDocumentRows(results[activeTab.key] || [], activeTab) +
