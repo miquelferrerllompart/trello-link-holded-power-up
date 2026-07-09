@@ -101,19 +101,6 @@ async function getContacts(env: Env, force: boolean): Promise<ContactRecord[]> {
   return slim;
 }
 
-function stripNonDigits(v: string | null | undefined): string {
-  return v ? v.replace(/\D/g, '') : '';
-}
-
-function searchContacts(contacts: ContactRecord[], query: string): ContactRecord[] {
-  if (!query) return [];
-  return contacts.filter((c) => {
-    const text = [c.name, c.email, c.code, c.tradeName, c.vatnumber, c.phone, c.mobile,
-      stripNonDigits(c.phone), stripNonDigits(c.mobile)].filter(Boolean).join(' ');
-    return fuzzyMatch(text, query);
-  });
-}
-
 async function handleContactsSearch(url: URL, env: Env): Promise<Response> {
   const query = url.searchParams.get('q') || '';
 
