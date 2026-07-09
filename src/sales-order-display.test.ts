@@ -80,4 +80,14 @@ describe('sales order display labels', () => {
       { label: 'Completado', className: 'served' },
     ]);
   });
+
+  it('uses estimate-specific wording for accepted and denied estimates', () => {
+    expect(getDocumentStatusPills({ type: 'estimates', status: 'completed' })).toEqual([
+      { label: 'Aceptado', className: 'served' },
+    ]);
+
+    expect(getDocumentStatusPills({ type: 'estimates', status: 'cancelled' })).toEqual([
+      { label: 'Denegado', className: 'cancelled' },
+    ]);
+  });
 });

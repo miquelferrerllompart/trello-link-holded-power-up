@@ -20,7 +20,7 @@ export interface ShippedItemsTracking {
 }
 
 export interface DocumentStatusInput {
-  type: 'sales-orders' | 'purchase-orders' | 'waybills' | string;
+  type: 'sales-orders' | 'purchase-orders' | 'waybills' | 'estimates' | string;
   status?: string | null;
   shippedItems?: ShippedItemsTracking;
 }
@@ -72,9 +72,16 @@ export function getWaybillStatusPill(status: string | null | undefined): StatusP
   return { label: getSalesOrderStatusLabel(status), className: getStatusClass(status) };
 }
 
+export function getEstimateStatusPill(status: string | null | undefined): StatusPill {
+  if (status === 'completed') return { label: 'Aceptado', className: 'served' };
+  if (status === 'cancelled') return { label: 'Denegado', className: 'cancelled' };
+  return { label: getSalesOrderStatusLabel(status), className: getStatusClass(status) };
+}
+
 export function getDocumentStatusPills(document: DocumentStatusInput): StatusPill[] {
   if (document.type === 'sales-orders') return [getSalesOrderShipmentPill(document.shippedItems)];
   if (document.type === 'waybills') return [getWaybillStatusPill(document.status)];
+  if (document.type === 'estimates') return [getEstimateStatusPill(document.status)];
   return [{
     label: getSalesOrderStatusLabel(document.status),
     className: getStatusClass(document.status),
