@@ -39,10 +39,11 @@ npx wrangler deploy
 The Holded API key is stored as a Cloudflare Worker secret (not in code):
 
 ```bash
-echo "YOUR_API_KEY" | npx wrangler secret put HOLDED_API_KEY --name holded-proxy
+echo "YOUR_V2_API_KEY" | npx wrangler secret put HOLDED_API_V2 --name holded-proxy
 ```
 
 Important: must pipe via `echo` — non-interactive `wrangler secret put` sends an empty string.
+`HOLDED_API_KEY` is still used only for legacy V1 pass-through calls, such as adding shipping addresses, when a V1 key is available.
 
 ## Trello Power-Up capabilities
 
@@ -82,12 +83,13 @@ interface CardHoldedData {
 
 | Endpoint | Use |
 |---|---|
-| `GET /contacts/search?q=&force=1` | Search contacts (server-side filtering, KV-cached) |
-| `POST /contacts/refresh` | Force-refresh contacts cache from Holded |
+| `GET /contacts/search?q=` | Search contacts through Holded V2 fan-out, without customer cache |
 | `GET /projects/search?q=&force=1` | Search projects (server-side filtering, KV-cached) |
 | `POST /projects/refresh` | Force-refresh projects cache from Holded |
+| `GET /sales-orders/search?contactId=&projectId=` | Search sales orders by contact and optionally filter by project |
+| `GET /documents/search?contactId=&projectId=` | Search sales orders, purchase orders, waybills, and estimates for the card-back tabs |
 
-Contacts and projects are cached in Cloudflare KV (15-min TTL). The worker fetches all records from Holded, stores them in KV, and filters server-side. The frontend calls `/contacts/search` or `/projects/search` with a query string.
+Projects are cached in Cloudflare KV (15-min TTL). Contact search calls Holded V2 directly using name, code, email, phone, and mobile filters in parallel, then merges results by ID.
 
 ## Common issues
 

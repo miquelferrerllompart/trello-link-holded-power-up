@@ -1,5 +1,14 @@
+import {
+  fetchAllPages,
+  normalizeV2Contact,
+  searchContactsV2,
+  searchHoldedDocumentsV2,
+  searchSalesOrdersV2,
+} from './holded-v2';
+
 interface Env {
-  HOLDED_API_KEY: string;
+  HOLDED_API_KEY?: string;
+  HOLDED_API_V2?: string;
   CACHE: KVNamespace;
 }
 
@@ -13,6 +22,14 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+
+function getV2ApiKey(env: Env): string {
+  return env.HOLDED_API_V2 || env.HOLDED_API_KEY || '';
+}
+
+function getV1ApiKey(env: Env): string {
+  return env.HOLDED_API_KEY || '';
+}
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -48,33 +65,9 @@ interface ContactRecord {
   shippingAddresses: unknown[];
 }
 
-const PAGE_SIZE = 500;
-
 async function fetchAllContactsFromHolded(apiKey: string): Promise<ContactRecord[]> {
-  const all: ContactRecord[] = [];
-  for (let page = 1; ; page++) {
-    const response = await fetch(
-      `${HOLDED_BASE}/api/invoicing/v1/contacts?page=${page}`,
-      { headers: { key: apiKey, Accept: 'application/json' } },
-    );
-    if (!response.ok) {
-      throw new Error(`Holded API error: ${response.status}`);
-    }
-    const body = await response.text();
-    const contentType = response.headers.get('Content-Type') || '';
-    if (contentType.includes('text/html')) {
-      throw new Error('Invalid API key or unauthorized');
-    }
-    let batch: ContactRecord[];
-    try {
-      batch = JSON.parse(body);
-    } catch {
-      throw new Error(`Unexpected Holded API response (${response.status})`);
-    }
-    all.push(...batch);
-    if (batch.length < PAGE_SIZE) break;
-  }
-  return all;
+  const contacts = await fetchAllPages<Record<string, unknown>>(`${HOLDED_BASE}/api/v2/contacts`, apiKey);
+  return contacts.map((contact) => normalizeV2Contact(contact) as unknown as ContactRecord);
 }
 
 async function getContacts(env: Env, force: boolean): Promise<ContactRecord[]> {
@@ -83,7 +76,7 @@ async function getContacts(env: Env, force: boolean): Promise<ContactRecord[]> {
     if (cached) return cached as ContactRecord[];
   }
 
-  const contacts = await fetchAllContactsFromHolded(env.HOLDED_API_KEY);
+  const contacts = await fetchAllContactsFromHolded(getV2ApiKey(env));
 
   // Store only the fields we need for search + selection
   const slim = contacts.map((c) => ({
@@ -108,27 +101,12 @@ async function getContacts(env: Env, force: boolean): Promise<ContactRecord[]> {
   return slim;
 }
 
-function stripNonDigits(v: string | null | undefined): string {
-  return v ? v.replace(/\D/g, '') : '';
-}
-
-function searchContacts(contacts: ContactRecord[], query: string): ContactRecord[] {
-  if (!query) return [];
-  return contacts.filter((c) => {
-    const text = [c.name, c.email, c.code, c.tradeName, c.vatnumber, c.phone, c.mobile,
-      stripNonDigits(c.phone), stripNonDigits(c.mobile)].filter(Boolean).join(' ');
-    return fuzzyMatch(text, query);
-  });
-}
-
 async function handleContactsSearch(url: URL, env: Env): Promise<Response> {
   const query = url.searchParams.get('q') || '';
-  const force = url.searchParams.get('force') === '1';
 
   try {
-    const contacts = await getContacts(env, force);
-    const results = searchContacts(contacts, query);
-    return jsonResponse({ total: contacts.length, results });
+    const results = await searchContactsV2(query, getV2ApiKey(env));
+    return jsonResponse({ total: results.length, results });
   } catch (err) {
     return jsonResponse({ error: (err as Error).message }, 502);
   }
@@ -144,23 +122,7 @@ interface ProjectRecord {
 }
 
 async function fetchAllProjectsFromHolded(apiKey: string): Promise<ProjectRecord[]> {
-  const response = await fetch(
-    `${HOLDED_BASE}/api/projects/v1/projects`,
-    { headers: { key: apiKey, Accept: 'application/json' } },
-  );
-  if (!response.ok) {
-    throw new Error(`Holded API error: ${response.status}`);
-  }
-  const body = await response.text();
-  const contentType = response.headers.get('Content-Type') || '';
-  if (contentType.includes('text/html')) {
-    throw new Error('Invalid API key or unauthorized');
-  }
-  try {
-    return JSON.parse(body);
-  } catch {
-    throw new Error(`Unexpected Holded API response (${response.status})`);
-  }
+  return fetchAllPages<ProjectRecord>(`${HOLDED_BASE}/api/v2/projects`, apiKey);
 }
 
 async function getProjects(env: Env, force: boolean): Promise<ProjectRecord[]> {
@@ -169,7 +131,7 @@ async function getProjects(env: Env, force: boolean): Promise<ProjectRecord[]> {
     if (cached) return cached as ProjectRecord[];
   }
 
-  const projects = await fetchAllProjectsFromHolded(env.HOLDED_API_KEY);
+  const projects = await fetchAllProjectsFromHolded(getV2ApiKey(env));
 
   const slim = projects
     .filter((p) => !p.archived)
@@ -225,14 +187,52 @@ async function handleContactsRefresh(env: Env): Promise<Response> {
   }
 }
 
+async function handleSalesOrdersSearch(url: URL, env: Env): Promise<Response> {
+  const contactId = url.searchParams.get('contactId');
+  const projectId = url.searchParams.get('projectId');
+
+  try {
+    const results = await searchSalesOrdersV2(getV2ApiKey(env), fetch, { contactId, projectId });
+    return jsonResponse({ total: results.length, results });
+  } catch (err) {
+    return jsonResponse({ error: (err as Error).message }, 502);
+  }
+}
+
+async function handleDocumentsSearch(url: URL, env: Env): Promise<Response> {
+  const contactId = url.searchParams.get('contactId');
+  const projectId = url.searchParams.get('projectId');
+
+  try {
+    const results = await searchHoldedDocumentsV2(getV2ApiKey(env), fetch, { contactId, projectId });
+    return jsonResponse({
+      totals: {
+        salesOrders: results.salesOrders.length,
+        purchaseOrders: results.purchaseOrders.length,
+        waybills: results.waybills.length,
+        estimates: results.estimates.length,
+      },
+      otherTotals: {
+        salesOrders: results.other?.salesOrders.length || 0,
+        purchaseOrders: results.other?.purchaseOrders.length || 0,
+        waybills: results.other?.waybills.length || 0,
+        estimates: results.other?.estimates.length || 0,
+      },
+      results,
+    });
+  } catch (err) {
+    return jsonResponse({ error: (err as Error).message }, 502);
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    if (!env.HOLDED_API_KEY) {
-      return jsonResponse({ error: 'HOLDED_API_KEY secret not configured in worker' }, 500);
+    if (!getV2ApiKey(env) && !getV1ApiKey(env)) {
+      return jsonResponse({ error: 'Holded API secret not configured in worker' }, 500);
     }
 
     const url = new URL(request.url);
@@ -250,6 +250,12 @@ export default {
     if (request.method === 'POST' && url.pathname === '/projects/refresh') {
       return handleProjectsRefresh(env);
     }
+    if (request.method === 'GET' && url.pathname === '/sales-orders/search') {
+      return handleSalesOrdersSearch(url, env);
+    }
+    if (request.method === 'GET' && url.pathname === '/documents/search') {
+      return handleDocumentsSearch(url, env);
+    }
 
     // Proxy pass-through for other Holded API calls (create contact, etc.)
     const method = request.method;
@@ -259,12 +265,24 @@ export default {
 
     const path = url.pathname + url.search;
 
+    const isV1Path = url.pathname.startsWith('/api/invoicing/v1/');
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+    };
+
+    if (isV1Path) {
+      const apiKey = getV1ApiKey(env);
+      if (!apiKey) return jsonResponse({ error: 'HOLDED_API_KEY secret not configured for V1 Holded calls' }, 500);
+      headers.key = apiKey;
+    } else {
+      const apiKey = getV2ApiKey(env);
+      if (!apiKey) return jsonResponse({ error: 'HOLDED_API_V2 secret not configured for V2 Holded calls' }, 500);
+      headers.Authorization = `Bearer ${apiKey}`;
+    }
+
     const fetchOptions: RequestInit = {
       method,
-      headers: {
-        key: env.HOLDED_API_KEY,
-        Accept: 'application/json',
-      },
+      headers,
     };
 
     if (method === 'POST' || method === 'PUT') {

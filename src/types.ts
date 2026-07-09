@@ -78,7 +78,7 @@ export interface HoldedContact {
   updatedHash?: string;
 }
 
-/** Payload for POST /api/invoicing/v1/contacts */
+/** Payload for POST /api/v2/contacts */
 export interface CreateContactPayload {
   name: string;
   /** DNI / CIF — maps to the `code` field in the contact */
@@ -103,14 +103,14 @@ export interface CreateContactPayload {
     salesTax?: string[];
     purchasesTax?: string[];
   };
-  /** Creates a note attached to the contact */
+  /** Legacy-only: V2 contact creation does not accept notes in the contact payload. */
   note?: string;
 }
 
-/** Response from POST /api/invoicing/v1/contacts */
+/** Response from POST /api/v2/contacts */
 export interface CreateContactResponse {
-  status: number;
-  info: string;
+  status?: number;
+  info?: string;
   id: string;
 }
 
@@ -120,6 +120,35 @@ export interface HoldedProject {
   id: string;
   name: string;
   status?: string;
+}
+
+// ── Holded Sales Orders ──
+
+export interface HoldedSalesOrderLine {
+  projectId?: string | null;
+  name?: string;
+  units?: string;
+  [key: string]: unknown;
+}
+
+export interface HoldedSalesOrder {
+  id: string;
+  documentNumber: string | null;
+  contactId: string | null;
+  contactName: string | null;
+  description: string | null;
+  date: string | null;
+  dueDate: string | null;
+  subtotal: string | null;
+  discount: string | null;
+  total: string | null;
+  tax: string | null;
+  currency: string | null;
+  status: string | null;
+  tags: string[];
+  lines: HoldedSalesOrderLine[];
+  projectId: string | null;
+  url: string;
 }
 
 // ── Power-Up internal data ──

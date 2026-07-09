@@ -128,12 +128,6 @@ submitBtn.addEventListener('click', async () => {
   successMsg.style.display = 'none';
 
   try {
-    // Fetch Trello context for the note
-    const [member, board] = await Promise.all([
-      t.member('fullName').catch(() => ({ fullName: 'Desconocido' })),
-      t.board('name').catch(() => ({ name: 'Desconocido' })),
-    ]);
-
     const contactName = formatSpanishTextCase(nameInput.value);
     const billAddress = {
       address: formatSpanishTextCase(addressInput.value),
@@ -155,7 +149,6 @@ submitBtn.addEventListener('click', async () => {
         salesTax: ['s_iva_21'],
         purchasesTax: ['s_iva_21'],
       },
-      note: `Creado desde Trello por ${member.fullName} — Tablero: ${board.name}`,
     };
     const result = await createContact(payload);
 
