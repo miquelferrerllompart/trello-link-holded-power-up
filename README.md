@@ -136,11 +136,13 @@ trello-link-holded-power-up/
 
 ## Deploy
 
-### 1. Configurar el API key de Holded en el Worker
+### 1. Configurar las API keys de Holded en el Worker
 
 ```bash
-echo "TU_API_KEY_DE_HOLDED" | npx wrangler secret put HOLDED_API_KEY --name holded-proxy
+echo "TU_API_KEY_V2_DE_HOLDED" | npx wrangler secret put HOLDED_API_V2 --name holded-proxy
 ```
+
+`HOLDED_API_KEY` se mantiene para llamadas legacy V1 si se necesita actualizar direcciones de envío existentes.
 
 ### 2. Desplegar el Worker
 
@@ -177,18 +179,20 @@ El frontend queda en `https://trello-link-holded-power-up.pages.dev`.
 | Hosting frontend | Cloudflare Pages |
 | Proxy API | Cloudflare Workers |
 | SDK | [Trello Power-Up SDK](https://developer.atlassian.com/cloud/trello/power-ups/) |
-| API | [Holded API v1](https://developers.holded.com/) |
+| API | [Holded API v2](https://www.holded.com/es/desarrolladores/referencia-api) |
 
 ## API de Holded (endpoints utilizados)
 
 | Endpoint | Uso |
 |---|---|
-| `GET /api/invoicing/v1/contacts` | Listar contactos (clientes/proveedores) |
-| `POST /api/invoicing/v1/contacts` | Crear nuevo contacto |
-| `PUT /api/invoicing/v1/contacts/:id` | Actualizar contacto (ej. añadir dirección de envío) |
-| `GET /api/projects/v1/projects` | Listar proyectos |
+| `GET /contacts/search?q=` | Buscar contactos en V2 por nombre, CIF/NIF, email, telefono y movil |
+| `POST /api/v2/contacts` | Crear nuevo contacto |
+| `GET /projects/search?q=` | Buscar proyectos (cache KV de 15 minutos) |
+| `GET /sales-orders/search?contactId=&projectId=` | Listar pedidos de venta por contacto y filtrar por proyecto |
+| `GET /documents/search?contactId=&projectId=` | Listar pedidos de venta, pedidos de compra, albaranes y presupuestos para las pestañas del card back |
+| `PUT /api/invoicing/v1/contacts/:id` | Legacy V1 para actualizar direcciones de envio, si hay API key V1 configurada |
 
-Todos los contactos/proyectos se cargan una vez y se filtran en el cliente.
+La busqueda de contactos ya no cachea clientes: el Worker consulta V2 en paralelo y fusiona resultados. Proyectos se mantienen cacheados en KV por volumen y estabilidad.
 
 ## Datos almacenados por tarjeta
 

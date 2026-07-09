@@ -1,4 +1,4 @@
-import { searchContacts, refreshContacts } from '../holded-api';
+import { searchContacts } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
@@ -10,19 +10,8 @@ import type { HoldedContact, TrelloContext } from '../types';
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
 const searchInput = document.getElementById('search') as HTMLInputElement;
 const resultsDiv = document.getElementById('results') as HTMLDivElement;
-const reloadBtn = document.getElementById('reload-btn') as HTMLButtonElement;
-const tooltipEl = reloadBtn.querySelector('.tooltip') as HTMLSpanElement;
 
 let debounceTimer: ReturnType<typeof setTimeout>;
-let totalContacts: number | null = null;
-
-function updateTooltip() {
-  if (totalContacts !== null) {
-    tooltipEl.textContent = `${totalContacts} contactos en caché — pulsa para recargar desde Holded`;
-  } else {
-    tooltipEl.textContent = 'Cargar lista de contactos desde Holded';
-  }
-}
 
 function addCreateButton() {
   resultsDiv.insertAdjacentHTML('beforeend',
@@ -105,9 +94,7 @@ async function doSearch() {
 
   resultsDiv.innerHTML = '<div class="loading">Buscando...</div>';
   try {
-    const { total, results } = await searchContacts(query);
-    totalContacts = total;
-    updateTooltip();
+    const { results } = await searchContacts(query);
     renderResults(results, query);
   } catch (err) {
     resultsDiv.innerHTML = `<div class="error">Error: ${(err as Error).message}</div>`;
@@ -118,29 +105,5 @@ searchInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(doSearch, 300);
 });
-
-reloadBtn.addEventListener('click', async () => {
-  reloadBtn.classList.add('spinning');
-  try {
-    const { total } = await refreshContacts();
-    totalContacts = total;
-    updateTooltip();
-    // Re-run current search with fresh data
-    const query = searchInput.value.trim();
-    if (query) {
-      const { results } = await searchContacts(query);
-      renderResults(results, query);
-    }
-  } catch (err) {
-    resultsDiv.innerHTML = `<div class="error">Error: ${(err as Error).message}</div>`;
-  }
-  reloadBtn.classList.remove('spinning');
-});
-
-// Warm up: trigger a no-query search so the worker loads contacts into KV if not cached
-searchContacts('').then(({ total }) => {
-  totalContacts = total;
-  updateTooltip();
-}).catch(() => {});
 
 renderResults([], '');
