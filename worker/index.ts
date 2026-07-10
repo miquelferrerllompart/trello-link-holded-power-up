@@ -1,9 +1,18 @@
 import {
+  attachShippedItemsTracking,
   fetchAllPages,
+  normalizeV2Document,
   normalizeV2Contact,
   searchContactsV2,
   searchHoldedDocumentsV2,
   searchSalesOrdersV2,
+  splitDocumentsForProject,
+} from './holded-v2';
+import type {
+  HoldedDocumentType,
+  HoldedV2Contact,
+  HoldedV2Document,
+  NormalizedHoldedDocument,
 } from './holded-v2';
 
 interface Env {
@@ -16,6 +25,8 @@ const HOLDED_BASE = 'https://api.holded.com';
 const CONTACTS_CACHE_KEY = 'holded_contacts';
 const PROJECTS_CACHE_KEY = 'holded_projects';
 const CACHE_TTL_SECONDS = 15 * 60; // 15 minutes
+const DOCUMENTS_PAGE_SIZE = 10;
+const DOCUMENT_TYPES: HoldedDocumentType[] = ['sales-orders', 'waybills', 'estimates'];
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -66,7 +77,7 @@ interface ContactRecord {
 }
 
 async function fetchAllContactsFromHolded(apiKey: string): Promise<ContactRecord[]> {
-  const contacts = await fetchAllPages<Record<string, unknown>>(`${HOLDED_BASE}/api/v2/contacts`, apiKey);
+  const contacts = await fetchAllPages<HoldedV2Contact>(`${HOLDED_BASE}/api/v2/contacts`, apiKey);
   return contacts.map((contact) => normalizeV2Contact(contact) as unknown as ContactRecord);
 }
 
@@ -199,25 +210,130 @@ async function handleSalesOrdersSearch(url: URL, env: Env): Promise<Response> {
   }
 }
 
+function parsePositiveInteger(value: string | null, fallback: number, maximum: number): number {
+  const parsed = Number.parseInt(value || '', 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return fallback;
+  return Math.min(parsed, maximum);
+}
+
+function getDocumentSortTime(document: NormalizedHoldedDocument): number {
+  const value = document.updatedAt || document.date;
+  if (!value) return 0;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function sortDocumentsNewestFirst(documents: NormalizedHoldedDocument[]): NormalizedHoldedDocument[] {
+  return documents.sort((left, right) => (
+    getDocumentSortTime(right) - getDocumentSortTime(left) ||
+    (right.documentNumber || '').localeCompare(left.documentNumber || '', 'es', { numeric: true }) ||
+    right.id.localeCompare(left.id)
+  ));
+}
+
+async function getCustomerDocumentsByType(
+  env: Env,
+  contactId: string,
+  type: HoldedDocumentType,
+): Promise<NormalizedHoldedDocument[]> {
+  const rawDocuments = await fetchAllPages<HoldedV2Document>(
+    `${HOLDED_BASE}/api/v2/${type}`,
+    getV2ApiKey(env),
+    fetch,
+    { contact_id: contactId },
+  );
+  const documents = sortDocumentsNewestFirst(
+    rawDocuments.map((document) => normalizeV2Document(type, document)),
+  );
+
+  return documents;
+}
+
+function stripHoldedDocumentPrefix(id: string): string {
+  return id.replace(/^(salesorder|sales-order|waybill|estimate|purchaseorder|purchase-order)-/, '');
+}
+
+function buildStatusMap(documents: NormalizedHoldedDocument[]): Map<string, string | null> {
+  const statuses = new Map<string, string | null>();
+
+  for (const document of documents) {
+    const bareId = stripHoldedDocumentPrefix(document.id);
+    statuses.set(document.id, document.status);
+    statuses.set(bareId, document.status);
+    statuses.set(`${document.type.slice(0, -1)}-${bareId}`, document.status);
+  }
+
+  return statuses;
+}
+
 async function handleDocumentsSearch(url: URL, env: Env): Promise<Response> {
   const contactId = url.searchParams.get('contactId');
   const projectId = url.searchParams.get('projectId');
+  const type = url.searchParams.get('type') as HoldedDocumentType | null;
+  const scope = url.searchParams.get('scope') || 'matched';
+
+  if (!contactId) return jsonResponse({ error: 'contactId is required' }, 400);
+
+  // Keep the grouped response during the Worker/Pages rollout. The paginated
+  // card-back always sends `type`, so only older deployed clients use this.
+  if (!type) {
+    try {
+      const grouped = await searchHoldedDocumentsV2(getV2ApiKey(env), fetch, { contactId, projectId });
+      return jsonResponse({
+        totals: {
+          salesOrders: grouped.salesOrders.length,
+          purchaseOrders: grouped.purchaseOrders.length,
+          waybills: grouped.waybills.length,
+          estimates: grouped.estimates.length,
+        },
+        otherTotals: {
+          salesOrders: grouped.other?.salesOrders.length || 0,
+          purchaseOrders: grouped.other?.purchaseOrders.length || 0,
+          waybills: grouped.other?.waybills.length || 0,
+          estimates: grouped.other?.estimates.length || 0,
+        },
+        results: grouped,
+      });
+    } catch (err) {
+      return jsonResponse({ error: (err as Error).message }, 502);
+    }
+  }
+
+  if (!DOCUMENT_TYPES.includes(type)) {
+    return jsonResponse({ error: 'type must be sales-orders, waybills, or estimates' }, 400);
+  }
+  if (scope !== 'matched' && scope !== 'other') {
+    return jsonResponse({ error: 'scope must be matched or other' }, 400);
+  }
+
+  const requestedPage = parsePositiveInteger(url.searchParams.get('page'), 1, 10_000);
+  const pageSize = parsePositiveInteger(url.searchParams.get('pageSize'), DOCUMENTS_PAGE_SIZE, DOCUMENTS_PAGE_SIZE);
 
   try {
-    const results = await searchHoldedDocumentsV2(getV2ApiKey(env), fetch, { contactId, projectId });
+    const documents = await getCustomerDocumentsByType(env, contactId, type);
+    const split = splitDocumentsForProject(documents, projectId);
+    const selected = scope === 'other' ? split.other : split.matched;
+    const total = selected.length;
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const start = (page - 1) * pageSize;
+    let results = selected.slice(start, start + pageSize);
+
+    // Shipment status is an extra Holded call per sales order. Enrich only the
+    // ten rows that are visible instead of every order owned by the customer.
+    if (type === 'sales-orders') {
+      const waybills = await getCustomerDocumentsByType(env, contactId, 'waybills');
+      results = await attachShippedItemsTracking(results, getV2ApiKey(env), fetch, buildStatusMap(waybills));
+    }
+
     return jsonResponse({
-      totals: {
-        salesOrders: results.salesOrders.length,
-        purchaseOrders: results.purchaseOrders.length,
-        waybills: results.waybills.length,
-        estimates: results.estimates.length,
-      },
-      otherTotals: {
-        salesOrders: results.other?.salesOrders.length || 0,
-        purchaseOrders: results.other?.purchaseOrders.length || 0,
-        waybills: results.other?.waybills.length || 0,
-        estimates: results.other?.estimates.length || 0,
-      },
+      type,
+      scope,
+      page,
+      pageSize,
+      total,
+      totalPages,
+      otherTotal: split.other.length,
       results,
     });
   } catch (err) {

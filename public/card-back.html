@@ -179,6 +179,8 @@
     }
     .documents-button:focus-visible,
     .documents-tab:focus-visible,
+    .documents-scope-button:focus-visible,
+    .documents-page-button:focus-visible,
     .document-row:focus-visible {
       outline: 2px solid #388bff;
       outline-offset: 2px;
@@ -189,7 +191,7 @@
     }
     .documents-tabs {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 4px;
       margin-bottom: 6px;
       padding: 2px;
@@ -215,6 +217,71 @@
       background: #ffffff;
       color: #172b4d;
       box-shadow: 0 1px 2px #091e4224;
+    }
+    .documents-scope-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 7px 2px 8px;
+    }
+    .documents-context {
+      color: #626f86;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 16px;
+      white-space: nowrap;
+    }
+    .documents-scope {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      min-width: 0;
+      padding: 2px;
+      border: 1px solid #091e4224;
+      border-radius: 7px;
+      background: #ffffff;
+    }
+    .documents-scope-button {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: #626f86;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 16px;
+      padding: 4px 7px;
+      white-space: nowrap;
+    }
+    .documents-scope-button:hover {
+      background: #091e420f;
+      color: #172b4d;
+    }
+    .documents-scope-button[aria-pressed="true"] {
+      background: #e9f2ff;
+      color: #0c66a1;
+    }
+    .documents-scope-count {
+      min-width: 14px;
+      border-radius: 999px;
+      background: #091e420f;
+      color: inherit;
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      line-height: 14px;
+      padding: 0 4px;
+      text-align: center;
+    }
+    .documents-scope-button[aria-pressed="true"] .documents-scope-count {
+      background: #ffffffb8;
     }
     .document-list {
       display: grid;
@@ -286,45 +353,89 @@
       line-height: 16px;
       padding: 2px 0;
     }
-    .documents-other {
-      margin-top: 6px;
-      padding-top: 6px;
-      border-top: 1px dashed #091e4224;
+    .documents-loading-label {
+      color: #626f86;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 16px;
+      margin: 2px 8px 5px;
     }
-    .documents-other-button {
-      appearance: none;
+    .documents-skeleton {
+      display: grid;
+      gap: 4px;
+    }
+    .documents-skeleton-row {
+      position: relative;
+      height: 30px;
+      overflow: hidden;
+      border-radius: 6px;
+      background: #091e420f;
+    }
+    .documents-skeleton-row::after {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, #ffffff8f 48%, transparent 100%);
+      content: '';
+      transform: translateX(-100%);
+      animation: documents-loading-sweep 1.35s ease-in-out infinite;
+    }
+    @keyframes documents-loading-sweep {
+      to { transform: translateX(100%); }
+    }
+    .documents-pagination {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
+      min-height: 28px;
+      margin-top: 6px;
+    }
+    .documents-page-controls {
+      display: flex;
+      align-items: center;
       gap: 8px;
-      width: 100%;
+    }
+    .documents-page-button {
+      appearance: none;
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
       border: 0;
       border-radius: 6px;
-      background: transparent;
-      color: #44546f;
-      cursor: pointer;
-      font: inherit;
-      font-size: 12px;
-      font-weight: 600;
-      line-height: 16px;
-      padding: 5px 6px;
-      text-align: left;
-    }
-    .documents-other-button:hover {
       background: #091e420f;
       color: #172b4d;
+      cursor: pointer;
+      font: inherit;
+      font-size: 20px;
+      line-height: 20px;
+      padding: 0 0 2px;
     }
-    .documents-other-button:focus-visible {
-      outline: 2px solid #388bff;
-      outline-offset: 2px;
+    .documents-page-button:hover:not([disabled]) {
+      background: #091e4224;
     }
-    .documents-other-count {
+    .documents-page-button[disabled] {
+      cursor: default;
+      opacity: 0.35;
+    }
+    .documents-page-label {
+      min-width: 84px;
       color: #626f86;
-      font-weight: 500;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      line-height: 16px;
+      text-align: center;
+    }
+    .documents-range {
+      color: #626f86;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      line-height: 16px;
       white-space: nowrap;
     }
-    .documents-other-list {
-      margin-top: 4px;
+    .documents-page-label strong {
+      color: #172b4d;
+      font-weight: 700;
     }
 
     /* Dark mode */
@@ -354,7 +465,9 @@
       .documents-hint,
       .document-date,
       .documents-note,
-      .documents-other-count { color: #8c9bab; }
+      .documents-loading-label,
+      .documents-range,
+      .documents-page-label { color: #8c9bab; }
       .documents-button { background: #a6c5e229; color: #b6c2cf; }
       .documents-button:hover { background: #a6c5e23d; }
       .documents-tabs { background: #a6c5e229; }
@@ -364,6 +477,13 @@
         color: #b6c2cf;
         box-shadow: 0 1px 2px #030404;
       }
+      .documents-context { color: #8c9bab; }
+      .documents-scope { background: #1d2125; border-color: #a6c5e229; }
+      .documents-scope-button { color: #8c9bab; }
+      .documents-scope-button:hover { background: #a6c5e229; color: #b6c2cf; }
+      .documents-scope-button[aria-pressed="true"] { background: #1c2b41; color: #579dff; }
+      .documents-scope-count { background: #a6c5e229; }
+      .documents-scope-button[aria-pressed="true"] .documents-scope-count { background: #579dff24; }
       .document-row { color: #b6c2cf; }
       .document-row:hover { background: #a6c5e229; }
       .document-number { color: #579dff; }
@@ -374,12 +494,42 @@
       .document-pill.review { background: rgba(245, 205, 71, 0.14); color: #f5cd47; }
       .document-pill.cancelled,
       .document-pill.failed { background: rgba(248, 113, 104, 0.16); color: #f87168; }
-      .documents-other { border-top-color: #a6c5e229; }
-      .documents-other-button { color: #8c9bab; }
-      .documents-other-button:hover {
-        background: #a6c5e229;
-        color: #b6c2cf;
+      .documents-page-button { background: #a6c5e229; color: #b6c2cf; }
+      .documents-page-button:hover:not([disabled]) { background: #a6c5e23d; }
+      .documents-page-label strong { color: #b6c2cf; }
+      .documents-skeleton-row { background: #a6c5e214; }
+      .documents-skeleton-row::after { background: linear-gradient(90deg, transparent 0%, #a6c5e21f 48%, transparent 100%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .documents-skeleton-row::after { animation: none; }
+    }
+    @media (max-width: 480px) {
+      .documents-scope-row {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 4px;
       }
+      .documents-context { margin-left: 5px; }
+      .documents-scope {
+        box-sizing: border-box;
+        width: 100%;
+      }
+      .documents-scope-button {
+        flex: 1 1 0;
+        justify-content: center;
+      }
+      .document-row {
+        grid-template-columns: 12px minmax(0, 1fr) auto;
+      }
+      .document-meta {
+        grid-column: 2 / 4;
+        grid-row: 2;
+      }
+      .document-date {
+        grid-column: 3;
+        grid-row: 1;
+      }
+      .documents-skeleton-row { height: 48px; }
     }
   </style>
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
@@ -518,7 +668,15 @@
         total += getNumberValue(items[i].total);
       }
 
-      if (pending <= 0 && sent !== 0) return { label: 'Preparado', className: 'served' };
+      if (pending <= 0 && sent !== 0) {
+        var waybillStatuses = Array.isArray(tracking.waybillStatuses) ? tracking.waybillStatuses : [];
+        var delivered = waybillStatuses.length > 0 && waybillStatuses.every(function(waybill) {
+          return waybill.status === 'completed';
+        });
+        return delivered
+          ? { label: 'Entregado', className: 'served' }
+          : { label: 'Preparado', className: 'served' };
+      }
       if (sent === 0 && pending > 0) return { label: 'Pendiente', className: 'pending' };
       if (sent > 0 && pending > 0) return { label: 'Parcial', className: 'partial' };
       return { label: 'Pendiente', className: 'pending' };
@@ -545,14 +703,45 @@
     }
 
     var DOCUMENT_TABS = [
-      { key: 'salesOrders', label: 'Pedidos venta', empty: 'No hay pedidos de venta para este cliente.' },
-      { key: 'waybills', label: 'Albaranes', empty: 'No hay albaranes para este cliente.' },
-      { key: 'estimates', label: 'Presupuestos', empty: 'No hay presupuestos para este cliente.' },
+      { key: 'salesOrders', type: 'sales-orders', label: 'Pedidos venta', loadingLabel: 'pedidos de venta', emptyClient: 'No hay pedidos de venta para este cliente.', emptyProject: 'No hay pedidos de venta en el proyecto vinculado.', emptyOther: 'No hay pedidos de venta en otros proyectos.' },
+      { key: 'waybills', type: 'waybills', label: 'Albaranes', loadingLabel: 'albaranes', emptyClient: 'No hay albaranes para este cliente.', emptyProject: 'No hay albaranes en el proyecto vinculado.', emptyOther: 'No hay albaranes en otros proyectos.' },
+      { key: 'estimates', type: 'estimates', label: 'Presupuestos', loadingLabel: 'presupuestos', emptyClient: 'No hay presupuestos para este cliente.', emptyProject: 'No hay presupuestos en el proyecto vinculado.', emptyOther: 'No hay presupuestos en otros proyectos.' },
     ];
+    var DOCUMENT_PAGE_SIZE = 10;
     var documentsCache = {};
+    var documentRequests = {};
+    var documentErrors = {};
+    var documentTotals = {};
+    var documentViews = {};
 
-    function getDocumentsCacheKey(data) {
+    function getDocumentsViewKey(data) {
       return (data.contactId || '') + '|' + (data.projectId || '');
+    }
+
+    function getDocumentsView(data) {
+      var key = getDocumentsViewKey(data);
+      if (!documentViews[key]) {
+        documentViews[key] = {
+          expanded: false,
+          activeKey: 'salesOrders',
+          pages: {},
+          otherPages: {},
+          scope: 'matched',
+        };
+      }
+      return documentViews[key];
+    }
+
+    function getDocumentTab(key) {
+      return DOCUMENT_TABS.find(function(tab) { return tab.key === key; }) || DOCUMENT_TABS[0];
+    }
+
+    function getDocumentsPageKey(data, tab, scope, page) {
+      return getDocumentsViewKey(data) + '|' + tab.type + '|' + scope + '|' + page;
+    }
+
+    function getDocumentsTotalsKey(data, tab) {
+      return getDocumentsViewKey(data) + '|' + tab.type;
     }
 
     function formatDateLabel(value) {
@@ -583,9 +772,12 @@
       return 'Sin fecha';
     }
 
-    function renderDocumentRows(items, tab) {
+    function renderDocumentRows(items, tab, scope, hasProject) {
       if (!items || items.length === 0) {
-        return '<div class="documents-note">' + tab.empty + '</div>';
+        var emptyMessage = scope === 'other'
+          ? tab.emptyOther
+          : (hasProject ? tab.emptyProject : tab.emptyClient);
+        return '<div class="documents-note">' + emptyMessage + '</div>';
       }
 
       return '<div class="document-list">' + items.map(function(documentItem) {
@@ -606,62 +798,217 @@
       }).join('') + '</div>';
     }
 
-    function renderOtherDocuments(otherItems, tab, showOther) {
-      if (!otherItems || otherItems.length === 0) return '';
-
-      return '<div class="documents-other">' +
-        '<button type="button" class="documents-other-button" data-show-other="' + tab.key + '" aria-expanded="' + (showOther ? 'true' : 'false') + '">' +
-          '<span>' + (showOther ? 'Ocultar otros sin proyecto' : 'Ver otros sin proyecto') + '</span>' +
-          '<span class="documents-other-count">' + otherItems.length + '</span>' +
-        '</button>' +
-        (showOther ? '<div class="documents-other-list">' + renderDocumentRows(otherItems, tab) + '</div>' : '') +
+    function renderDocumentsLoading(tab) {
+      return '<div class="documents-loading" role="status">' +
+        '<div class="documents-loading-label">Cargando ' + tab.loadingLabel + '…</div>' +
+        '<div class="documents-skeleton" aria-hidden="true">' +
+          '<div class="documents-skeleton-row"></div>' +
+          '<div class="documents-skeleton-row"></div>' +
+          '<div class="documents-skeleton-row"></div>' +
+        '</div>' +
       '</div>';
     }
 
-    function renderDocumentsPanel(data, result, activeKey, showOther) {
+    function renderPagination(result, scope) {
+      if (!result || result.totalPages <= 1) return '';
+
+      var previousDisabled = result.page <= 1 ? ' disabled' : '';
+      var nextDisabled = result.page >= result.totalPages ? ' disabled' : '';
+      var scopeLabel = scope === 'other' ? 'otros documentos' : 'documentos del proyecto';
+      var rangeStart = ((result.page - 1) * result.pageSize) + 1;
+      var rangeEnd = Math.min(result.page * result.pageSize, result.total);
+
+      return '<div class="documents-pagination" role="navigation" aria-label="Paginación de ' + scopeLabel + '">' +
+        '<span class="documents-range">' + rangeStart + '–' + rangeEnd + ' de ' + result.total + '</span>' +
+        '<div class="documents-page-controls">' +
+          '<button type="button" class="documents-page-button" data-page-scope="' + scope + '" data-page="' + (result.page - 1) + '" aria-label="Página anterior"' + previousDisabled + '>‹</button>' +
+          '<span class="documents-page-label">Página <strong>' + result.page + '</strong> de ' + result.totalPages + '</span>' +
+          '<button type="button" class="documents-page-button" data-page-scope="' + scope + '" data-page="' + (result.page + 1) + '" aria-label="Página siguiente"' + nextDisabled + '>›</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function renderDocumentScope(data, tab, view) {
+      var totals = documentTotals[getDocumentsTotalsKey(data, tab)] || {};
+      var matchedTotal = typeof totals.total === 'number' ? totals.total : '…';
+      var otherTotal = typeof totals.otherTotal === 'number' ? totals.otherTotal : '…';
+
+      if (!data.projectId) {
+        return '<div class="documents-context">Este cliente</div>';
+      }
+
+      return '<div class="documents-scope-row">' +
+        '<span class="documents-context">Este cliente</span>' +
+        '<div class="documents-scope" aria-label="Ámbito de documentos">' +
+          '<button type="button" class="documents-scope-button" data-document-scope="matched" aria-pressed="' + (view.scope === 'matched' ? 'true' : 'false') + '">' +
+            '<span>Proyecto vinculado</span> <span class="documents-scope-count">' + matchedTotal + '</span>' +
+          '</button>' +
+          '<button type="button" class="documents-scope-button" data-document-scope="other" aria-pressed="' + (view.scope === 'other' ? 'true' : 'false') + '">' +
+            '<span>Otros proyectos</span> <span class="documents-scope-count">' + otherTotal + '</span>' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+    }
+
+    function ensureDocumentsPage(data, tab, scope, page) {
+      var cacheKey = getDocumentsPageKey(data, tab, scope, page);
+      if (documentsCache[cacheKey] || documentRequests[cacheKey]) return;
+
+      var params = new URLSearchParams({
+        contactId: data.contactId,
+        type: tab.type,
+        scope: scope,
+        page: String(page),
+        pageSize: String(DOCUMENT_PAGE_SIZE),
+      });
+      if (data.projectId) params.set('projectId', data.projectId);
+
+      documentRequests[cacheKey] = true;
+      delete documentErrors[cacheKey];
+
+      fetch(HOLDED_PROXY_URL + '/documents/search?' + params.toString())
+        .then(function(response) {
+          if (!response.ok) throw new Error('Holded API error: ' + response.status);
+          return response.json();
+        })
+        .then(function(result) {
+          delete documentRequests[cacheKey];
+          documentsCache[cacheKey] = result;
+          documentsCache[getDocumentsPageKey(data, tab, scope, result.page)] = result;
+          var totalsKey = getDocumentsTotalsKey(data, tab);
+          var existingTotals = documentTotals[totalsKey] || {};
+          documentTotals[totalsKey] = {
+            total: result.scope === 'matched' ? result.total : existingTotals.total,
+            otherTotal: result.otherTotal,
+          };
+          renderDocumentsPanel(data);
+        })
+        .catch(function(err) {
+          delete documentRequests[cacheKey];
+          documentErrors[cacheKey] = true;
+          console.warn('Holded: error loading documents', err);
+          renderDocumentsPanel(data);
+        });
+    }
+
+    function renderDocumentsPanel(data) {
       var container = document.getElementById('documents');
       if (!container ||
         container.getAttribute('data-contact-id') !== (data.contactId || '') ||
         container.getAttribute('data-project-id') !== (data.projectId || '')) return;
 
-      activeKey = activeKey || 'salesOrders';
-      var results = result.results || {};
-      var otherResults = results.other || result.other || {};
-      var activeTab = DOCUMENT_TABS.find(function(tab) { return tab.key === activeKey; }) || DOCUMENT_TABS[0];
-      showOther = !!showOther;
+      var view = getDocumentsView(data);
+      var activeTab = getDocumentTab(view.activeKey);
+      var scope = view.scope === 'other' ? 'other' : 'matched';
+      var page = scope === 'other'
+        ? (view.otherPages[activeTab.key] || 1)
+        : (view.pages[activeTab.key] || 1);
+      var cacheKey = getDocumentsPageKey(data, activeTab, scope, page);
+      var result = documentsCache[cacheKey];
+      var content = '';
+
+      if (result) {
+        if (result.page !== page) {
+          if (scope === 'other') view.otherPages[activeTab.key] = result.page;
+          else view.pages[activeTab.key] = result.page;
+        }
+        content = renderDocumentRows(result.results || [], activeTab, scope, !!data.projectId) +
+          renderPagination(result, scope);
+      } else if (documentErrors[cacheKey]) {
+        content = '<div class="documents-note">No se pudieron cargar los documentos.</div>' +
+          '<button type="button" class="documents-button documents-retry">Reintentar</button>';
+      } else {
+        content = renderDocumentsLoading(activeTab);
+      }
 
       var tabs = DOCUMENT_TABS.map(function(tab) {
-        var count = Array.isArray(results[tab.key]) ? results[tab.key].length : 0;
-        return '<button type="button" class="documents-tab" data-tab="' + tab.key + '" aria-selected="' + (tab.key === activeTab.key ? 'true' : 'false') + '">' +
-          escapeHtml(tab.label) + ' ' + count +
+        var totals = documentTotals[getDocumentsTotalsKey(data, tab)];
+        var count = totals && typeof totals.total === 'number' ? ' ' + totals.total : '';
+        return '<button type="button" role="tab" id="documents-tab-' + tab.key + '" class="documents-tab" data-tab="' + tab.key + '" aria-controls="documents-panel" aria-selected="' + (tab.key === activeTab.key ? 'true' : 'false') + '" tabindex="' + (tab.key === activeTab.key ? '0' : '-1') + '">' +
+          escapeHtml(tab.label) + count +
         '</button>';
       }).join('');
 
-      var visibleCount = DOCUMENT_TABS.reduce(function(total, tab) {
-        return total + (Array.isArray(results[tab.key]) ? results[tab.key].length : 0);
-      }, 0);
+      var countLabel = result
+        ? result.total + (result.total === 1 ? ' documento' : ' documentos')
+        : '…';
 
       container.innerHTML =
         '<div class="documents-header">' +
           '<div class="section-label">Documentos Holded</div>' +
-          '<div class="documents-count">' + visibleCount + '</div>' +
+          '<div class="documents-count">' + countLabel + '</div>' +
         '</div>' +
         '<div class="documents-tabs" role="tablist">' + tabs + '</div>' +
-        renderDocumentRows(results[activeTab.key] || [], activeTab) +
-        renderOtherDocuments(otherResults[activeTab.key] || [], activeTab, showOther);
+        '<div id="documents-panel" role="tabpanel" aria-labelledby="documents-tab-' + activeTab.key + '" aria-live="polite" aria-busy="' + (!result && !documentErrors[cacheKey] ? 'true' : 'false') + '">' +
+          renderDocumentScope(data, activeTab, view) +
+          content +
+        '</div>';
 
       var buttons = container.querySelectorAll('.documents-tab');
       for (var i = 0; i < buttons.length; i++) {
         buttons[i].addEventListener('click', function() {
-          renderDocumentsPanel(data, result, this.getAttribute('data-tab') || 'salesOrders');
+          view.activeKey = this.getAttribute('data-tab') || 'salesOrders';
+          view.scope = 'matched';
+          view.pendingTabFocus = null;
+          renderDocumentsPanel(data);
+        });
+        buttons[i].addEventListener('keydown', function(event) {
+          var currentIndex = DOCUMENT_TABS.findIndex(function(tab) {
+            return tab.key === (event.currentTarget.getAttribute('data-tab') || 'salesOrders');
+          });
+          var targetIndex = currentIndex;
+
+          if (event.key === 'ArrowRight') targetIndex = (currentIndex + 1) % DOCUMENT_TABS.length;
+          else if (event.key === 'ArrowLeft') targetIndex = (currentIndex - 1 + DOCUMENT_TABS.length) % DOCUMENT_TABS.length;
+          else if (event.key === 'Home') targetIndex = 0;
+          else if (event.key === 'End') targetIndex = DOCUMENT_TABS.length - 1;
+          else return;
+
+          event.preventDefault();
+          view.activeKey = DOCUMENT_TABS[targetIndex].key;
+          view.scope = 'matched';
+          view.pendingTabFocus = view.activeKey;
+          renderDocumentsPanel(data);
         });
       }
 
-      var otherButton = container.querySelector('.documents-other-button');
-      if (otherButton) {
-        otherButton.addEventListener('click', function() {
-          renderDocumentsPanel(data, result, this.getAttribute('data-show-other') || activeTab.key, !showOther);
+      var scopeButtons = container.querySelectorAll('.documents-scope-button');
+      for (var scopeIndex = 0; scopeIndex < scopeButtons.length; scopeIndex++) {
+        scopeButtons[scopeIndex].addEventListener('click', function() {
+          view.scope = this.getAttribute('data-document-scope') === 'other' ? 'other' : 'matched';
+          renderDocumentsPanel(data);
         });
+      }
+
+      var pageButtons = container.querySelectorAll('.documents-page-button:not([disabled])');
+      for (var j = 0; j < pageButtons.length; j++) {
+        pageButtons[j].addEventListener('click', function() {
+          var targetPage = Number(this.getAttribute('data-page')) || 1;
+          if (this.getAttribute('data-page-scope') === 'other') {
+            view.otherPages[activeTab.key] = targetPage;
+          } else {
+            view.pages[activeTab.key] = targetPage;
+          }
+          renderDocumentsPanel(data);
+        });
+      }
+
+      var retryButton = container.querySelector('.documents-retry');
+      if (retryButton) {
+        retryButton.addEventListener('click', function() {
+          delete documentErrors[cacheKey];
+          renderDocumentsPanel(data);
+        });
+      }
+
+      if (!result && !documentErrors[cacheKey]) {
+        ensureDocumentsPage(data, activeTab, scope, page);
+      }
+
+      if (view.pendingTabFocus) {
+        var focusTarget = container.querySelector('[data-tab="' + view.pendingTabFocus + '"]');
+        if (focusTarget) focusTarget.focus();
+        if (result && view.pendingTabFocus === activeTab.key) view.pendingTabFocus = null;
       }
 
       t.sizeTo(contentDiv).catch(function() {});
@@ -671,9 +1018,9 @@
       var container = document.getElementById('documents');
       if (!container) return;
 
-      var cacheKey = getDocumentsCacheKey(data);
-      if (documentsCache[cacheKey]) {
-        renderDocumentsPanel(data, documentsCache[cacheKey], 'salesOrders');
+      var view = getDocumentsView(data);
+      if (view.expanded) {
+        renderDocumentsPanel(data);
         return;
       }
 
@@ -693,51 +1040,12 @@
       var button = document.getElementById('load-documents');
       if (button) {
         button.addEventListener('click', function() {
-          refreshDocuments(data);
+          view.expanded = true;
+          renderDocumentsPanel(data);
         });
       }
 
       t.sizeTo(contentDiv).catch(function() {});
-    }
-
-    function refreshDocuments(data) {
-      if (!data.contactId) return;
-
-      var container = document.getElementById('documents');
-      if (!container) return;
-      container.innerHTML =
-        '<div class="documents-summary">' +
-          '<div>' +
-            '<div class="section-label">Documentos Holded</div>' +
-            '<div class="documents-note">Cargando documentos...</div>' +
-          '</div>' +
-          '<button type="button" class="documents-button" disabled>Cargar documentos</button>' +
-        '</div>';
-
-      var params = new URLSearchParams({ contactId: data.contactId });
-      if (data.projectId) params.set('projectId', data.projectId);
-
-      fetch(HOLDED_PROXY_URL + '/documents/search?' + params.toString())
-        .then(function(response) {
-          if (!response.ok) throw new Error('Holded API error: ' + response.status);
-          return response.json();
-        })
-        .then(function(result) {
-          documentsCache[getDocumentsCacheKey(data)] = result;
-          renderDocumentsPanel(data, result, 'salesOrders');
-        })
-        .catch(function(err) {
-          console.warn('Holded: error loading documents', err);
-          if (container.getAttribute('data-contact-id') === (data.contactId || '') &&
-            container.getAttribute('data-project-id') === (data.projectId || '')) {
-            container.innerHTML =
-              '<div class="documents-header">' +
-                '<div class="section-label">Documentos Holded</div>' +
-              '</div>' +
-              '<div class="documents-note">No se pudieron cargar los documentos.</div>';
-            t.sizeTo(contentDiv).catch(function() {});
-          }
-        });
     }
 
     function refreshTrelloMessage(data) {

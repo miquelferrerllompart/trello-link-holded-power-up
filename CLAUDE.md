@@ -11,6 +11,13 @@ Two separate components:
 - **Frontend** (Cloudflare Pages): Vite + TypeScript, no framework. Hosted at `trello-link-holded-power-up.pages.dev`
 - **Worker** (Cloudflare Workers): API proxy at `holded-proxy.electricaferrer.workers.dev`. Holds the Holded API key as a secret — frontend never sees it.
 
+## Development practices
+
+- For Wrangler commands, configuration, and deployment work, follow the Cloudflare skill (look for it in available skills).
+- For repo development in general, try to use the TDD skill for each feature or bug fix: define the public behavior under test, write the failing test first when practical, then implement the smallest change needed to pass.
+- For user interface modifications, always try to use the frontend-design skill.
+- For UI animations and motion design, always use the emil-design-eng skill.
+
 ## Key conventions
 
 - **No frameworks** — vanilla TypeScript, vanilla CSS. Keep it lightweight.
@@ -87,9 +94,10 @@ interface CardHoldedData {
 | `GET /projects/search?q=&force=1` | Search projects (server-side filtering, KV-cached) |
 | `POST /projects/refresh` | Force-refresh projects cache from Holded |
 | `GET /sales-orders/search?contactId=&projectId=` | Search sales orders by contact and optionally filter by project |
-| `GET /documents/search?contactId=&projectId=` | Search sales orders, purchase orders, waybills, and estimates for the card-back tabs |
+| `GET /documents/search?contactId=&projectId=&type=&scope=&page=&pageSize=10` | Paginate sales orders, waybills, or estimates for the active card-back tab |
 
 Projects are cached in Cloudflare KV (15-min TTL). Contact search calls Holded V2 directly using name, code, email, phone, and mobile filters in parallel, then merges results by ID.
+Documents are fetched through every Holded cursor and cached in KV for 5 minutes by contact and type. Project filtering happens on the complete cached list, and shipment details are fetched only for the visible sales-order page.
 
 ## Common issues
 

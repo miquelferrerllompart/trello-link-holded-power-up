@@ -232,6 +232,162 @@ describe('Holded proxy Worker V2 routes', () => {
     ]);
   });
 
+  it('paginates a complete customer document scan and enriches only visible sales orders', async () => {
+    const matched = Array.from({ length: 12 }, (_, index) => ({
+      id: `sales-order-${index + 1}`,
+      document_number: `PV-${index + 1}`,
+      contact_id: 'contact-1',
+      status: 'pending',
+      date: `2026-07-${String(index + 1).padStart(2, '0')}`,
+      project_id: 'project-1',
+      lines: [],
+    }));
+    const other = {
+      id: 'sales-order-other',
+      document_number: 'PV-OTHER',
+      contact_id: 'contact-1',
+      status: 'pending',
+      date: '2026-07-13',
+      project_id: 'project-2',
+      lines: [],
+    };
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/shipped-items')) {
+        return new Response(JSON.stringify({ items: [] }));
+      }
+      if (input.includes('/api/v2/waybills?')) {
+        return new Response(JSON.stringify({
+          items: [],
+          cursor: null,
+          has_more: false,
+        }));
+      }
+      if (input.includes('cursor=next-cursor')) {
+        return new Response(JSON.stringify({
+          items: [...matched.slice(6), other],
+          cursor: null,
+          has_more: false,
+        }));
+      }
+      return new Response(JSON.stringify({
+        items: matched.slice(0, 6),
+        cursor: 'next-cursor',
+        has_more: true,
+      }));
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const cache = {
+      get: vi.fn(),
+      put: vi.fn(),
+    };
+    const paginatedEnv = { ...env, CACHE: cache };
+
+    const firstResponse = await worker.fetch(
+      new Request('https://proxy.test/documents/search?contactId=contact-1&projectId=project-1&type=sales-orders&page=1&pageSize=10'),
+      paginatedEnv,
+    );
+    const firstPage = await firstResponse.json() as {
+      page: number;
+      total: number;
+      totalPages: number;
+      otherTotal: number;
+      results: Array<{ id: string; shippedItems?: { count: number } }>;
+    };
+
+    expect(firstResponse.status).toBe(200);
+    expect(firstPage).toMatchObject({ page: 1, total: 12, totalPages: 2, otherTotal: 1 });
+    expect(firstPage.results).toHaveLength(10);
+    expect(firstPage.results[0]).toMatchObject({ id: 'sales-order-12', shippedItems: { count: 0 } });
+    expect(firstPage.results.at(-1)?.id).toBe('sales-order-3');
+
+    const secondResponse = await worker.fetch(
+      new Request('https://proxy.test/documents/search?contactId=contact-1&projectId=project-1&type=sales-orders&page=2&pageSize=10'),
+      paginatedEnv,
+    );
+    const secondPage = await secondResponse.json() as {
+      page: number;
+      results: Array<{ id: string }>;
+    };
+
+    expect(secondPage.page).toBe(2);
+    expect(secondPage.results.map((document) => document.id)).toEqual(['sales-order-2', 'sales-order-1']);
+    const listCalls = fetchImpl.mock.calls.map((call) => call[0])
+      .filter((requestUrl) => requestUrl.includes('/api/v2/sales-orders?'));
+    const waybillListCalls = fetchImpl.mock.calls.map((call) => call[0])
+      .filter((requestUrl) => requestUrl.includes('/api/v2/waybills?'));
+    const shippedItemCalls = fetchImpl.mock.calls.map((call) => call[0])
+      .filter((requestUrl) => requestUrl.includes('/shipped-items'));
+    expect(listCalls).toEqual([
+      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1',
+      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1&cursor=next-cursor',
+      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1',
+      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1&cursor=next-cursor',
+    ]);
+    expect(waybillListCalls).toEqual([
+      'https://api.holded.com/api/v2/waybills?limit=100&contact_id=contact-1',
+      'https://api.holded.com/api/v2/waybills?limit=100&contact_id=contact-1',
+    ]);
+    expect(shippedItemCalls).toHaveLength(12);
+    expect(cache.get).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('adds current linked waybill statuses to paginated sales orders', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/api/v2/sales-orders?')) {
+        return new Response(JSON.stringify({
+          items: [{
+            id: 'sales-order-1',
+            document_number: 'PV-1',
+            contact_id: 'contact-1',
+            status: 'pending',
+            date: '2026-07-01',
+            project_id: 'project-1',
+            lines: [],
+          }],
+          cursor: null,
+          has_more: false,
+        }));
+      }
+      if (input.includes('/api/v2/waybills?')) {
+        return new Response(JSON.stringify({
+          items: [{
+            id: '69d8711d2a692b09870f7e34',
+            document_number: 'ALB-1',
+            contact_id: 'contact-1',
+            status: 'completed',
+            date: '2026-07-02',
+            project_id: 'project-1',
+            lines: [],
+          }],
+          cursor: null,
+          has_more: false,
+        }));
+      }
+      if (input.includes('/shipped-items')) {
+        return new Response(JSON.stringify({
+          items: [{ waybill_id: 'waybill-69d8711d2a692b09870f7e34', total: 4, sent: 4, pending: 0 }],
+        }));
+      }
+      throw new Error(`Unexpected request ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/documents/search?contactId=contact-1&projectId=project-1&type=sales-orders&page=1&pageSize=10'),
+      env,
+    );
+    const body = await response.json() as {
+      results: Array<{ shippedItems?: { waybillStatuses?: Array<{ id: string; status: string | null }> } }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.results[0].shippedItems?.waybillStatuses).toEqual([
+      { id: 'waybill-69d8711d2a692b09870f7e34', status: 'completed' },
+    ]);
+  });
+
   it('keeps legacy V1 pass-through calls on the key header when a V1 key is configured', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 1 })));
     vi.stubGlobal('fetch', fetchImpl);

@@ -189,10 +189,12 @@ El frontend queda en `https://trello-link-holded-power-up.pages.dev`.
 | `POST /api/v2/contacts` | Crear nuevo contacto |
 | `GET /projects/search?q=` | Buscar proyectos (cache KV de 15 minutos) |
 | `GET /sales-orders/search?contactId=&projectId=` | Listar pedidos de venta por contacto y filtrar por proyecto |
-| `GET /documents/search?contactId=&projectId=` | Listar pedidos de venta, pedidos de compra, albaranes y presupuestos para las pestañas del card back |
+| `GET /documents/search?contactId=&projectId=&type=&scope=&page=&pageSize=10` | Listar una página de pedidos de venta, albaranes o presupuestos para la pestaña activa del card back |
 | `PUT /api/invoicing/v1/contacts/:id` | Legacy V1 para actualizar direcciones de envio, si hay API key V1 configurada |
 
 La busqueda de contactos ya no cachea clientes: el Worker consulta V2 en paralelo y fusiona resultados. Proyectos se mantienen cacheados en KV por volumen y estabilidad.
+
+Los documentos se descargan siguiendo todos los cursores de Holded y se cachean en KV durante 5 minutos por cliente y tipo. Después se filtran por proyecto y se devuelven en páginas de 10; así no se pierden coincidencias que estén después de los primeros 100 documentos del cliente. El estado de envío se consulta solo para los pedidos de venta visibles.
 
 ## Datos almacenados por tarjeta
 
