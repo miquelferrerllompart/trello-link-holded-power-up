@@ -16,6 +16,7 @@ export interface ShippedItemsTracking {
   count: number;
   fields: string[];
   items: unknown[];
+  waybillStatuses?: Array<{ id: string; status: string | null }>;
   error?: string;
 }
 
@@ -57,7 +58,16 @@ export function getSalesOrderShipmentPill(tracking: ShippedItemsTracking | undef
     total += getNumberValue(record.total);
   }
 
-  if (pending <= 0 && sent !== 0) return { label: 'Preparado', className: 'served' };
+  if (pending <= 0 && sent !== 0) {
+    const waybillStatuses = Array.isArray(tracking.waybillStatuses) ? tracking.waybillStatuses : [];
+    if (
+      waybillStatuses.length > 0 &&
+      waybillStatuses.every((waybill) => waybill.status === 'completed')
+    ) {
+      return { label: 'Entregado', className: 'served' };
+    }
+    return { label: 'Preparado', className: 'served' };
+  }
   if (sent === 0 && pending > 0) return { label: 'Pendiente', className: 'pending' };
   if (sent > 0 && pending > 0) return { label: 'Parcial', className: 'partial' };
   return { label: 'Pendiente', className: 'pending' };

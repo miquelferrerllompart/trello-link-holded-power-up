@@ -137,6 +137,34 @@ describe('card-back document status rendering', () => {
     expect(text).not.toContain('Completado');
   });
 
+  it('renders delivered sales orders when all linked waybills are accepted', async () => {
+    const dom = loadCardBackWithDocuments({
+      salesOrders: [{
+        id: 'sales-order-1',
+        type: 'sales-orders',
+        documentNumber: 'PV-1',
+        status: 'completed',
+        shippedItems: {
+          count: 1,
+          fields: ['pending', 'sent', 'total', 'waybill_id'],
+          items: [{ total: 4, sent: 4, pending: 0, waybill_id: 'waybill-1' }],
+          waybillStatuses: [{ id: 'waybill-1', status: 'completed' }],
+        },
+      }],
+      purchaseOrders: [],
+      waybills: [],
+      estimates: [],
+    });
+
+    await waitForRender();
+    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    await waitForRender();
+
+    const text = dom.window.document.querySelector('#content')?.textContent || '';
+    expect(text).toContain('Entregado');
+    expect(text).not.toContain('Preparado');
+  });
+
   it('renders waybill status as Pendiente or Aceptado', async () => {
     const dom = loadCardBackWithDocuments({
       salesOrders: [],

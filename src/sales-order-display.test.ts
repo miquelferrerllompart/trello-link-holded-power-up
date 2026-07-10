@@ -35,6 +35,20 @@ describe('sales order display labels', () => {
       fields: ['pending', 'sent', 'total'],
       items: [{ total: 4, sent: 4, pending: 0 }],
     })).toEqual({ label: 'Preparado', className: 'served' });
+
+    expect(getSalesOrderShipmentPill({
+      count: 1,
+      fields: ['pending', 'sent', 'total', 'waybill_id'],
+      items: [{ total: 4, sent: 4, pending: 0, waybill_id: 'waybill-1' }],
+      waybillStatuses: [{ id: 'waybill-1', status: 'completed' }],
+    })).toEqual({ label: 'Entregado', className: 'served' });
+
+    expect(getSalesOrderShipmentPill({
+      count: 1,
+      fields: ['pending', 'sent', 'total', 'waybill_id'],
+      items: [{ total: 4, sent: 4, pending: 0, waybill_id: 'waybill-1' }],
+      waybillStatuses: [{ id: 'waybill-1', status: 'pending' }],
+    })).toEqual({ label: 'Preparado', className: 'served' });
   });
 
   it('treats negative shipment quantities from abonos as prepared movement', () => {

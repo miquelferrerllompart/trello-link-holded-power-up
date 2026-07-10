@@ -25,7 +25,6 @@ const HOLDED_BASE = 'https://api.holded.com';
 const CONTACTS_CACHE_KEY = 'holded_contacts';
 const PROJECTS_CACHE_KEY = 'holded_projects';
 const CACHE_TTL_SECONDS = 15 * 60; // 15 minutes
-const DOCUMENTS_CACHE_TTL_SECONDS = 5 * 60;
 const DOCUMENTS_PAGE_SIZE = 10;
 const DOCUMENT_TYPES: HoldedDocumentType[] = ['sales-orders', 'waybills', 'estimates'];
 
@@ -237,10 +236,6 @@ async function getCustomerDocumentsByType(
   contactId: string,
   type: HoldedDocumentType,
 ): Promise<NormalizedHoldedDocument[]> {
-  const cacheKey = `holded_documents:v1:${type}:${contactId}`;
-  const cached = await env.CACHE.get<NormalizedHoldedDocument[]>(cacheKey, 'json');
-  if (Array.isArray(cached)) return cached;
-
   const rawDocuments = await fetchAllPages<HoldedV2Document>(
     `${HOLDED_BASE}/api/v2/${type}`,
     getV2ApiKey(env),
@@ -251,16 +246,24 @@ async function getCustomerDocumentsByType(
     rawDocuments.map((document) => normalizeV2Document(type, document)),
   );
 
-  try {
-    await env.CACHE.put(cacheKey, JSON.stringify(documents), {
-      expirationTtl: DOCUMENTS_CACHE_TTL_SECONDS,
-    });
-  } catch (err) {
-    // A cache outage should make this request slower, not make documents unavailable.
-    console.warn('Holded documents cache write failed', err);
+  return documents;
+}
+
+function stripHoldedDocumentPrefix(id: string): string {
+  return id.replace(/^(salesorder|sales-order|waybill|estimate|purchaseorder|purchase-order)-/, '');
+}
+
+function buildStatusMap(documents: NormalizedHoldedDocument[]): Map<string, string | null> {
+  const statuses = new Map<string, string | null>();
+
+  for (const document of documents) {
+    const bareId = stripHoldedDocumentPrefix(document.id);
+    statuses.set(document.id, document.status);
+    statuses.set(bareId, document.status);
+    statuses.set(`${document.type.slice(0, -1)}-${bareId}`, document.status);
   }
 
-  return documents;
+  return statuses;
 }
 
 async function handleDocumentsSearch(url: URL, env: Env): Promise<Response> {
@@ -319,7 +322,8 @@ async function handleDocumentsSearch(url: URL, env: Env): Promise<Response> {
     // Shipment status is an extra Holded call per sales order. Enrich only the
     // ten rows that are visible instead of every order owned by the customer.
     if (type === 'sales-orders') {
-      results = await attachShippedItemsTracking(results, getV2ApiKey(env), fetch);
+      const waybills = await getCustomerDocumentsByType(env, contactId, 'waybills');
+      results = await attachShippedItemsTracking(results, getV2ApiKey(env), fetch, buildStatusMap(waybills));
     }
 
     return jsonResponse({

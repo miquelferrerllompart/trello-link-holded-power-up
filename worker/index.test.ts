@@ -255,6 +255,13 @@ describe('Holded proxy Worker V2 routes', () => {
       if (input.includes('/shipped-items')) {
         return new Response(JSON.stringify({ items: [] }));
       }
+      if (input.includes('/api/v2/waybills?')) {
+        return new Response(JSON.stringify({
+          items: [],
+          cursor: null,
+          has_more: false,
+        }));
+      }
       if (input.includes('cursor=next-cursor')) {
         return new Response(JSON.stringify({
           items: [...matched.slice(6), other],
@@ -270,12 +277,9 @@ describe('Holded proxy Worker V2 routes', () => {
     });
     vi.stubGlobal('fetch', fetchImpl);
 
-    let cachedDocuments: string | null = null;
     const cache = {
-      get: vi.fn(async () => cachedDocuments ? JSON.parse(cachedDocuments) : null),
-      put: vi.fn(async (_key: string, value: string) => {
-        cachedDocuments = value;
-      }),
+      get: vi.fn(),
+      put: vi.fn(),
     };
     const paginatedEnv = { ...env, CACHE: cache };
 
@@ -310,15 +314,78 @@ describe('Holded proxy Worker V2 routes', () => {
     expect(secondPage.results.map((document) => document.id)).toEqual(['sales-order-2', 'sales-order-1']);
     const listCalls = fetchImpl.mock.calls.map((call) => call[0])
       .filter((requestUrl) => requestUrl.includes('/api/v2/sales-orders?'));
+    const waybillListCalls = fetchImpl.mock.calls.map((call) => call[0])
+      .filter((requestUrl) => requestUrl.includes('/api/v2/waybills?'));
     const shippedItemCalls = fetchImpl.mock.calls.map((call) => call[0])
       .filter((requestUrl) => requestUrl.includes('/shipped-items'));
     expect(listCalls).toEqual([
       'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1',
       'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1&cursor=next-cursor',
+      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1',
+      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1&cursor=next-cursor',
+    ]);
+    expect(waybillListCalls).toEqual([
+      'https://api.holded.com/api/v2/waybills?limit=100&contact_id=contact-1',
+      'https://api.holded.com/api/v2/waybills?limit=100&contact_id=contact-1',
     ]);
     expect(shippedItemCalls).toHaveLength(12);
-    expect(cache.put).toHaveBeenCalledOnce();
-    expect(cache.put.mock.calls[0][2]).toEqual({ expirationTtl: 5 * 60 });
+    expect(cache.get).not.toHaveBeenCalled();
+    expect(cache.put).not.toHaveBeenCalled();
+  });
+
+  it('adds current linked waybill statuses to paginated sales orders', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/api/v2/sales-orders?')) {
+        return new Response(JSON.stringify({
+          items: [{
+            id: 'sales-order-1',
+            document_number: 'PV-1',
+            contact_id: 'contact-1',
+            status: 'pending',
+            date: '2026-07-01',
+            project_id: 'project-1',
+            lines: [],
+          }],
+          cursor: null,
+          has_more: false,
+        }));
+      }
+      if (input.includes('/api/v2/waybills?')) {
+        return new Response(JSON.stringify({
+          items: [{
+            id: '69d8711d2a692b09870f7e34',
+            document_number: 'ALB-1',
+            contact_id: 'contact-1',
+            status: 'completed',
+            date: '2026-07-02',
+            project_id: 'project-1',
+            lines: [],
+          }],
+          cursor: null,
+          has_more: false,
+        }));
+      }
+      if (input.includes('/shipped-items')) {
+        return new Response(JSON.stringify({
+          items: [{ waybill_id: 'waybill-69d8711d2a692b09870f7e34', total: 4, sent: 4, pending: 0 }],
+        }));
+      }
+      throw new Error(`Unexpected request ${input}`);
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/documents/search?contactId=contact-1&projectId=project-1&type=sales-orders&page=1&pageSize=10'),
+      env,
+    );
+    const body = await response.json() as {
+      results: Array<{ shippedItems?: { waybillStatuses?: Array<{ id: string; status: string | null }> } }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.results[0].shippedItems?.waybillStatuses).toEqual([
+      { id: 'waybill-69d8711d2a692b09870f7e34', status: 'completed' },
+    ]);
   });
 
   it('keeps legacy V1 pass-through calls on the key header when a V1 key is configured', async () => {

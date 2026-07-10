@@ -58,6 +58,7 @@ export interface ShippedItemsTracking {
   count: number;
   fields: string[];
   items: unknown[];
+  waybillStatuses?: Array<{ id: string; status: string | null }>;
   error?: string;
 }
 
@@ -379,6 +380,31 @@ function collectObjectFields(items: unknown[]): string[] {
   return [...fields].sort();
 }
 
+function getStringField(record: Record<string, unknown>, names: string[]): string | null {
+  for (const name of names) {
+    const value = record[name];
+    if (typeof value === 'string' && value) return value;
+  }
+  return null;
+}
+
+function collectWaybillIdsFromShippedItems(items: unknown[]): string[] {
+  const ids = new Set<string>();
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const id = getStringField(item as Record<string, unknown>, [
+      'waybill_id',
+      'waybillId',
+      'waybill',
+      'id',
+    ]);
+    if (id) ids.add(id);
+  }
+
+  return [...ids];
+}
+
 export async function fetchSalesOrderShippedItems(
   salesOrderId: string,
   apiKey: string,
@@ -401,12 +427,20 @@ export async function attachShippedItemsTracking(
   orders: NormalizedHoldedDocument[],
   apiKey: string,
   fetchImpl: FetchLike,
+  waybillStatusesById?: Map<string, string | null>,
 ): Promise<NormalizedHoldedDocument[]> {
   return Promise.all(orders.map(async (order) => {
     try {
+      const shippedItems = await fetchSalesOrderShippedItems(order.id, apiKey, fetchImpl);
+      if (waybillStatusesById) {
+        const waybillStatuses = collectWaybillIdsFromShippedItems(shippedItems.items)
+          .map((id) => ({ id, status: waybillStatusesById.get(id) ?? null }));
+        if (waybillStatuses.length > 0) shippedItems.waybillStatuses = waybillStatuses;
+      }
+
       return {
         ...order,
-        shippedItems: await fetchSalesOrderShippedItems(order.id, apiKey, fetchImpl),
+        shippedItems,
       };
     } catch (err) {
       return {
