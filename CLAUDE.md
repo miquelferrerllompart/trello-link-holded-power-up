@@ -15,7 +15,7 @@ Two separate components:
 
 - For Wrangler commands, configuration, and deployment work, follow the Cloudflare skill at `/Users/miquelferrerllompart/.agents/skills/cloudflare/SKILL.md`.
 - For repo development in general, try to use the TDD skill at `/Users/miquelferrerllompart/.agents/skills/tdd/SKILL.md` for each feature or bug fix: define the public behavior under test, write the failing test first when practical, then implement the smallest change needed to pass.
-- For user interface modifications, always try to use the frontend-design skill at `/Users/miquelferrerllompart/conductor/workspaces/trello-link-holded-power-up/bismarck-v1/.agents/skills/frontend-design/SKILL.md`.
+- For user interface modifications, always try to use the frontend-design skill at `/Users/miquelferrerllompart/.agents/skills/frontend-design/SKILL.md`.
 
 ## Key conventions
 
