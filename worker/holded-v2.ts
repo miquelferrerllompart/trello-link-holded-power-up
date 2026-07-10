@@ -397,7 +397,7 @@ export async function fetchSalesOrderShippedItems(
   };
 }
 
-async function attachShippedItemsTracking(
+export async function attachShippedItemsTracking(
   orders: NormalizedHoldedDocument[],
   apiKey: string,
   fetchImpl: FetchLike,
