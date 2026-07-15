@@ -2,6 +2,7 @@ import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
 import { addShippingAddress } from '../holded-api';
+import { createSubmissionKeyer } from '../idempotency';
 import { TRELLO_APP_KEY } from '../config';
 import { formatSpanishTextCase } from '../spanish-text-case';
 import { getPendingContactSelection, removePendingContactSelection } from '../pending-contact';
@@ -9,6 +10,8 @@ import type { PendingContactSelection, TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
 const addressesDiv = document.getElementById('addresses') as HTMLDivElement;
+
+const submissionKeyer = createSubmissionKeyer();
 
 interface AddressOption {
   label: string;
@@ -116,8 +119,10 @@ function showCreateForm(pending: PendingContactSelection) {
         country: formatSpanishTextCase(countryInput.value),
       };
 
-      await addShippingAddress(pending.contactId, pending.shippingAddresses, newAddr);
+      const key = submissionKeyer.keyFor(JSON.stringify({ contactId: pending.contactId, newAddr }));
+      await addShippingAddress(pending.contactId, newAddr, key);
       await selectAddress(pending, newAddr.name);
+      submissionKeyer.reset(); // workflow complete
     } catch (err) {
       errorMsg.textContent = (err as Error).message;
       errorMsg.style.display = 'block';

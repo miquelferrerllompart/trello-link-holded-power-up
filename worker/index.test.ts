@@ -2,12 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import worker from './index';
 
 const env = {
-  HOLDED_API_KEY: 'sk_test',
-  HOLDED_API_V2: 'sk_v2_test',
-  CACHE: {
-    get: vi.fn(),
-    put: vi.fn(),
-  },
+  EF_INTERNAL_API_KEY: 'efk_test',
 };
 
 describe('Holded proxy Worker V2 routes', () => {
@@ -15,399 +10,534 @@ describe('Holded proxy Worker V2 routes', () => {
     vi.unstubAllGlobals();
   });
 
-  it('searches contacts through V2 fan-out and returns the existing response shape', async () => {
-    const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        items: [{ id: 'contact-1', name: 'Acme' }],
-        cursor: null,
-        has_more: false,
-      })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], cursor: null, has_more: false })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], cursor: null, has_more: false })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], cursor: null, has_more: false })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [], cursor: null, has_more: false })));
+  it('searches contacts through the internal API and maps summaries', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [{
+        id: 'contact-1',
+        name: 'Acme',
+        code: 'B123',
+        vatnumber: 'ESB123',
+        tradeName: 'Acme SL',
+        email: 'a@acme.es',
+        phone: '971',
+        mobile: '600',
+        type: 'client',
+        customId: 'C-1',
+      }],
+    }), { headers: { 'Content-Type': 'application/json' } }));
     vi.stubGlobal('fetch', fetchImpl);
 
     const response = await worker.fetch(
       new Request('https://proxy.test/contacts/search?q=Acme'),
       env,
     );
-    const body = await response.json() as { total: number; results: Array<{ id: string }> };
+    const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body).toEqual({ total: 1, results: [{ id: 'contact-1', name: 'Acme', customId: null, vatnumber: '', tradeName: null, isperson: 0, billAddress: {}, shippingAddresses: [], customFields: [] }] });
-    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.holded.com/api/v2/contacts/search?limit=100&name=Acme');
-    expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({
-      Authorization: 'Bearer sk_v2_test',
-      Accept: 'application/json',
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.app.electricaferrer.es/internal/v1/contacts?query=Acme&limit=30');
+    expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer efk_test' });
+    expect(body).toEqual({
+      total: 1,
+      results: [{
+        id: 'contact-1',
+        name: 'Acme',
+        code: 'B123',
+        vatnumber: 'ESB123',
+        tradeName: 'Acme SL',
+        email: 'a@acme.es',
+        phone: '971',
+        mobile: '600',
+        type: 'client',
+        customId: 'C-1',
+      }],
     });
   });
 
-  it('returns contact-filtered sales orders and narrows by project when provided', async () => {
-    const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        items: [
-          {
-            id: 'order-1',
-            document_number: 'PV-100',
-            contact_id: 'contact-1',
-            status: 'pending',
-            project_id: 'project-1',
-            lines: [],
-          },
-          {
-            id: 'order-2',
-            document_number: 'PV-101',
-            contact_id: 'contact-1',
-            status: 'completed',
-            project_id: 'project-2',
-            lines: [],
-          },
-        ],
-        cursor: null,
-        has_more: false,
-      })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        items: [{ waybill_id: 'waybill-1', units: '2' }],
-      })));
+  it('returns an empty contact search without hitting the internal API for a blank query', async () => {
+    const fetchImpl = vi.fn();
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(new Request('https://proxy.test/contacts/search?q='), env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ total: 0, results: [] });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('searches projects through the internal API and surfaces the client and code', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [{
+        id: 'project-1',
+        name: 'Obra Norte',
+        key: 'AUT3',
+        contactName: 'Melchor Mascaró S.A.',
+        status: '0',
+        archived: false,
+      }],
+    }), { headers: { 'Content-Type': 'application/json' } }));
     vi.stubGlobal('fetch', fetchImpl);
 
     const response = await worker.fetch(
-      new Request('https://proxy.test/sales-orders/search?contactId=contact-1&projectId=project-1'),
+      new Request('https://proxy.test/projects/search?q=Obra'),
       env,
     );
-    const body = await response.json() as { results: Array<{ id: string; documentNumber: string; url: string }> };
+    const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.results).toEqual([expect.objectContaining({
-      id: 'order-1',
-      documentNumber: 'PV-100',
-      shippedItems: {
-        count: 1,
-        fields: ['units', 'waybill_id'],
-        items: [{ waybill_id: 'waybill-1', units: '2' }],
-      },
-      url: 'https://app.holded.com/sales/orders#open:salesorder-order-1',
-    })]);
-    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1');
-    expect(fetchImpl.mock.calls[1][0]).toBe('https://api.holded.com/api/v2/sales-orders/order-1/shipped-items');
-    expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({
-      Authorization: 'Bearer sk_v2_test',
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.app.electricaferrer.es/internal/v1/projects?query=Obra&limit=30');
+    expect(body).toEqual({
+      total: 1,
+      results: [{ id: 'project-1', name: 'Obra Norte', contactName: 'Melchor Mascaró S.A.', key: 'AUT3' }],
     });
   });
 
-  it('returns grouped Holded documents for the card-back tabs', async () => {
-    const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({
+});
+
+const INTERNAL_BASE = 'https://api.app.electricaferrer.es/internal/v1';
+const envV2 = { ...env, EF_INTERNAL_API_KEY: 'efk_test' };
+
+function internalJson(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+describe('Worker /v2 internal-API document routes', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('maps sales-orders with no shipped-items and an empty relation when no POs match', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false }, readiness: 'ready' });
+      }
+      return internalJson({
         items: [{
-          id: 'sales-order-1',
-          document_number: 'PV-100',
-          contact_id: 'contact-1',
-          status: 'pending',
-          date: '2026-07-01',
-          project_id: 'project-1',
-          lines: [],
-        }, {
-          id: 'sales-order-2',
-          document_number: 'PV-101',
-          contact_id: 'contact-1',
-          status: 'pending',
-          date: '2026-07-01',
-          project_id: 'project-2',
-          lines: [],
-        }],
-        cursor: null,
-        has_more: false,
-      })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        items: [{
-          id: 'purchase-order-1',
-          document_number: 'PC-200',
-          contact_id: 'contact-1',
-          status: 'completed',
-          date: '2026-07-02',
-          project_id: 'project-1',
-          lines: [],
-        }, {
-          id: 'purchase-order-2',
-          document_number: 'PC-201',
-          contact_id: 'contact-1',
-          status: 'completed',
-          date: '2026-07-02',
-          project_id: null,
-          lines: [],
-        }],
-        cursor: null,
-        has_more: false,
-      })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        items: [{
-          id: 'waybill-1',
-          document_number: 'ALB-300',
-          contact_id: 'contact-1',
+          id: 'so-1',
+          docNumber: 'PV-26-008005',
+          issueDate: '2026-07-14',
+          dueDate: null,
           status: 'partial',
-          date: '2026-07-03',
-          project_id: 'project-2',
-          lines: [],
+          rawStatus: 'processing',
+          isDraft: false,
+          approvedAt: '2026-07-14',
+          customer: { id: 'contact-1', name: 'Acme' },
+          projects: [{ id: 'project-1', name: 'Obra', color: '#fff' }],
+          totalUnits: 10,
+          deliveryCount: 1,
+          internalStatus: 'partially_prepared',
         }],
-        cursor: null,
-        has_more: false,
-      })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        items: [{
-          id: 'estimate-1',
-          document_number: 'PRE-400',
-          contact_id: 'contact-1',
-          status: 'pending',
-          date: '2026-07-04',
-          project_id: 'project-1',
-          lines: [],
-        }, {
-          id: 'estimate-2',
-          document_number: 'PRE-401',
-          contact_id: 'contact-1',
-          status: 'pending',
-          date: '2026-07-04',
-          project_id: null,
-          lines: [],
-        }],
-        cursor: null,
-        has_more: false,
-      })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        items: [{ waybill_id: 'waybill-1', quantity: '1' }],
-      })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
-        items: [{ waybill_id: 'waybill-2', quantity: '1' }],
-      })));
+        pagination: { page: 1, pageSize: 10, hasMore: true },
+        readiness: 'ready',
+      });
+    });
     vi.stubGlobal('fetch', fetchImpl);
 
     const response = await worker.fetch(
-      new Request('https://proxy.test/documents/search?contactId=contact-1&projectId=project-1'),
-      env,
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&page=1&scope=matched&projectId=project-1'),
+      envV2,
     );
-    const body = await response.json() as {
-      totals: { salesOrders: number; purchaseOrders: number; waybills: number };
-      results: {
-        salesOrders: Array<{ id: string; type: string }>;
-        purchaseOrders: Array<{ id: string; type: string }>;
-        waybills: Array<{ id: string; type: string }>;
-        estimates: Array<{ id: string; type: string }>;
-        other: {
-          salesOrders: Array<{ id: string; type: string }>;
-          purchaseOrders: Array<{ id: string; type: string }>;
-          waybills: Array<{ id: string; type: string }>;
-          estimates: Array<{ id: string; type: string }>;
-        };
-      };
-      otherTotals: { salesOrders: number; purchaseOrders: number; waybills: number; estimates: number };
-    };
+    const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.totals).toEqual({ salesOrders: 1, purchaseOrders: 1, waybills: 0, estimates: 1 });
-    expect(body.otherTotals).toEqual({ salesOrders: 1, purchaseOrders: 1, waybills: 1, estimates: 1 });
-    expect(body.results.salesOrders).toEqual([expect.objectContaining({
-      id: 'sales-order-1',
+    const calledUrls = fetchImpl.mock.calls.map((call) => call[0]);
+    expect(calledUrls).toContain(`${INTERNAL_BASE}/sales-orders?customerId=contact-1&projectId=project-1&page=1&pageSize=10`);
+    expect(calledUrls).toContain(`${INTERNAL_BASE}/purchase-orders?customerId=contact-1&projectId=project-1&page=1&pageSize=100`);
+    expect(calledUrls.some((url: string) => url.includes('/shipped-items'))).toBe(false);
+    expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer efk_test' });
+    expect(body).toEqual({
       type: 'sales-orders',
-      shippedItems: {
-        count: 1,
-        fields: ['quantity', 'waybill_id'],
-        items: [{ waybill_id: 'waybill-1', quantity: '1' }],
+      scope: 'matched',
+      page: 1,
+      pageSize: 10,
+      hasMore: true,
+      results: [{
+        type: 'sales-orders',
+        id: 'so-1',
+        documentNumber: 'PV-26-008005',
+        url: 'https://app.holded.com/sales/orders#open:salesorder-so-1',
+        internalStatus: 'partially_prepared',
+        issueDate: '2026-07-14',
+        dueDate: null,
+        deliveryCount: 1,
+        totalUnits: 10,
+        projects: [{ id: 'project-1', name: 'Obra', color: '#fff' }],
+        purchaseOrders: [],
+      }],
+    });
+  });
+
+  it('nests purchase orders under their source sales order and drops orphan/off-page POs', async () => {
+    const salesOrder = (id: string, docNumber: string) => ({
+      id,
+      docNumber,
+      issueDate: '2026-07-14',
+      dueDate: null,
+      status: 'partial',
+      rawStatus: 'processing',
+      isDraft: false,
+      approvedAt: null,
+      customer: { id: 'contact-1', name: 'Acme' },
+      projects: [],
+      totalUnits: 5,
+      deliveryCount: 0,
+      internalStatus: 'in_process',
+    });
+    const purchaseOrder = (id: string, docNumber: string, sourceId: string | null) => ({
+      id,
+      docNumber,
+      issueDate: '2026-07-13',
+      dueDate: null,
+      status: 'partial',
+      rawStatus: 'processing',
+      isDraft: false,
+      approvedAt: null,
+      supplier: { id: 'supplier-1', name: 'Rexel' },
+      projects: [],
+      totalUnits: 5,
+      total: 250,
+      currency: 'EUR',
+      receiptCount: 0,
+      internalStatus: 'awaiting_receipt',
+      sourceOrder: sourceId ? { id: sourceId, docNumber: 'PV-26-008005' } : null,
+    });
+
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({
+          items: [
+            purchaseOrder('po-1', 'PC-26-001101', 'so-1'),
+            purchaseOrder('po-2', 'PC-26-001102', 'so-1'),
+            purchaseOrder('po-3', 'PC-26-001103', null),        // orphan, dropped
+            purchaseOrder('po-4', 'PC-26-001104', 'so-off-page'), // off page, dropped
+          ],
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+          readiness: 'ready',
+        });
+      }
+      return internalJson({
+        items: [salesOrder('so-1', 'PV-26-008005'), salesOrder('so-2', 'PV-26-008006')],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+        readiness: 'ready',
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&page=1&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { results: Array<{ id: string; purchaseOrders: Array<Record<string, unknown>> }> };
+
+    expect(response.status).toBe(200);
+    expect(body.results[0].id).toBe('so-1');
+    expect(body.results[0].purchaseOrders).toEqual([
+      {
+        type: 'purchase-orders',
+        id: 'po-1',
+        documentNumber: 'PC-26-001101',
+        url: 'https://app.holded.com/sales/orders#open:order-po-1',
+        internalStatus: 'awaiting_receipt',
+        issueDate: '2026-07-13',
+        supplier: { id: 'supplier-1', name: 'Rexel' },
+        total: 250,
+        currency: 'EUR',
+        projects: [],
       },
-    })]);
-    expect(body.results.purchaseOrders).toEqual([expect.objectContaining({ id: 'purchase-order-1', type: 'purchase-orders' })]);
-    expect(body.results.waybills).toEqual([]);
-    expect(body.results.estimates).toEqual([expect.objectContaining({ id: 'estimate-1', type: 'estimates' })]);
-    expect(body.results.other.salesOrders).toEqual([expect.objectContaining({ id: 'sales-order-2', type: 'sales-orders' })]);
-    expect(body.results.other.purchaseOrders).toEqual([expect.objectContaining({ id: 'purchase-order-2', type: 'purchase-orders' })]);
-    expect(body.results.other.waybills).toEqual([expect.objectContaining({ id: 'waybill-1', type: 'waybills' })]);
-    expect(body.results.other.estimates).toEqual([expect.objectContaining({ id: 'estimate-2', type: 'estimates' })]);
-    expect(fetchImpl.mock.calls.map((call) => call[0])).toEqual([
-      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1',
-      'https://api.holded.com/api/v2/purchase-orders?limit=100&contact_id=contact-1',
-      'https://api.holded.com/api/v2/waybills?limit=100&contact_id=contact-1',
-      'https://api.holded.com/api/v2/estimates?limit=100&contact_id=contact-1',
-      'https://api.holded.com/api/v2/sales-orders/sales-order-1/shipped-items',
-      'https://api.holded.com/api/v2/sales-orders/sales-order-2/shipped-items',
+      expect.objectContaining({ id: 'po-2', documentNumber: 'PC-26-001102' }),
     ]);
+    expect(body.results[1].id).toBe('so-2');
+    expect(body.results[1].purchaseOrders).toEqual([]);
   });
 
-  it('paginates a complete customer document scan and enriches only visible sales orders', async () => {
-    const matched = Array.from({ length: 12 }, (_, index) => ({
-      id: `sales-order-${index + 1}`,
-      document_number: `PV-${index + 1}`,
-      contact_id: 'contact-1',
-      status: 'pending',
-      date: `2026-07-${String(index + 1).padStart(2, '0')}`,
-      project_id: 'project-1',
-      lines: [],
+  it('keeps sales orders and flags purchaseOrdersError when the PO fetch fails', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ error: { code: 'SERVICE_UNAVAILABLE', message: 'later' } }, 503);
+      }
+      return internalJson({
+        items: [{
+          id: 'so-1',
+          docNumber: 'PV-26-008005',
+          issueDate: '2026-07-14',
+          dueDate: null,
+          status: 'partial',
+          rawStatus: 'processing',
+          isDraft: false,
+          approvedAt: null,
+          customer: { id: 'contact-1', name: 'Acme' },
+          projects: [],
+          totalUnits: 5,
+          deliveryCount: 0,
+          internalStatus: 'in_process',
+        }],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+        readiness: 'ready',
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { purchaseOrdersError?: boolean; results: Array<{ id: string; purchaseOrders: unknown[] }> };
+
+    expect(response.status).toBe(200);
+    expect(body.purchaseOrdersError).toBe(true);
+    expect(body.results[0].id).toBe('so-1');
+    expect(body.results[0].purchaseOrders).toEqual([]);
+  });
+
+  it('maps waybills passing through workflowStatus, approvedAt and sourceOrder', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(internalJson({
+      items: [{
+        id: 'wb-1',
+        docNumber: 'ALB-26-000123',
+        issueDate: '2026-07-10',
+        status: 'completed',
+        rawStatus: 'delivered',
+        approvedAt: '2026-07-11',
+        workflowStatus: 'delivered',
+        customer: { id: 'contact-1', name: 'Acme' },
+        projects: [],
+        sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
+      }],
+      pagination: { page: 1, pageSize: 10, hasMore: false },
+      readiness: 'ready',
     }));
-    const other = {
-      id: 'sales-order-other',
-      document_number: 'PV-OTHER',
-      contact_id: 'contact-1',
-      status: 'pending',
-      date: '2026-07-13',
-      project_id: 'project-2',
-      lines: [],
-    };
-    const fetchImpl = vi.fn(async (input: string) => {
-      if (input.includes('/shipped-items')) {
-        return new Response(JSON.stringify({ items: [] }));
-      }
-      if (input.includes('/api/v2/waybills?')) {
-        return new Response(JSON.stringify({
-          items: [],
-          cursor: null,
-          has_more: false,
-        }));
-      }
-      if (input.includes('cursor=next-cursor')) {
-        return new Response(JSON.stringify({
-          items: [...matched.slice(6), other],
-          cursor: null,
-          has_more: false,
-        }));
-      }
-      return new Response(JSON.stringify({
-        items: matched.slice(0, 6),
-        cursor: 'next-cursor',
-        has_more: true,
-      }));
-    });
-    vi.stubGlobal('fetch', fetchImpl);
-
-    const cache = {
-      get: vi.fn(),
-      put: vi.fn(),
-    };
-    const paginatedEnv = { ...env, CACHE: cache };
-
-    const firstResponse = await worker.fetch(
-      new Request('https://proxy.test/documents/search?contactId=contact-1&projectId=project-1&type=sales-orders&page=1&pageSize=10'),
-      paginatedEnv,
-    );
-    const firstPage = await firstResponse.json() as {
-      page: number;
-      total: number;
-      totalPages: number;
-      otherTotal: number;
-      results: Array<{ id: string; shippedItems?: { count: number } }>;
-    };
-
-    expect(firstResponse.status).toBe(200);
-    expect(firstPage).toMatchObject({ page: 1, total: 12, totalPages: 2, otherTotal: 1 });
-    expect(firstPage.results).toHaveLength(10);
-    expect(firstPage.results[0]).toMatchObject({ id: 'sales-order-12', shippedItems: { count: 0 } });
-    expect(firstPage.results.at(-1)?.id).toBe('sales-order-3');
-
-    const secondResponse = await worker.fetch(
-      new Request('https://proxy.test/documents/search?contactId=contact-1&projectId=project-1&type=sales-orders&page=2&pageSize=10'),
-      paginatedEnv,
-    );
-    const secondPage = await secondResponse.json() as {
-      page: number;
-      results: Array<{ id: string }>;
-    };
-
-    expect(secondPage.page).toBe(2);
-    expect(secondPage.results.map((document) => document.id)).toEqual(['sales-order-2', 'sales-order-1']);
-    const listCalls = fetchImpl.mock.calls.map((call) => call[0])
-      .filter((requestUrl) => requestUrl.includes('/api/v2/sales-orders?'));
-    const waybillListCalls = fetchImpl.mock.calls.map((call) => call[0])
-      .filter((requestUrl) => requestUrl.includes('/api/v2/waybills?'));
-    const shippedItemCalls = fetchImpl.mock.calls.map((call) => call[0])
-      .filter((requestUrl) => requestUrl.includes('/shipped-items'));
-    expect(listCalls).toEqual([
-      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1',
-      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1&cursor=next-cursor',
-      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1',
-      'https://api.holded.com/api/v2/sales-orders?limit=100&contact_id=contact-1&cursor=next-cursor',
-    ]);
-    expect(waybillListCalls).toEqual([
-      'https://api.holded.com/api/v2/waybills?limit=100&contact_id=contact-1',
-      'https://api.holded.com/api/v2/waybills?limit=100&contact_id=contact-1',
-    ]);
-    expect(shippedItemCalls).toHaveLength(12);
-    expect(cache.get).not.toHaveBeenCalled();
-    expect(cache.put).not.toHaveBeenCalled();
-  });
-
-  it('adds current linked waybill statuses to paginated sales orders', async () => {
-    const fetchImpl = vi.fn(async (input: string) => {
-      if (input.includes('/api/v2/sales-orders?')) {
-        return new Response(JSON.stringify({
-          items: [{
-            id: 'sales-order-1',
-            document_number: 'PV-1',
-            contact_id: 'contact-1',
-            status: 'pending',
-            date: '2026-07-01',
-            project_id: 'project-1',
-            lines: [],
-          }],
-          cursor: null,
-          has_more: false,
-        }));
-      }
-      if (input.includes('/api/v2/waybills?')) {
-        return new Response(JSON.stringify({
-          items: [{
-            id: '69d8711d2a692b09870f7e34',
-            document_number: 'ALB-1',
-            contact_id: 'contact-1',
-            status: 'completed',
-            date: '2026-07-02',
-            project_id: 'project-1',
-            lines: [],
-          }],
-          cursor: null,
-          has_more: false,
-        }));
-      }
-      if (input.includes('/shipped-items')) {
-        return new Response(JSON.stringify({
-          items: [{ waybill_id: 'waybill-69d8711d2a692b09870f7e34', total: 4, sent: 4, pending: 0 }],
-        }));
-      }
-      throw new Error(`Unexpected request ${input}`);
-    });
     vi.stubGlobal('fetch', fetchImpl);
 
     const response = await worker.fetch(
-      new Request('https://proxy.test/documents/search?contactId=contact-1&projectId=project-1&type=sales-orders&page=1&pageSize=10'),
-      env,
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=waybills&page=1&scope=all'),
+      envV2,
     );
-    const body = await response.json() as {
-      results: Array<{ shippedItems?: { waybillStatuses?: Array<{ id: string; status: string | null }> } }>;
-    };
+    const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(body.results[0].shippedItems?.waybillStatuses).toEqual([
-      { id: 'waybill-69d8711d2a692b09870f7e34', status: 'completed' },
-    ]);
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=1&pageSize=10`,
+    );
+    expect(body).toEqual({
+      type: 'waybills',
+      scope: 'all',
+      page: 1,
+      pageSize: 10,
+      hasMore: false,
+      results: [{
+        type: 'waybills',
+        id: 'wb-1',
+        documentNumber: 'ALB-26-000123',
+        url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
+        issueDate: '2026-07-10',
+        workflowStatus: 'delivered',
+        approvedAt: '2026-07-11',
+        sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
+        projects: [],
+      }],
+    });
   });
 
-  it('keeps legacy V1 pass-through calls on the key header when a V1 key is configured', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify({ status: 1 })));
+  it('maps estimates through the cursor model with total, currency and displayStatus', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(internalJson({
+      items: [{
+        id: 'est-1',
+        docNumber: 'PRE-26-000045',
+        issueDate: '2026-07-01',
+        dueDate: null,
+        subtotal: 100,
+        tax: 21,
+        total: 121,
+        currency: 'EUR',
+        customer: { id: 'contact-1', name: 'Acme' },
+        projects: [],
+        status: 'pending',
+        rawStatus: 'sent',
+        displayStatus: 'sent',
+        sentAt: null,
+        freshness: 'live',
+        syncPending: false,
+      }],
+      hasMore: true,
+      nextCursor: 'cursor-2',
+    }));
     vi.stubGlobal('fetch', fetchImpl);
 
     const response = await worker.fetch(
-      new Request('https://proxy.test/api/invoicing/v1/contacts/contact-1', {
-        method: 'PUT',
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=estimates&scope=all&cursor=cursor-1'),
+      envV2,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      `${INTERNAL_BASE}/estimates?customerId=contact-1&cursor=cursor-1&limit=10`,
+    );
+    expect(body).toEqual({
+      type: 'estimates',
+      scope: 'all',
+      hasMore: true,
+      nextCursor: 'cursor-2',
+      results: [{
+        type: 'estimates',
+        id: 'est-1',
+        documentNumber: 'PRE-26-000045',
+        url: 'https://app.holded.com/sales/estimates#open:estimate-est-1',
+        issueDate: '2026-07-01',
+        dueDate: null,
+        displayStatus: 'sent',
+        total: 121,
+        currency: 'EUR',
+        projects: [],
+      }],
+    });
+  });
+
+  it('omits projectId in the "all" scope and rejects an unknown scope', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(internalJson({ items: [], pagination: { hasMore: false }, readiness: 'ready' }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&scope=all&projectId=project-1'),
+      envV2,
+    );
+    expect(fetchImpl.mock.calls[0][0]).toBe(`${INTERNAL_BASE}/sales-orders?customerId=contact-1&page=1&pageSize=10`);
+
+    const bad = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&scope=weird'),
+      envV2,
+    );
+    expect(bad.status).toBe(400);
+  });
+
+  it('returns 503 DATA_NOT_READY when the internal API is still syncing', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      internalJson({ error: { code: 'DATA_NOT_READY', message: 'sync in progress' } }, 503),
+    );
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders'),
+      envV2,
+    );
+    const body = await response.json() as { error: { code: string } };
+
+    expect(response.status).toBe(503);
+    expect(body.error.code).toBe('DATA_NOT_READY');
+  });
+
+  it('treats a non-ready readiness flag as DATA_NOT_READY', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      internalJson({ items: [], pagination: { hasMore: false }, readiness: 'pending' }),
+    );
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders'),
+      envV2,
+    );
+
+    expect(response.status).toBe(503);
+    expect((await response.json() as { error: { code: string } }).error.code).toBe('DATA_NOT_READY');
+  });
+
+  it('returns a config error without leaking the key when the internal API rejects auth', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      internalJson({ error: { code: 'UNAUTHORIZED', message: 'bad key' } }, 401),
+    );
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders'),
+      envV2,
+    );
+    const raw = await response.text();
+
+    expect(response.status).toBe(500);
+    expect(raw).not.toContain('efk_test');
+    expect(JSON.parse(raw).error.code).toBe('CONFIG');
+  });
+
+  it('proxies internal contact detail through /v2/contacts/:id', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(internalJson({
+      id: 'contact-1',
+      name: 'Acme',
+      customFields: [{ field: 'trello', value: 'Aviso' }],
+      shippingAddresses: [],
+    }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/contacts/contact-1'),
+      envV2,
+    );
+    const body = await response.json() as { id: string; customFields: unknown[] };
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl.mock.calls[0][0]).toBe(`${INTERNAL_BASE}/contacts/contact-1`);
+    expect(body).toMatchObject({ id: 'contact-1', customFields: [{ field: 'trello', value: 'Aviso' }] });
+  });
+
+  it('creates a contact through the internal API forwarding the idempotency key', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(internalJson({ id: 'contact-9', name: 'Nuevo' }, 201));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/contacts?idempotencyKey=idem-1', {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shippingAddresses: [] }),
+        body: JSON.stringify({ name: 'Nuevo', code: 'B1' }),
       }),
-      env,
+      envV2,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(fetchImpl.mock.calls[0][0]).toBe(`${INTERNAL_BASE}/contacts`);
+    const init = fetchImpl.mock.calls[0][1];
+    expect(init.method).toBe('POST');
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer efk_test', 'Idempotency-Key': 'idem-1' });
+    expect(JSON.parse(init.body)).toEqual({ name: 'Nuevo', code: 'B1' });
+    expect(body).toEqual({ id: 'contact-9', name: 'Nuevo' });
+  });
+
+  it('appends a shipping address through the internal API', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(internalJson({ contactId: 'contact-9', address: { name: 'Obra' } }, 201));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/contacts/contact-9/shipping-addresses?idempotencyKey=idem-2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Obra', address: 'Calle 1' }),
+      }),
+      envV2,
     );
 
-    expect(response.status).toBe(200);
-    expect(fetchImpl.mock.calls[0][0]).toBe('https://api.holded.com/api/invoicing/v1/contacts/contact-1');
-    expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({
-      key: 'sk_test',
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    });
-    expect(fetchImpl.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
+    expect(response.status).toBe(201);
+    expect(fetchImpl.mock.calls[0][0]).toBe(`${INTERNAL_BASE}/contacts/contact-9/shipping-addresses`);
+    expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({ 'Idempotency-Key': 'idem-2' });
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body)).toEqual({ name: 'Obra', address: 'Calle 1' });
+  });
+
+  it('surfaces the internal validation detail on a failed create', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      internalJson({ error: { code: 'INVALID_REQUEST', message: 'code already used' } }, 400),
+    );
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'X' }),
+      }),
+      envV2,
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: 'code already used' });
   });
 });

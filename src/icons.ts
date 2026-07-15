@@ -1,7 +1,7 @@
 const BASE = 'https://trello-link-holded-power-up.pages.dev/icons';
 
 // Plain SVGs (no fill) — Trello colorizes them automatically
-// Used by card-buttons (only accepts string URL)
+// Used by card-badges (only accepts string URL)
 export const CONTACT_ICON_URL = `${BASE}/contact.svg`;
 export const PROJECT_ICON_URL = `${BASE}/project.svg`;
 

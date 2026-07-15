@@ -119,7 +119,10 @@ export interface CreateContactResponse {
 export interface HoldedProject {
   id: string;
   name: string;
-  status?: string;
+  /** Linked client (the project's contact in Holded), used as the search subtitle. */
+  contactName?: string | null;
+  /** Short project code, e.g. "AUT3". */
+  key?: string | null;
 }
 
 // ── Holded Sales Orders ──

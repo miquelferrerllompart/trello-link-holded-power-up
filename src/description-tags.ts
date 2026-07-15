@@ -1,6 +1,9 @@
+// `[\s\S]*?` (non-greedy, any char incl. newlines and braces) up to the first
+// closing `}}`, so tags whose value contains a brace — e.g. "Obra {Fase 2}" —
+// are still matched and removed.
 const TAG_REGEX: Record<string, RegExp> = {
-  contact: /\{\{\s*contact:\s*[^}]*\}\}/g,
-  project: /\{\{\s*project:\s*[^}]*\}\}/g,
+  contact: /\{\{\s*contact:[\s\S]*?\}\}/g,
+  project: /\{\{\s*project:[\s\S]*?\}\}/g,
 };
 
 export function addTag(desc: string, type: 'contact' | 'project', name: string, addressLabel?: string): string {

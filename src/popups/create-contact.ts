@@ -1,4 +1,5 @@
 import { createContact, searchContacts } from '../holded-api';
+import { createSubmissionKeyer } from '../idempotency';
 import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
@@ -7,6 +8,8 @@ import { formatSpanishTextCase } from '../spanish-text-case';
 import type { TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
+
+const submissionKeyer = createSubmissionKeyer();
 
 const nameInput = document.getElementById('name') as HTMLInputElement;
 const codeInput = document.getElementById('code') as HTMLInputElement;
@@ -150,7 +153,7 @@ submitBtn.addEventListener('click', async () => {
         purchasesTax: ['s_iva_21'],
       },
     };
-    const result = await createContact(payload);
+    const result = await createContact(payload, submissionKeyer.keyFor(JSON.stringify(payload)));
 
     // Auto-assign contact to card
     const contactId = result.id;
@@ -172,6 +175,7 @@ submitBtn.addEventListener('click', async () => {
       console.error('Holded: error syncing description', err);
     }
 
+    submissionKeyer.reset(); // workflow complete — a later create starts a fresh key
     successMsg.textContent = `Contacto "${contactName}" creado y vinculado.`;
     successMsg.style.display = 'block';
 

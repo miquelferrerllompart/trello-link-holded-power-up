@@ -4,60 +4,84 @@ import { resolve } from 'node:path';
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 
-function buildDocumentsPage(documents: Record<string, unknown[]>, requestUrl: string): Record<string, unknown> {
-  const url = new URL(requestUrl);
-  const typeToKey = {
-    'sales-orders': 'salesOrders',
-    waybills: 'waybills',
-    estimates: 'estimates',
-  };
-  const key = typeToKey[url.searchParams.get('type')] || 'salesOrders';
-  const scope = url.searchParams.get('scope') || 'matched';
-  const page = Number(url.searchParams.get('page')) || 1;
-  const pageSize = Number(url.searchParams.get('pageSize')) || 10;
-  const other = documents.other || {};
-  const matchedItems = documents[key] || [];
-  const otherItems = other[key] || [];
-  const items = scope === 'other' ? otherItems : matchedItems;
+const PAGE_SIZE = 10;
+const TYPE_TO_KEY = {
+  'sales-orders': 'salesOrders',
+  waybills: 'waybills',
+  estimates: 'estimates',
+};
 
-  return {
-    type: url.searchParams.get('type'),
-    scope,
-    page,
-    pageSize,
-    total: items.length,
-    totalPages: Math.max(1, Math.ceil(items.length / pageSize)),
-    otherTotal: otherItems.length,
-    results: items.slice((page - 1) * pageSize, page * pageSize),
-  };
+// Mirrors the worker's /v2/documents/search response shape.
+function buildDocumentsPage(documents, requestUrl, options) {
+  const url = new URL(requestUrl);
+  const type = url.searchParams.get('type');
+  const scope = url.searchParams.get('scope') || 'matched';
+  const key = TYPE_TO_KEY[type] || 'salesOrders';
+  const source = scope === 'all' ? (documents.all || documents) : documents;
+  const items = source[key] || [];
+
+  if (type === 'estimates') {
+    const start = Number(url.searchParams.get('cursor')) || 0;
+    const slice = items.slice(start, start + PAGE_SIZE);
+    const hasMore = start + PAGE_SIZE < items.length;
+    return { type, scope, hasMore, nextCursor: hasMore ? String(start + PAGE_SIZE) : null, results: slice };
+  }
+
+  const page = Number(url.searchParams.get('page')) || 1;
+  const startIndex = (page - 1) * PAGE_SIZE;
+  const slice = items.slice(startIndex, startIndex + PAGE_SIZE);
+  const hasMore = startIndex + PAGE_SIZE < items.length;
+  const body = { type, scope, page, pageSize: PAGE_SIZE, hasMore, results: slice };
+  if (type === 'sales-orders' && options.purchaseOrdersError) body.purchaseOrdersError = true;
+  return body;
 }
 
-function loadCardBackWithDocuments(
-  documents: Record<string, unknown[]>,
-  options: { documentDelayMs?: number } = {},
-): JSDOM {
+function loadCardBack(documents, options = {}) {
   const html = readFileSync(resolve(__dirname, '../public/card-back.html'), 'utf8')
     .replace('<script src="https://p.trellocdn.com/power-up.min.js"></script>', '');
+  const urls = [];
+  const requests = [];
+  const setCalls = [];
+  const popupCalls = [];
+  const authState = { authorizeCalls: 0 };
+  let restApiAuthorized = options.authorized !== false;
+  let cardData = {
+    contactId: options.contactId === null ? undefined : 'contact-1',
+    contactName: options.contactId === null ? undefined : 'Cliente largo',
+    addressLabel: options.contactId === null ? undefined : (options.addressLabel || 'Calle Mayor 123, Palma'),
+    projectId: options.projectId === null ? undefined : 'project-1',
+    projectName: options.projectId === null ? undefined : 'Proyecto largo',
+  };
 
-  return new JSDOM(html, {
+  const dom = new JSDOM(html, {
     url: 'http://127.0.0.1/card-back.html',
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     beforeParse(window) {
-      window.confirm = () => false;
-      window.fetch = async (url) => {
-        if (String(url).includes('/documents/search')) {
+      window.confirm = () => options.confirmUnlink === true;
+      window.fetch = async (url, init) => {
+        const requestUrl = String(url);
+        urls.push(requestUrl);
+        requests.push({ url: requestUrl, init });
+
+        if (requestUrl.includes('/v2/documents/search')) {
           if (options.documentDelayMs) {
-            await new Promise((resolve) => setTimeout(resolve, options.documentDelayMs));
+            await new Promise((r) => setTimeout(r, options.documentDelayMs));
           }
-          return new Response(JSON.stringify(buildDocumentsPage(documents, String(url))), {
+          if (options.dataNotReady) {
+            return new Response(JSON.stringify({ error: { code: 'DATA_NOT_READY', message: 'sync' } }), {
+              status: 503,
+              headers: { 'Content-Type': 'application/json' },
+            });
+          }
+          return new Response(JSON.stringify(buildDocumentsPage(documents, requestUrl, options)), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });
         }
 
-        if (String(url).includes('/api/v2/contacts/')) {
-          return new Response(JSON.stringify({ customFields: [] }), {
+        if (requestUrl.includes('/v2/contacts/')) {
+          return new Response(JSON.stringify({ customFields: options.customFields || [] }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });
@@ -67,374 +91,327 @@ function loadCardBackWithDocuments(
       };
       window.TrelloPowerUp = {
         iframe: () => ({
-          get: () => Promise.resolve({
-            contactId: 'contact-1',
-            contactName: 'Cliente largo',
-            addressLabel: 'Calle Mayor 123, Palma',
-            projectId: 'project-1',
-            projectName: 'Proyecto largo',
+          get: () => Promise.resolve({ ...cardData }),
+          card: () => Promise.resolve({ id: 'card-1', desc: options.cardDesc || '' }),
+          getRestApi: () => ({
+            // Stateful: a token only exists once authorized. When options.authorized
+            // is false the card-back starts tokenless (the original bug) until
+            // authorize() grants it. authorizeCalls guards that we only authorize once.
+            isAuthorized: () => Promise.resolve(restApiAuthorized),
+            authorize: () => { authState.authorizeCalls += 1; restApiAuthorized = true; return Promise.resolve(); },
+            getToken: () => Promise.resolve(restApiAuthorized ? (options.trelloToken || 'tok') : null),
           }),
-          card: () => Promise.resolve({ id: 'card-1', desc: '' }),
-          getRestApi: () => ({ getToken: () => Promise.resolve(null) }),
-          set: () => Promise.resolve(),
+          set: (...args) => { setCalls.push(args); cardData = args[3]; return Promise.resolve(); },
+          popup: (opts) => { popupCalls.push(opts); },
+          closePopup: () => undefined,
           sizeTo: () => Promise.resolve(),
           render: () => undefined,
         }),
       };
     },
   });
+
+  return { dom, urls, requests, setCalls, popupCalls, authState };
 }
 
-async function waitForRender(): Promise<void> {
+async function waitForRender() {
   await new Promise((resolve) => setTimeout(resolve, 100));
 }
 
-describe('card-back document status rendering', () => {
+function expand(dom) {
+  dom.window.document.querySelector('#load-documents')?.click();
+}
+
+function contentText(dom) {
+  return dom.window.document.querySelector('#content')?.textContent || '';
+}
+
+const salesOrder = (id, documentNumber, extra = {}) => ({
+  id,
+  type: 'sales-orders',
+  documentNumber,
+  internalStatus: 'in_process',
+  issueDate: '2026-07-14',
+  projects: [{ id: 'project-1', name: 'Obra', color: null }],
+  purchaseOrders: [],
+  ...extra,
+});
+
+describe('card-back document view (internal API v2)', () => {
   it('renders the full customer address and color-inheriting open-link icons', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [],
-      purchaseOrders: [],
-      waybills: [],
-      estimates: [],
-    });
-
+    const { dom } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
     await waitForRender();
 
-    const text = dom.window.document.querySelector('#content')?.textContent || '';
     const openIcon = dom.window.document.querySelector('.tag-open-icon');
-
-    expect(text).toContain('Calle Mayor 123, Palma');
-    expect(text).not.toContain('Calle Ma…');
+    expect(contentText(dom)).toContain('Calle Mayor 123, Palma');
+    expect(contentText(dom)).not.toContain('Calle Ma…');
     expect(openIcon).not.toBeNull();
-    expect(dom.window.getComputedStyle(openIcon as Element).fill.toLowerCase()).toBe('currentcolor');
+    expect(dom.window.getComputedStyle(openIcon).fill.toLowerCase()).toBe('currentcolor');
   });
 
-  it('renders sales order shipment state from shipped items and not Holded PV status', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [{
-        id: 'sales-order-1',
-        type: 'sales-orders',
-        documentNumber: 'PV-1',
-        status: 'completed',
-        shippedItems: {
-          count: 1,
-          fields: ['pending', 'sent', 'total'],
-          items: [{ total: 4, sent: 4, pending: 0 }],
-        },
-      }],
-      purchaseOrders: [],
+  it('fetches the linked contact detail from /v2/contacts/:id', async () => {
+    const { dom, urls } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
+    await waitForRender();
+    expect(urls.some((url) => url.includes('/v2/contacts/contact-1'))).toBe(true);
+  });
+
+  it('shows the sales-order internalStatus label, not the document status', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_prepared' })],
       waybills: [],
       estimates: [],
     });
-
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    expand(dom);
     await waitForRender();
 
-    const text = dom.window.document.querySelector('#content')?.textContent || '';
-    expect(text).toContain('Preparado');
-    expect(text).not.toContain('Servido');
-    expect(text).not.toContain('Completado');
+    expect(contentText(dom)).toContain('Parcialmente preparado');
+    expect(contentText(dom)).not.toContain('Completado');
   });
 
-  it('renders delivered sales orders when all linked waybills are accepted', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [{
-        id: 'sales-order-1',
-        type: 'sales-orders',
-        documentNumber: 'PV-1',
-        status: 'completed',
-        shippedItems: {
-          count: 1,
-          fields: ['pending', 'sent', 'total', 'waybill_id'],
-          items: [{ total: 4, sent: 4, pending: 0, waybill_id: 'waybill-1' }],
-          waybillStatuses: [{ id: 'waybill-1', status: 'completed' }],
-        },
-      }],
-      purchaseOrders: [],
-      waybills: [],
+  it('shows waybill approval labels (Sin aprobar / Aprobado)', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
       estimates: [],
+      waybills: [
+        { id: 'wb-1', type: 'waybills', documentNumber: 'ALB-1', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] },
+        { id: 'wb-2', type: 'waybills', documentNumber: 'ALB-2', workflowStatus: 'delivered', issueDate: '2026-07-11', projects: [] },
+      ],
     });
-
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    expand(dom);
+    await waitForRender();
+    dom.window.document.querySelector('[data-tab="waybills"]')?.click();
     await waitForRender();
 
-    const text = dom.window.document.querySelector('#content')?.textContent || '';
-    expect(text).toContain('Entregado');
+    const text = contentText(dom);
+    expect(text).toContain('Sin aprobar');
+    expect(text).toContain('Aprobado');
     expect(text).not.toContain('Preparado');
   });
 
-  it('renders waybill status as Pendiente or Aceptado', async () => {
-    const dom = loadCardBackWithDocuments({
+  it('shows estimate displayStatus labels (Aceptado / Denegado)', async () => {
+    const { dom } = loadCardBack({
       salesOrders: [],
-      purchaseOrders: [],
-      estimates: [],
-      waybills: [
-        { id: 'waybill-1', type: 'waybills', documentNumber: 'ALB-1', status: 'pending' },
-        { id: 'waybill-2', type: 'waybills', documentNumber: 'ALB-2', status: 'completed' },
+      waybills: [],
+      estimates: [
+        { id: 'est-1', type: 'estimates', documentNumber: 'PRE-1', displayStatus: 'accepted', issueDate: '2026-07-01', total: 100, currency: 'EUR', projects: [] },
+        { id: 'est-2', type: 'estimates', documentNumber: 'PRE-2', displayStatus: 'rejected', issueDate: '2026-07-02', total: 50, currency: 'EUR', projects: [] },
       ],
     });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+    dom.window.document.querySelector('[data-tab="estimates"]')?.click();
+    await waitForRender();
 
-    await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
-    await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('[data-tab="waybills"]')?.click();
-    await waitForRender();
-
-    const text = dom.window.document.querySelector('#content')?.textContent || '';
-    expect(text).toContain('Pendiente');
+    const text = contentText(dom);
     expect(text).toContain('Aceptado');
+    expect(text).toContain('Denegado');
     expect(text).not.toContain('Completado');
   });
 
-  it('switches between the linked project and the customer’s other projects without stacking lists', async () => {
-    let documentFetches = 0;
-    const html = readFileSync(resolve(__dirname, '../public/card-back.html'), 'utf8')
-      .replace('<script src="https://p.trellocdn.com/power-up.min.js"></script>', '');
-    const dom = new JSDOM(html, {
-      url: 'http://127.0.0.1/card-back.html',
-      runScripts: 'dangerously',
-      pretendToBeVisual: true,
-      beforeParse(window) {
-        window.confirm = () => false;
-        window.fetch = async (url) => {
-          if (String(url).includes('/documents/search')) {
-            documentFetches += 1;
-            return new Response(JSON.stringify(buildDocumentsPage({
-              salesOrders: [
-                { id: 'sales-order-1', type: 'sales-orders', documentNumber: 'PV-1', shippedItems: { count: 1, fields: [], items: [{ total: 1, sent: 1, pending: 0 }] } },
-              ],
-              purchaseOrders: [],
-              waybills: [],
-              estimates: [],
-              other: {
-                salesOrders: [
-                  { id: 'sales-order-2', type: 'sales-orders', documentNumber: 'PV-2', shippedItems: { count: 1, fields: [], items: [{ total: 2, sent: 0, pending: 2 }] } },
-                ],
-                purchaseOrders: [],
-                waybills: [],
-                estimates: [],
-              },
-            }, String(url))), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' },
-            });
-          }
-
-          if (String(url).includes('/api/v2/contacts/')) {
-            return new Response(JSON.stringify({ customFields: [] }), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' },
-            });
-          }
-
-          return new Response('{}', { status: 200 });
-        };
-        window.TrelloPowerUp = {
-          iframe: () => ({
-            get: () => Promise.resolve({
-              contactId: 'contact-1',
-              contactName: 'Cliente largo',
-              projectId: 'project-1',
-              projectName: 'Proyecto largo',
-            }),
-            card: () => Promise.resolve({ id: 'card-1', desc: '' }),
-            getRestApi: () => ({ getToken: () => Promise.resolve(null) }),
-            set: () => Promise.resolve(),
-            sizeTo: () => Promise.resolve(),
-            render: () => undefined,
-          }),
-        };
-      },
-    });
-
-    await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
-    await waitForRender();
-
-    let text = dom.window.document.querySelector('#content')?.textContent || '';
-    expect(text).toContain('#PV-1');
-    expect(text).not.toContain('#PV-2');
-    expect(text).toContain('Este cliente');
-    expect(Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.documents-scope-button'))
-      .map((button) => button.textContent?.trim())).toEqual([
-      'Proyecto vinculado 1',
-      'Otros proyectos 1',
-    ]);
-
-    dom.window.document.querySelector<HTMLButtonElement>('[data-document-scope="other"]')?.click();
-    await waitForRender();
-
-    text = dom.window.document.querySelector('#content')?.textContent || '';
-    expect(text).toContain('#PV-2');
-    expect(text).not.toContain('#PV-1');
-    expect(dom.window.document.querySelectorAll('.document-list')).toHaveLength(1);
-    expect(documentFetches).toBe(2);
-  });
-
-  it('renders estimates as a document tab and can switch to estimates from other projects', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [],
-      purchaseOrders: [],
+  it('offers Proyecto vinculado | Todos (no counts) and drops projectId in Todos', async () => {
+    const { dom, urls } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1')],
       waybills: [],
-      estimates: [
-        { id: 'estimate-1', type: 'estimates', documentNumber: 'PRE-1', status: 'pending' },
-      ],
-      other: {
-        salesOrders: [],
-        purchaseOrders: [],
-        waybills: [],
-        estimates: [
-          { id: 'estimate-2', type: 'estimates', documentNumber: 'PRE-2', status: 'pending' },
+      estimates: [],
+      all: {
+        salesOrders: [
+          salesOrder('so-1', 'PV-1'),
+          salesOrder('so-2', 'PV-2', { projects: [{ id: 'project-2', name: 'Otra obra', color: null }] }),
         ],
+        waybills: [],
+        estimates: [],
       },
     });
-
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
-    await waitForRender();
-
-    const estimateTab = dom.window.document.querySelector<HTMLButtonElement>('[data-tab="estimates"]');
-    expect(estimateTab?.textContent?.trim()).toBe('Presupuestos');
-    estimateTab?.click();
+    expand(dom);
     await waitForRender();
 
-    let text = dom.window.document.querySelector('#content')?.textContent || '';
-    expect(dom.window.document.querySelector<HTMLButtonElement>('[data-tab="estimates"]')?.textContent).toContain('Presupuestos 1');
-    expect(text).toContain('#PRE-1');
-    expect(text).toContain('Otros proyectos 1');
-    expect(text).not.toContain('#PRE-2');
+    expect(Array.from(dom.window.document.querySelectorAll('.documents-scope-button')).map((b) => b.textContent?.trim()))
+      .toEqual(['Proyecto vinculado', 'Todos']);
+    expect(contentText(dom)).toContain('#PV-1');
+    expect(contentText(dom)).not.toContain('#PV-2');
 
-    dom.window.document.querySelector<HTMLButtonElement>('[data-document-scope="other"]')?.click();
+    dom.window.document.querySelector('[data-document-scope="all"]')?.click();
     await waitForRender();
 
-    text = dom.window.document.querySelector('#content')?.textContent || '';
-    expect(text).toContain('#PRE-2');
-    expect(text).not.toContain('#PRE-1');
+    const text = contentText(dom);
+    expect(text).toContain('#PV-1');
+    expect(text).toContain('#PV-2');
+    expect(text).toContain('Otra obra'); // muted project chip on the off-project row
+    expect(dom.window.document.querySelectorAll('.document-list')).toHaveLength(1);
+
+    const matchedCall = urls.find((u) => u.includes('type=sales-orders') && u.includes('scope=matched'));
+    const allCall = urls.find((u) => u.includes('type=sales-orders') && u.includes('scope=all'));
+    expect(matchedCall).toContain('projectId=project-1');
+    expect(allCall).not.toContain('projectId=');
   });
 
-  it('does not render purchase orders in the customer document tabs or count', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [
-        { id: 'sales-order-1', type: 'sales-orders', documentNumber: 'PV-1', shippedItems: { count: 0, fields: [], items: [] } },
-      ],
-      purchaseOrders: [
-        { id: 'purchase-order-1', type: 'purchase-orders', documentNumber: 'PC-1', status: 'completed' },
-      ],
-      waybills: [],
-      estimates: [],
-    });
-
+  it('omits the scope toggle when there is no linked project', async () => {
+    const { dom } = loadCardBack({ salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] }, { projectId: null });
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    expand(dom);
     await waitForRender();
 
-    const text = dom.window.document.querySelector('#content')?.textContent || '';
-    const tabs = Array.from(dom.window.document.querySelectorAll<HTMLButtonElement>('.documents-tab'))
-      .map((tab) => tab.textContent?.trim());
-    const count = dom.window.document.querySelector('.documents-count')?.textContent;
-
-    expect(tabs).toEqual(['Pedidos venta 1', 'Albaranes', 'Presupuestos']);
-    expect(count).toBe('1 documento');
-    expect(text).not.toContain('Pedidos Compra');
-    expect(text).not.toContain('#PC-1');
+    expect(dom.window.document.querySelector('.documents-scope')).toBeNull();
+    expect(contentText(dom)).toContain('Este cliente');
   });
 
-  it('renders at most ten documents and moves between numbered pages', async () => {
-    const salesOrders = Array.from({ length: 23 }, (_, index) => ({
-      id: `sales-order-${index + 1}`,
-      type: 'sales-orders',
-      documentNumber: `PV-${index + 1}`,
-      shippedItems: { count: 0, fields: [], items: [] },
-    }));
-    const dom = loadCardBackWithDocuments({
-      salesOrders,
-      purchaseOrders: [],
-      waybills: [],
-      estimates: [],
-    });
-
+  it('paginates offset tabs with ‹ Página N › driven by hasMore, without totals', async () => {
+    const salesOrders = Array.from({ length: 23 }, (_, index) => salesOrder(`so-${index + 1}`, `PV-${index + 1}`));
+    const { dom } = loadCardBack({ salesOrders, waybills: [], estimates: [] });
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    expand(dom);
     await waitForRender();
 
     expect(dom.window.document.querySelectorAll('.document-row')).toHaveLength(10);
-    expect(dom.window.document.querySelector('.documents-range')?.textContent).toBe('1–10 de 23');
-    expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toContain('Página 1 de 3');
-    expect(dom.window.document.querySelector('#content')?.textContent).toContain('#PV-1');
-    expect(dom.window.document.querySelector('#content')?.textContent).not.toContain('#PV-11');
+    expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 1');
+    expect(dom.window.document.querySelector('.documents-range')).toBeNull();
+    expect(dom.window.document.querySelector('.documents-count')).toBeNull();
+    expect(dom.window.document.querySelector('.documents-page-button[aria-label="Página anterior"]')?.disabled).toBe(true);
+    expect(dom.window.document.querySelector('.documents-page-button[aria-label="Página siguiente"]')?.disabled).toBe(false);
 
-    dom.window.document.querySelector<HTMLButtonElement>('.documents-page-button[aria-label="Página siguiente"]')?.click();
+    dom.window.document.querySelector('.documents-page-button[aria-label="Página siguiente"]')?.click();
     await waitForRender();
 
-    expect(dom.window.document.querySelectorAll('.document-row')).toHaveLength(10);
-    expect(dom.window.document.querySelector('.documents-range')?.textContent).toBe('11–20 de 23');
-    expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toContain('Página 2 de 3');
-    const pageTwoNumbers = Array.from(dom.window.document.querySelectorAll('.document-number'))
-      .map((element) => element.textContent);
-    expect(pageTwoNumbers).toContain('#PV-11');
-    expect(pageTwoNumbers).not.toContain('#PV-1');
+    expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 2');
+    const numbers = Array.from(dom.window.document.querySelectorAll('.document-number')).map((el) => el.textContent);
+    expect(numbers).toContain('#PV-11');
+    expect(numbers).not.toContain('#PV-1');
   });
 
-  it('does not show pagination controls when the active scope fits on one page', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [
-        { id: 'sales-order-1', type: 'sales-orders', documentNumber: 'PV-1', shippedItems: { count: 0, fields: [], items: [] } },
-      ],
-      purchaseOrders: [],
-      waybills: [],
-      estimates: [],
-    });
-
+  it('hides pagination when a single short page fits', async () => {
+    const { dom } = loadCardBack({ salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] });
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    expand(dom);
     await waitForRender();
 
     expect(dom.window.document.querySelector('.documents-pagination')).toBeNull();
   });
 
-  it('moves focus and lazy-loads document tabs with the arrow keys', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [],
-      purchaseOrders: [],
-      waybills: [
-        { id: 'waybill-1', type: 'waybills', documentNumber: 'ALB-1', status: 'pending' },
-      ],
+  it('walks estimates by cursor and returns to the previous page', async () => {
+    const estimates = Array.from({ length: 15 }, (_, index) => ({
+      id: `est-${index + 1}`,
+      type: 'estimates',
+      documentNumber: `PRE-${index + 1}`,
+      displayStatus: 'sent',
+      issueDate: '2026-07-01',
+      total: 10,
+      currency: 'EUR',
+      projects: [],
+    }));
+    const { dom, urls } = loadCardBack({ salesOrders: [], waybills: [], estimates });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+    dom.window.document.querySelector('[data-tab="estimates"]')?.click();
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 1');
+    dom.window.document.querySelector('.documents-page-button[aria-label="Página siguiente"]')?.click();
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 2');
+    expect(contentText(dom)).toContain('#PRE-11');
+    expect(urls.some((u) => u.includes('type=estimates') && u.includes('cursor=10'))).toBe(true);
+    expect(dom.window.document.querySelector('.documents-page-button[aria-label="Página siguiente"]')?.disabled).toBe(true);
+
+    dom.window.document.querySelector('.documents-page-button[aria-label="Página anterior"]')?.click();
+    await waitForRender();
+    expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 1');
+    expect(contentText(dom)).toContain('#PRE-1');
+  });
+
+  it('shows a sync message and retry on DATA_NOT_READY', async () => {
+    const { dom } = loadCardBack({ salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] }, { dataNotReady: true });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(contentText(dom)).toContain('Sincronizando datos de Holded');
+    expect(dom.window.document.querySelector('.documents-retry')).not.toBeNull();
+  });
+
+  it('nests purchase orders under their sales order as tree children with a Holded deep link', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1', {
+        purchaseOrders: [{
+          id: 'po-1',
+          type: 'purchase-orders',
+          documentNumber: 'PC-1',
+          internalStatus: 'awaiting_receipt',
+          issueDate: '2026-07-13',
+          supplier: { id: 's1', name: 'Rexel' },
+          total: 250,
+          currency: 'EUR',
+          url: 'https://app.holded.com/sales/orders#open:order-po-1',
+          projects: [],
+        }],
+      })],
+      waybills: [],
       estimates: [],
     });
-
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    expand(dom);
     await waitForRender();
 
-    const salesTab = dom.window.document.querySelector<HTMLButtonElement>('[data-tab="salesOrders"]');
+    const subRow = dom.window.document.querySelector('.purchase-order-row');
+    expect(subRow).not.toBeNull();
+    expect(subRow.getAttribute('href')).toBe('https://app.holded.com/sales/orders#open:order-po-1');
+    const text = contentText(dom);
+    expect(text).toContain('#PC-1');
+    expect(text).toContain('Rexel');
+    expect(text).toContain('Pendiente recibir');
+
+    // Still a three-tab view — purchase orders are not a tab.
+    expect(Array.from(dom.window.document.querySelectorAll('.documents-tab')).map((t) => t.textContent?.trim()))
+      .toEqual(['Pedidos venta', 'Albaranes', 'Presupuestos']);
+  });
+
+  it('keeps sales orders visible and warns quietly when purchase orders fail to load', async () => {
+    const { dom } = loadCardBack(
+      { salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] },
+      { purchaseOrdersError: true },
+    );
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(contentText(dom)).toContain('#PV-1');
+    expect(contentText(dom)).toContain('No se pudieron cargar las compras.');
+  });
+
+  it('moves focus and lazy-loads document tabs with the arrow keys', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [{ id: 'wb-1', type: 'waybills', documentNumber: 'ALB-1', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] }],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const salesTab = dom.window.document.querySelector('[data-tab="salesOrders"]');
     salesTab?.focus();
-    salesTab?.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
-      key: 'ArrowRight',
-      bubbles: true,
-    }));
+    salesTab?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     await waitForRender();
 
-    const waybillTab = dom.window.document.querySelector<HTMLButtonElement>('[data-tab="waybills"]');
+    const waybillTab = dom.window.document.querySelector('[data-tab="waybills"]');
     expect(waybillTab?.getAttribute('aria-selected')).toBe('true');
     expect(waybillTab?.tabIndex).toBe(0);
     expect(dom.window.document.activeElement).toBe(waybillTab);
-    expect(dom.window.document.querySelector('#content')?.textContent).toContain('#ALB-1');
+    expect(contentText(dom)).toContain('#ALB-1');
   });
 
   it('announces a stable loading panel while a document page is pending', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [
-        { id: 'sales-order-1', type: 'sales-orders', documentNumber: 'PV-1', shippedItems: { count: 0, fields: [], items: [] } },
-      ],
-      purchaseOrders: [],
-      waybills: [],
-      estimates: [],
-    }, { documentDelayMs: 200 });
-
+    const { dom } = loadCardBack(
+      { salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] },
+      { documentDelayMs: 200 },
+    );
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    expand(dom);
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     const pendingPanel = dom.window.document.querySelector('#documents-panel');
@@ -450,53 +427,72 @@ describe('card-back document status rendering', () => {
     expect(loadedPanel?.textContent).toContain('#PV-1');
   });
 
-  it('uses an accurate empty message for the customer’s other projects', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [
-        { id: 'sales-order-1', type: 'sales-orders', documentNumber: 'PV-1', shippedItems: { count: 0, fields: [], items: [] } },
-      ],
-      purchaseOrders: [],
+  it('shows always-visible link placeholders and opens the link popups when nothing is linked', async () => {
+    const { dom, popupCalls } = loadCardBack(
+      { salesOrders: [], waybills: [], estimates: [] },
+      { contactId: null, projectId: null },
+    );
+    await waitForRender();
+
+    const addButtons = Array.from(dom.window.document.querySelectorAll('.tag-add'));
+    expect(addButtons.map((b) => b.textContent?.trim())).toEqual(['Vincula un cliente', 'Vincula un proyecto']);
+    // No documents section without a linked contact.
+    expect(dom.window.document.querySelector('#documents')).toBeNull();
+
+    addButtons[0].click();
+    addButtons[1].click();
+    expect(popupCalls[0].url).toBe('./src/popups/search-contact.html');
+    expect(popupCalls[1].url).toBe('./src/popups/search-project.html');
+    expect(popupCalls[0].mouseEvent).toBeTruthy();
+    expect(popupCalls[1].mouseEvent).toBeTruthy();
+  });
+
+  it('shows the client chip alongside the project placeholder when only the contact is linked', async () => {
+    const { dom, popupCalls } = loadCardBack(
+      { salesOrders: [], waybills: [], estimates: [] },
+      { projectId: null },
+    );
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.tag-contact')).not.toBeNull();
+    const placeholders = Array.from(dom.window.document.querySelectorAll('.tag-add'));
+    expect(placeholders.map((b) => b.textContent?.trim())).toEqual(['Vincula un proyecto']);
+
+    placeholders[0].click();
+    expect(popupCalls[0].url).toBe('./src/popups/search-project.html');
+  });
+
+  it('opens the unlink popup for the contact and the project close buttons', async () => {
+    const { dom, popupCalls } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
+    await waitForRender();
+
+    dom.window.document.querySelector('.tag-close[data-field="contact"]')?.click();
+    dom.window.document.querySelector('.tag-close[data-field="project"]')?.click();
+
+    expect(popupCalls).toHaveLength(2);
+    expect(popupCalls[0].url).toBe('./src/popups/unlink.html?field=contact');
+    expect(popupCalls[1].url).toBe('./src/popups/unlink.html?field=project');
+    expect(popupCalls[0].title).toContain('cliente');
+    expect(popupCalls[1].title).toContain('proyecto');
+    // Opening a popup from inside an iframe requires the mouse event, or Trello rejects it.
+    expect(popupCalls[0].mouseEvent).toBeTruthy();
+    expect(popupCalls[1].mouseEvent).toBeTruthy();
+  });
+
+  it('uses a customer-wide empty message in the Todos scope', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1')],
       waybills: [],
       estimates: [],
-      other: {
-        salesOrders: [],
-        purchaseOrders: [],
-        waybills: [],
-        estimates: [],
-      },
+      all: { salesOrders: [], waybills: [], estimates: [] },
     });
-
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
+    expand(dom);
     await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('[data-document-scope="other"]')?.click();
+    dom.window.document.querySelector('[data-document-scope="all"]')?.click();
     await waitForRender();
 
     expect(dom.window.document.querySelector('.documents-note')?.textContent)
-      .toBe('No hay pedidos de venta en otros proyectos.');
-  });
-
-  it('renders estimate completion and cancellation with estimate wording', async () => {
-    const dom = loadCardBackWithDocuments({
-      salesOrders: [],
-      purchaseOrders: [],
-      waybills: [],
-      estimates: [
-        { id: 'estimate-1', type: 'estimates', documentNumber: 'PRE-1', status: 'completed' },
-        { id: 'estimate-2', type: 'estimates', documentNumber: 'PRE-2', status: 'cancelled' },
-      ],
-    });
-
-    await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('#load-documents')?.click();
-    await waitForRender();
-    dom.window.document.querySelector<HTMLButtonElement>('[data-tab="estimates"]')?.click();
-    await waitForRender();
-
-    const text = dom.window.document.querySelector('#content')?.textContent || '';
-    expect(text).toContain('Aceptado');
-    expect(text).toContain('Denegado');
-    expect(text).not.toContain('Completado');
-    expect(text).not.toContain('Cancelado');
+      .toBe('Este cliente no tiene pedidos de venta.');
   });
 });

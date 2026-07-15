@@ -11,6 +11,7 @@ export default defineConfig({
         'search-project': resolve(__dirname, 'src/popups/search-project.html'),
         'create-contact': resolve(__dirname, 'src/popups/create-contact.html'),
         'select-address': resolve(__dirname, 'src/popups/select-address.html'),
+        'unlink': resolve(__dirname, 'src/popups/unlink.html'),
       },
     },
   },

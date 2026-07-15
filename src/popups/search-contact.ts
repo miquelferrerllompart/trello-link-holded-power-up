@@ -1,4 +1,4 @@
-import { searchContacts } from '../holded-api';
+import { searchContacts, getContactDetail } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
@@ -12,6 +12,15 @@ const searchInput = document.getElementById('search') as HTMLInputElement;
 const resultsDiv = document.getElementById('results') as HTMLDivElement;
 
 let debounceTimer: ReturnType<typeof setTimeout>;
+
+function clearSelectionError() {
+  resultsDiv.querySelector('.selection-error')?.remove();
+}
+
+function showSelectionError(message: string) {
+  clearSelectionError();
+  resultsDiv.insertAdjacentHTML('afterbegin', `<div class="error selection-error">${message}</div>`);
+}
 
 function addCreateButton() {
   resultsDiv.insertAdjacentHTML('beforeend',
@@ -56,8 +65,21 @@ function renderResults(contacts: HoldedContact[], query: string) {
   resultsDiv.querySelectorAll('.result-item').forEach((el) => {
     el.addEventListener('click', async () => {
       const id = (el as HTMLElement).dataset.id!;
-      const contact = contacts.find((c) => c.id === id)!;
-      const contactName = formatSpanishTextCase(contact.name);
+      const summary = contacts.find((c) => c.id === id)!;
+      const contactName = formatSpanishTextCase(summary.name);
+
+      // Search returns summaries; the addresses come from the full detail. If that
+      // fetch fails, stop — linking without it could drop the contact's address.
+      // Show a retryable error and let the user click the contact again.
+      clearSelectionError();
+      let contact: HoldedContact;
+      try {
+        contact = await getContactDetail(id);
+      } catch (err) {
+        console.error('Holded: error loading contact detail', err);
+        showSelectionError('No se pudo cargar el contacto. Pulsa de nuevo para reintentar.');
+        return;
+      }
 
       if (contact.shippingAddresses && contact.shippingAddresses.length > 0) {
         const pending = buildPendingContactSelection(contact, contactName);
