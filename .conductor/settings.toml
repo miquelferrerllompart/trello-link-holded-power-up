@@ -1,0 +1,11 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+[scripts]
+run_mode = "nonconcurrent"
+setup = "ln -sf \"$CONDUCTOR_ROOT_PATH/.env\" .env && npm ci"
+
+[scripts.run.run]
+available_in = "local"
+command = "npm run dev"
+default = true
+icon = "play"
