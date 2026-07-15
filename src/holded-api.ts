@@ -1,4 +1,4 @@
-import type { HoldedContact, HoldedProject, HoldedSalesOrder, PendingShippingAddress, CreateContactPayload, CreateContactResponse } from './types';
+import type { HoldedContact, HoldedProject, CreateContactPayload, CreateContactResponse } from './types';
 import { HOLDED_PROXY_URL } from './config';
 
 const PROXY_BASE = HOLDED_PROXY_URL;
@@ -23,22 +23,15 @@ export interface ContactSearchResult {
   results: HoldedContact[];
 }
 
-export async function searchContacts(query: string, force = false): Promise<ContactSearchResult> {
+export async function searchContacts(query: string): Promise<ContactSearchResult> {
   const params = new URLSearchParams();
   if (query) params.set('q', query);
-  if (force) params.set('force', '1');
   return fetchHolded<ContactSearchResult>(`${PROXY_BASE}/contacts/search?${params}`);
 }
 
-export async function refreshContacts(): Promise<{ total: number }> {
-  const response = await fetch(`${PROXY_BASE}/contacts/refresh`, { method: 'POST' });
-  const body = await response.text();
-  if (!response.ok) {
-    let msg = `Holded API error: ${response.status}`;
-    try { msg = JSON.parse(body).error || msg; } catch {}
-    throw new Error(msg);
-  }
-  return JSON.parse(body);
+/** Full contact detail (shipping/bill addresses, custom fields) from the internal API. */
+export async function getContactDetail(id: string): Promise<HoldedContact> {
+  return fetchHolded<HoldedContact>(`${PROXY_BASE}/v2/contacts/${encodeURIComponent(id)}`);
 }
 
 export interface ProjectSearchResult {
@@ -46,33 +39,10 @@ export interface ProjectSearchResult {
   results: HoldedProject[];
 }
 
-export async function searchProjects(query: string, force = false): Promise<ProjectSearchResult> {
+export async function searchProjects(query: string): Promise<ProjectSearchResult> {
   const params = new URLSearchParams();
   if (query) params.set('q', query);
-  if (force) params.set('force', '1');
   return fetchHolded<ProjectSearchResult>(`${PROXY_BASE}/projects/search?${params}`);
-}
-
-export async function refreshProjects(): Promise<{ total: number }> {
-  const response = await fetch(`${PROXY_BASE}/projects/refresh`, { method: 'POST' });
-  const body = await response.text();
-  if (!response.ok) {
-    let msg = `Holded API error: ${response.status}`;
-    try { msg = JSON.parse(body).error || msg; } catch {}
-    throw new Error(msg);
-  }
-  return JSON.parse(body);
-}
-
-export interface SalesOrderSearchResult {
-  total: number;
-  results: HoldedSalesOrder[];
-}
-
-export async function searchSalesOrders(contactId: string, projectId?: string): Promise<SalesOrderSearchResult> {
-  const params = new URLSearchParams({ contactId });
-  if (projectId) params.set('projectId', projectId);
-  return fetchHolded<SalesOrderSearchResult>(`${PROXY_BASE}/sales-orders/search?${params}`);
 }
 
 function omitEmpty<T extends Record<string, unknown>>(value: T): T {
@@ -81,49 +51,60 @@ function omitEmpty<T extends Record<string, unknown>>(value: T): T {
   ) as T;
 }
 
-function toV2ContactPayload(payload: CreateContactPayload): Record<string, unknown> {
+/** Stable-per-submit key so a network retry of the same write can't duplicate it. */
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `idem-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+// Internal CreateContact payload (camelCase). `defaults` is sent forward-compatibly:
+// the internal API will start honouring salesTax/purchasesTax once it adds support.
+function toInternalContactPayload(payload: CreateContactPayload): Record<string, unknown> {
   const billAddress = payload.billAddress
     ? omitEmpty({
       address: payload.billAddress.address,
       city: payload.billAddress.city,
-      postal_code: payload.billAddress.postalCode,
+      postalCode: payload.billAddress.postalCode,
       province: payload.billAddress.province,
       country: payload.billAddress.country,
-      country_code: payload.billAddress.countryCode,
+      countryCode: payload.billAddress.countryCode,
     })
     : undefined;
 
   const defaults = payload.defaults
     ? omitEmpty({
-      sales_tax: payload.defaults.salesTax,
-      purchases_tax: payload.defaults.purchasesTax,
+      salesTax: payload.defaults.salesTax,
+      purchasesTax: payload.defaults.purchasesTax,
     })
     : undefined;
 
   return omitEmpty({
     name: payload.name,
     code: payload.code,
-    vat_number: payload.vatnumber,
-    trade_name: payload.tradeName,
-    is_person: payload.isperson === 1,
+    vatnumber: payload.vatnumber,
+    tradeName: payload.tradeName,
+    isperson: payload.isperson,
     email: payload.email,
     phone: payload.phone,
     mobile: payload.mobile,
     type: payload.type,
-    bill_address: billAddress,
+    billAddress,
     defaults,
   });
 }
 
 export async function createContact(payload: CreateContactPayload): Promise<CreateContactResponse> {
-  const response = await fetch(`${PROXY_BASE}/api/v2/contacts`, {
+  const idempotencyKey = generateIdempotencyKey();
+  const response = await fetch(`${PROXY_BASE}/v2/contacts?idempotencyKey=${idempotencyKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(toV2ContactPayload(payload)),
+    body: JSON.stringify(toInternalContactPayload(payload)),
   });
   if (!response.ok) {
     const body = await response.text();
-    let msg = `Holded API error: ${response.status}`;
+    let msg = `Error ${response.status}`;
     try { msg = JSON.parse(body).error || msg; } catch {}
     throw new Error(msg);
   }
@@ -139,31 +120,27 @@ export interface NewShippingAddress {
   country?: string;
 }
 
-/** Adds a shipping address to an existing contact via PUT */
-export async function addShippingAddress(
-  contactId: string,
-  existing: PendingShippingAddress[],
-  newAddr: NewShippingAddress,
-): Promise<void> {
-  const shippingAddresses = [
-    ...existing.map((a) => ({
-      name: a.name,
-      address: a.address,
-      city: a.city,
-      postalCode: a.postalCode,
-      province: a.province,
-      country: a.country,
-    })),
-    { ...newAddr, country: newAddr.country || 'España' },
-  ];
-  const response = await fetch(`${PROXY_BASE}/api/invoicing/v1/contacts/${contactId}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ shippingAddresses }),
-  });
+/** Appends a shipping address to an existing contact through the internal API. */
+export async function addShippingAddress(contactId: string, newAddr: NewShippingAddress): Promise<void> {
+  const idempotencyKey = generateIdempotencyKey();
+  const response = await fetch(
+    `${PROXY_BASE}/v2/contacts/${encodeURIComponent(contactId)}/shipping-addresses?idempotencyKey=${idempotencyKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newAddr.name,
+        address: newAddr.address,
+        city: newAddr.city,
+        postalCode: newAddr.postalCode,
+        province: newAddr.province,
+        country: newAddr.country || 'España',
+      }),
+    },
+  );
   if (!response.ok) {
     const body = await response.text();
-    let msg = `Holded API error: ${response.status}`;
+    let msg = `Error ${response.status}`;
     try { msg = JSON.parse(body).error || msg; } catch {}
     throw new Error(msg);
   }

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Desvincular</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 14px;
+      color: #172b4d;
+    }
+    .prompt {
+      font-size: 14px;
+      line-height: 20px;
+      margin-bottom: 14px;
+    }
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+    button {
+      flex: 1;
+      padding: 8px 10px;
+      border: 0;
+      border-radius: 6px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s ease-out;
+    }
+    button:active { transform: scale(0.97); }
+    button[disabled] { cursor: default; opacity: 0.6; }
+    .confirm { background: #ffebe6; color: #ae2e24; }
+    .confirm:hover { background: #ffd5cd; }
+    .cancel { background: #091e420f; color: #172b4d; }
+    .cancel:hover { background: #091e4224; }
+    .error {
+      display: none;
+      margin-top: 10px;
+      font-size: 12px;
+      line-height: 16px;
+      color: #ae2e24;
+    }
+    @media (prefers-color-scheme: dark) {
+      body { color: #b6c2cf; }
+      .confirm { background: rgba(248, 113, 104, 0.16); color: #f87168; }
+      .confirm:hover { background: rgba(248, 113, 104, 0.24); }
+      .cancel { background: #a6c5e229; color: #b6c2cf; }
+      .cancel:hover { background: #a6c5e23d; }
+      .error { color: #f87168; }
+    }
+  </style>
+  <script src="https://p.trellocdn.com/power-up.min.js"></script>
+</head>
+<body>
+  <div class="prompt">¿Desvincular <span id="label">cliente</span> y quitarlo de la descripción de la tarjeta?</div>
+  <div class="actions">
+    <button type="button" class="confirm" id="confirm">Desvincular</button>
+    <button type="button" class="cancel" id="cancel">Cancelar</button>
+  </div>
+  <div class="error" id="error"></div>
+  <script type="module" src="./unlink.ts"></script>
+</body>
+</html>

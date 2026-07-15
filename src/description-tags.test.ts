@@ -63,4 +63,15 @@ describe('removeTag', () => {
     const desc = 'Text\n\n\n{{ contact: Alice | C/ Mayor 1, Madrid }}';
     expect(removeTag(desc, 'contact')).toBe('Text');
   });
+
+  it('removes a tag whose value contains braces', () => {
+    expect(removeTag('{{ project: Obra {Fase 2} }}', 'project')).toBe('');
+    const desc = 'Nota\n\n\n{{ contact: Empresa {Grupo} S.L. }}';
+    expect(removeTag(desc, 'contact')).toBe('Nota');
+  });
+
+  it('round-trips add then remove for a braced name', () => {
+    const withTag = addTag('Nota previa', 'project', 'Obra {Fase 2}');
+    expect(removeTag(withTag, 'project')).toBe('Nota previa');
+  });
 });

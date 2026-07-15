@@ -1,46 +1,15 @@
-import {
-  attachShippedItemsTracking,
-  fetchAllPages,
-  normalizeV2Document,
-  normalizeV2Contact,
-  searchContactsV2,
-  searchHoldedDocumentsV2,
-  searchSalesOrdersV2,
-  splitDocumentsForProject,
-} from './holded-v2';
-import type {
-  HoldedDocumentType,
-  HoldedV2Contact,
-  HoldedV2Document,
-  NormalizedHoldedDocument,
-} from './holded-v2';
+import { buildDocumentUrl } from './holded-v2';
+import { InternalApiError, internalApiGet, internalApiPost } from './internal-api';
 
 interface Env {
-  HOLDED_API_KEY?: string;
-  HOLDED_API_V2?: string;
-  CACHE: KVNamespace;
+  EF_INTERNAL_API_KEY?: string;
 }
-
-const HOLDED_BASE = 'https://api.holded.com';
-const CONTACTS_CACHE_KEY = 'holded_contacts';
-const PROJECTS_CACHE_KEY = 'holded_projects';
-const CACHE_TTL_SECONDS = 15 * 60; // 15 minutes
-const DOCUMENTS_PAGE_SIZE = 10;
-const DOCUMENT_TYPES: HoldedDocumentType[] = ['sales-orders', 'waybills', 'estimates'];
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
-
-function getV2ApiKey(env: Env): string {
-  return env.HOLDED_API_V2 || env.HOLDED_API_KEY || '';
-}
-
-function getV1ApiKey(env: Env): string {
-  return env.HOLDED_API_KEY || '';
-}
 
 function jsonResponse(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -49,295 +18,394 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
-/** Normalize text for accent-insensitive matching */
-function normalize(text: string): string {
-  return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
-
-function fuzzyMatch(text: string, query: string): boolean {
-  if (!query) return true;
-  const normalizedText = normalize(text);
-  const words = normalize(query).split(/\s+/).filter(Boolean);
-  return words.every((w) => normalizedText.includes(w));
-}
-
-interface ContactRecord {
-  id: string;
-  name: string;
-  code: string | null;
-  vatnumber: string;
-  tradeName: string | null;
-  email: string | null;
-  mobile: string | null;
-  phone: string | null;
-  type: string;
-  isperson: number;
-  billAddress: unknown;
-  shippingAddresses: unknown[];
-}
-
-async function fetchAllContactsFromHolded(apiKey: string): Promise<ContactRecord[]> {
-  const contacts = await fetchAllPages<HoldedV2Contact>(`${HOLDED_BASE}/api/v2/contacts`, apiKey);
-  return contacts.map((contact) => normalizeV2Contact(contact) as unknown as ContactRecord);
-}
-
-async function getContacts(env: Env, force: boolean): Promise<ContactRecord[]> {
-  if (!force) {
-    const cached = await env.CACHE.get(CONTACTS_CACHE_KEY, 'json');
-    if (cached) return cached as ContactRecord[];
-  }
-
-  const contacts = await fetchAllContactsFromHolded(getV2ApiKey(env));
-
-  // Store only the fields we need for search + selection
-  const slim = contacts.map((c) => ({
-    id: c.id,
-    name: c.name,
-    code: c.code,
-    vatnumber: c.vatnumber,
-    tradeName: c.tradeName,
-    email: c.email,
-    mobile: c.mobile,
-    phone: c.phone,
-    type: c.type,
-    isperson: c.isperson,
-    billAddress: c.billAddress,
-    shippingAddresses: c.shippingAddresses,
-  }));
-
-  await env.CACHE.put(CONTACTS_CACHE_KEY, JSON.stringify(slim), {
-    expirationTtl: CACHE_TTL_SECONDS,
-  });
-
-  return slim;
-}
-
-async function handleContactsSearch(url: URL, env: Env): Promise<Response> {
-  const query = url.searchParams.get('q') || '';
-
-  try {
-    const results = await searchContactsV2(query, getV2ApiKey(env));
-    return jsonResponse({ total: results.length, results });
-  } catch (err) {
-    return jsonResponse({ error: (err as Error).message }, 502);
-  }
-}
-
-// ── Projects ──
-
-interface ProjectRecord {
-  id: string;
-  name: string;
-  status?: string;
-  archived?: number | null;
-}
-
-async function fetchAllProjectsFromHolded(apiKey: string): Promise<ProjectRecord[]> {
-  return fetchAllPages<ProjectRecord>(`${HOLDED_BASE}/api/v2/projects`, apiKey);
-}
-
-async function getProjects(env: Env, force: boolean): Promise<ProjectRecord[]> {
-  if (!force) {
-    const cached = await env.CACHE.get(PROJECTS_CACHE_KEY, 'json');
-    if (cached) return cached as ProjectRecord[];
-  }
-
-  const projects = await fetchAllProjectsFromHolded(getV2ApiKey(env));
-
-  const slim = projects
-    .filter((p) => !p.archived)
-    .map((p) => ({
-      id: p.id,
-      name: p.name,
-      status: p.status,
-    }));
-
-  await env.CACHE.put(PROJECTS_CACHE_KEY, JSON.stringify(slim), {
-    expirationTtl: CACHE_TTL_SECONDS,
-  });
-
-  return slim;
-}
-
-function searchProjects(projects: ProjectRecord[], query: string): ProjectRecord[] {
-  if (!query) return [];
-  return projects.filter((p) => {
-    const text = [p.name, p.status].filter(Boolean).join(' ');
-    return fuzzyMatch(text, query);
-  });
-}
-
-async function handleProjectsSearch(url: URL, env: Env): Promise<Response> {
-  const query = url.searchParams.get('q') || '';
-  const force = url.searchParams.get('force') === '1';
-
-  try {
-    const projects = await getProjects(env, force);
-    const results = searchProjects(projects, query);
-    return jsonResponse({ total: projects.length, results });
-  } catch (err) {
-    return jsonResponse({ error: (err as Error).message }, 502);
-  }
-}
-
-async function handleProjectsRefresh(env: Env): Promise<Response> {
-  try {
-    const projects = await getProjects(env, true);
-    return jsonResponse({ total: projects.length });
-  } catch (err) {
-    return jsonResponse({ error: (err as Error).message }, 502);
-  }
-}
-
-async function handleContactsRefresh(env: Env): Promise<Response> {
-  try {
-    const contacts = await getContacts(env, true);
-    return jsonResponse({ total: contacts.length });
-  } catch (err) {
-    return jsonResponse({ error: (err as Error).message }, 502);
-  }
-}
-
-async function handleSalesOrdersSearch(url: URL, env: Env): Promise<Response> {
-  const contactId = url.searchParams.get('contactId');
-  const projectId = url.searchParams.get('projectId');
-
-  try {
-    const results = await searchSalesOrdersV2(getV2ApiKey(env), fetch, { contactId, projectId });
-    return jsonResponse({ total: results.length, results });
-  } catch (err) {
-    return jsonResponse({ error: (err as Error).message }, 502);
-  }
-}
-
 function parsePositiveInteger(value: string | null, fallback: number, maximum: number): number {
   const parsed = Number.parseInt(value || '', 10);
   if (!Number.isFinite(parsed) || parsed < 1) return fallback;
   return Math.min(parsed, maximum);
 }
 
-function getDocumentSortTime(document: NormalizedHoldedDocument): number {
-  const value = document.updatedAt || document.date;
-  if (!value) return 0;
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : 0;
+// ── Contact & project search ──
+
+/** Localized, key-safe error for the search popups (they show `error` verbatim). */
+function internalSearchError(err: unknown): Response {
+  const message = err instanceof InternalApiError && err.code === 'DATA_NOT_READY'
+    ? 'Sincronizando datos… inténtalo de nuevo en un momento.'
+    : 'No se pudieron cargar los resultados.';
+  return jsonResponse({ error: message }, 502);
 }
 
-function sortDocumentsNewestFirst(documents: NormalizedHoldedDocument[]): NormalizedHoldedDocument[] {
-  return documents.sort((left, right) => (
-    getDocumentSortTime(right) - getDocumentSortTime(left) ||
-    (right.documentNumber || '').localeCompare(left.documentNumber || '', 'es', { numeric: true }) ||
-    right.id.localeCompare(left.id)
-  ));
+function mapInternalContactSummary(item: Record<string, any>) {
+  return {
+    id: item.id,
+    name: item.name ?? '',
+    code: item.code ?? null,
+    vatnumber: item.vatnumber ?? '',
+    tradeName: item.tradeName ?? null,
+    email: item.email ?? null,
+    phone: item.phone ?? null,
+    mobile: item.mobile ?? null,
+    type: item.type ?? null,
+    customId: item.customId ?? null,
+  };
 }
 
-async function getCustomerDocumentsByType(
-  env: Env,
-  contactId: string,
-  type: HoldedDocumentType,
-): Promise<NormalizedHoldedDocument[]> {
-  const rawDocuments = await fetchAllPages<HoldedV2Document>(
-    `${HOLDED_BASE}/api/v2/${type}`,
-    getV2ApiKey(env),
-    fetch,
-    { contact_id: contactId },
-  );
-  const documents = sortDocumentsNewestFirst(
-    rawDocuments.map((document) => normalizeV2Document(type, document)),
-  );
+async function handleContactsSearch(url: URL, env: Env): Promise<Response> {
+  const apiKey = env.EF_INTERNAL_API_KEY;
+  if (!apiKey) return jsonResponse({ error: 'Internal API key not configured in worker' }, 500);
 
-  return documents;
-}
-
-function stripHoldedDocumentPrefix(id: string): string {
-  return id.replace(/^(salesorder|sales-order|waybill|estimate|purchaseorder|purchase-order)-/, '');
-}
-
-function buildStatusMap(documents: NormalizedHoldedDocument[]): Map<string, string | null> {
-  const statuses = new Map<string, string | null>();
-
-  for (const document of documents) {
-    const bareId = stripHoldedDocumentPrefix(document.id);
-    statuses.set(document.id, document.status);
-    statuses.set(bareId, document.status);
-    statuses.set(`${document.type.slice(0, -1)}-${bareId}`, document.status);
-  }
-
-  return statuses;
-}
-
-async function handleDocumentsSearch(url: URL, env: Env): Promise<Response> {
-  const contactId = url.searchParams.get('contactId');
-  const projectId = url.searchParams.get('projectId');
-  const type = url.searchParams.get('type') as HoldedDocumentType | null;
-  const scope = url.searchParams.get('scope') || 'matched';
-
-  if (!contactId) return jsonResponse({ error: 'contactId is required' }, 400);
-
-  // Keep the grouped response during the Worker/Pages rollout. The paginated
-  // card-back always sends `type`, so only older deployed clients use this.
-  if (!type) {
-    try {
-      const grouped = await searchHoldedDocumentsV2(getV2ApiKey(env), fetch, { contactId, projectId });
-      return jsonResponse({
-        totals: {
-          salesOrders: grouped.salesOrders.length,
-          purchaseOrders: grouped.purchaseOrders.length,
-          waybills: grouped.waybills.length,
-          estimates: grouped.estimates.length,
-        },
-        otherTotals: {
-          salesOrders: grouped.other?.salesOrders.length || 0,
-          purchaseOrders: grouped.other?.purchaseOrders.length || 0,
-          waybills: grouped.other?.waybills.length || 0,
-          estimates: grouped.other?.estimates.length || 0,
-        },
-        results: grouped,
-      });
-    } catch (err) {
-      return jsonResponse({ error: (err as Error).message }, 502);
-    }
-  }
-
-  if (!DOCUMENT_TYPES.includes(type)) {
-    return jsonResponse({ error: 'type must be sales-orders, waybills, or estimates' }, 400);
-  }
-  if (scope !== 'matched' && scope !== 'other') {
-    return jsonResponse({ error: 'scope must be matched or other' }, 400);
-  }
-
-  const requestedPage = parsePositiveInteger(url.searchParams.get('page'), 1, 10_000);
-  const pageSize = parsePositiveInteger(url.searchParams.get('pageSize'), DOCUMENTS_PAGE_SIZE, DOCUMENTS_PAGE_SIZE);
+  const query = (url.searchParams.get('q') || '').trim();
+  if (!query) return jsonResponse({ total: 0, results: [] });
 
   try {
-    const documents = await getCustomerDocumentsByType(env, contactId, type);
-    const split = splitDocumentsForProject(documents, projectId);
-    const selected = scope === 'other' ? split.other : split.matched;
-    const total = selected.length;
-    const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(requestedPage, totalPages);
-    const start = (page - 1) * pageSize;
-    let results = selected.slice(start, start + pageSize);
+    const page = await internalApiGet<{ items?: Array<Record<string, any>> }>('/contacts', apiKey, {
+      query: { query, limit: '30' },
+    });
+    const results = (page.items ?? []).map(mapInternalContactSummary);
+    return jsonResponse({ total: results.length, results });
+  } catch (err) {
+    return internalSearchError(err);
+  }
+}
 
-    // Shipment status is an extra Holded call per sales order. Enrich only the
-    // ten rows that are visible instead of every order owned by the customer.
+function mapInternalProject(item: Record<string, any>) {
+  return {
+    id: item.id,
+    name: item.name ?? '',
+    contactName: item.contactName || null,
+    key: item.key || null,
+  };
+}
+
+async function handleProjectsSearch(url: URL, env: Env): Promise<Response> {
+  const apiKey = env.EF_INTERNAL_API_KEY;
+  if (!apiKey) return jsonResponse({ error: 'Internal API key not configured in worker' }, 500);
+
+  const query = (url.searchParams.get('q') || '').trim();
+  if (!query) return jsonResponse({ total: 0, results: [] });
+
+  try {
+    const page = await internalApiGet<{ items?: Array<Record<string, any>> }>('/projects', apiKey, {
+      query: { query, limit: '30' },
+    });
+    const results = (page.items ?? []).map(mapInternalProject);
+    return jsonResponse({ total: results.length, results });
+  } catch (err) {
+    return internalSearchError(err);
+  }
+}
+
+// ── Card-back document tabs ──
+
+const V2_PAGE_SIZE = 10;
+type V2DocumentType = 'sales-orders' | 'waybills' | 'estimates';
+const V2_DOCUMENT_TYPES: V2DocumentType[] = ['sales-orders', 'waybills', 'estimates'];
+
+interface InternalProjectRef {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
+interface InternalSourceOrderRef {
+  id: string;
+  docNumber: string;
+}
+
+function mapInternalSalesOrder(item: Record<string, any>) {
+  return {
+    type: 'sales-orders' as const,
+    id: item.id,
+    documentNumber: item.docNumber ?? null,
+    url: buildDocumentUrl('sales-orders', item.id),
+    internalStatus: item.internalStatus ?? null,
+    issueDate: item.issueDate ?? null,
+    dueDate: item.dueDate ?? null,
+    deliveryCount: item.deliveryCount ?? 0,
+    totalUnits: item.totalUnits ?? 0,
+    projects: (item.projects ?? []) as InternalProjectRef[],
+  };
+}
+
+function mapInternalWaybill(item: Record<string, any>) {
+  return {
+    type: 'waybills' as const,
+    id: item.id,
+    documentNumber: item.docNumber ?? null,
+    url: buildDocumentUrl('waybills', item.id),
+    issueDate: item.issueDate ?? null,
+    workflowStatus: item.workflowStatus ?? null,
+    approvedAt: item.approvedAt ?? null,
+    sourceOrder: (item.sourceOrder ?? null) as InternalSourceOrderRef | null,
+    projects: (item.projects ?? []) as InternalProjectRef[],
+  };
+}
+
+function mapInternalPurchaseOrder(item: Record<string, any>) {
+  return {
+    type: 'purchase-orders' as const,
+    id: item.id,
+    documentNumber: item.docNumber ?? null,
+    url: buildDocumentUrl('purchase-orders', item.id),
+    internalStatus: item.internalStatus ?? null,
+    issueDate: item.issueDate ?? null,
+    supplier: (item.supplier ?? null) as { id: string; name: string } | null,
+    total: item.total ?? null,
+    currency: item.currency ?? null,
+    projects: (item.projects ?? []) as InternalProjectRef[],
+  };
+}
+
+function mapInternalEstimate(item: Record<string, any>) {
+  return {
+    type: 'estimates' as const,
+    id: item.id,
+    documentNumber: item.docNumber ?? null,
+    url: buildDocumentUrl('estimates', item.id),
+    issueDate: item.issueDate ?? null,
+    dueDate: item.dueDate ?? null,
+    displayStatus: item.displayStatus ?? null,
+    total: item.total ?? null,
+    currency: item.currency ?? null,
+    projects: (item.projects ?? []) as InternalProjectRef[],
+  };
+}
+
+interface InternalPage {
+  items?: Array<Record<string, any>>;
+  pagination?: { page?: number; pageSize?: number; hasMore?: boolean };
+  hasMore?: boolean;
+  nextCursor?: string | null;
+}
+
+function internalErrorResponse(err: unknown): Response {
+  if (err instanceof InternalApiError) {
+    if (err.code === 'AUTH_INVALID' || err.code === 'CONFIG') {
+      return jsonResponse({ error: { code: 'CONFIG', message: 'Internal API request was rejected.' } }, 500);
+    }
+    if (err.code === 'DATA_NOT_READY') {
+      return jsonResponse({ error: { code: 'DATA_NOT_READY', message: 'Sincronizando datos de Holded…' } }, 503);
+    }
+    const status = err.status >= 400 ? err.status : 502;
+    return jsonResponse({ error: { code: err.code, message: 'No se pudieron cargar los documentos.' } }, status);
+  }
+  return jsonResponse({ error: { code: 'UNKNOWN', message: 'Error inesperado.' } }, 502);
+}
+
+const PURCHASE_ORDER_PAGE_SIZE = 100;
+const PURCHASE_ORDER_MAX_PAGES = 10;
+
+// Purchase orders are fetched by the customer relation (resolved through each
+// PO's source sales order) with a bounded page loop, then grouped under the
+// sales orders that are visible on the current page. Orphans (no sourceOrder)
+// and POs whose source order is not on this page are dropped.
+async function fetchCustomerPurchaseOrders(
+  apiKey: string,
+  contactId: string,
+  projectId: string | null,
+): Promise<Array<Record<string, any>>> {
+  const items: Array<Record<string, any>> = [];
+  for (let page = 1; page <= PURCHASE_ORDER_MAX_PAGES; page += 1) {
+    const result = await internalApiGet<InternalPage>('/purchase-orders', apiKey, {
+      query: {
+        customerId: contactId,
+        projectId,
+        page: String(page),
+        pageSize: String(PURCHASE_ORDER_PAGE_SIZE),
+      },
+    });
+    items.push(...(result.items ?? []));
+    if (!result.pagination?.hasMore) break;
+  }
+  return items;
+}
+
+function nestPurchaseOrders(
+  salesOrders: ReturnType<typeof mapInternalSalesOrder>[],
+  purchaseOrders: Array<Record<string, any>>,
+) {
+  const byOrderId = new Map<string, ReturnType<typeof mapInternalPurchaseOrder>[]>();
+  for (const purchaseOrder of purchaseOrders) {
+    const sourceId = purchaseOrder.sourceOrder?.id;
+    if (!sourceId) continue;
+    const bucket = byOrderId.get(sourceId);
+    if (bucket) bucket.push(mapInternalPurchaseOrder(purchaseOrder));
+    else byOrderId.set(sourceId, [mapInternalPurchaseOrder(purchaseOrder)]);
+  }
+  return salesOrders.map((order) => ({
+    ...order,
+    purchaseOrders: byOrderId.get(order.id) ?? [],
+  }));
+}
+
+async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
+  const apiKey = env.EF_INTERNAL_API_KEY;
+  if (!apiKey) {
+    return jsonResponse({ error: { code: 'CONFIG', message: 'Internal API key not configured in worker' } }, 500);
+  }
+
+  const contactId = url.searchParams.get('contactId');
+  const type = url.searchParams.get('type') as V2DocumentType | null;
+  const scope = url.searchParams.get('scope') || 'matched';
+  const projectId = url.searchParams.get('projectId');
+
+  if (!contactId) return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'contactId is required' } }, 400);
+  if (!type || !V2_DOCUMENT_TYPES.includes(type)) {
+    return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'type must be sales-orders, waybills, or estimates' } }, 400);
+  }
+  if (scope !== 'matched' && scope !== 'all') {
+    return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'scope must be matched or all' } }, 400);
+  }
+
+  // In the "all" scope the linked project is intentionally dropped so the list
+  // spans every document the customer owns.
+  const effectiveProjectId = scope === 'matched' ? projectId : null;
+
+  try {
+    if (type === 'estimates') {
+      const cursor = url.searchParams.get('cursor');
+      const page = await internalApiGet<InternalPage>('/estimates', apiKey, {
+        query: { customerId: contactId, projectId: effectiveProjectId, cursor, limit: String(V2_PAGE_SIZE) },
+      });
+      return jsonResponse({
+        type,
+        scope,
+        hasMore: Boolean(page.hasMore),
+        nextCursor: page.nextCursor ?? null,
+        results: (page.items ?? []).map(mapInternalEstimate),
+      });
+    }
+
+    const requestedPage = parsePositiveInteger(url.searchParams.get('page'), 1, 10_000);
+    const path = type === 'sales-orders' ? '/sales-orders' : '/waybills';
+    const page = await internalApiGet<InternalPage>(path, apiKey, {
+      query: {
+        customerId: contactId,
+        projectId: effectiveProjectId,
+        page: String(requestedPage),
+        pageSize: String(V2_PAGE_SIZE),
+      },
+    });
+
     if (type === 'sales-orders') {
-      const waybills = await getCustomerDocumentsByType(env, contactId, 'waybills');
-      results = await attachShippedItemsTracking(results, getV2ApiKey(env), fetch, buildStatusMap(waybills));
+      const salesOrders = (page.items ?? []).map(mapInternalSalesOrder);
+      let results = salesOrders.map((order) => ({ ...order, purchaseOrders: [] as ReturnType<typeof mapInternalPurchaseOrder>[] }));
+      let purchaseOrdersError = false;
+      try {
+        const purchaseOrders = await fetchCustomerPurchaseOrders(apiKey, contactId, effectiveProjectId);
+        results = nestPurchaseOrders(salesOrders, purchaseOrders);
+      } catch {
+        // The relation is supplementary — never fail the whole view because the
+        // purchase-order fetch is degraded.
+        purchaseOrdersError = true;
+      }
+      return jsonResponse({
+        type,
+        scope,
+        page: requestedPage,
+        pageSize: V2_PAGE_SIZE,
+        hasMore: Boolean(page.pagination?.hasMore),
+        results,
+        ...(purchaseOrdersError ? { purchaseOrdersError: true } : {}),
+      });
     }
 
     return jsonResponse({
       type,
       scope,
-      page,
-      pageSize,
-      total,
-      totalPages,
-      otherTotal: split.other.length,
-      results,
+      page: requestedPage,
+      pageSize: V2_PAGE_SIZE,
+      hasMore: Boolean(page.pagination?.hasMore),
+      results: (page.items ?? []).map(mapInternalWaybill),
     });
   } catch (err) {
-    return jsonResponse({ error: (err as Error).message }, 502);
+    return internalErrorResponse(err);
+  }
+}
+
+async function handleV2ContactDetail(url: URL, env: Env): Promise<Response> {
+  const apiKey = env.EF_INTERNAL_API_KEY;
+  if (!apiKey) {
+    return jsonResponse({ error: { code: 'CONFIG', message: 'Internal API key not configured in worker' } }, 500);
+  }
+
+  const contactId = url.pathname.slice('/v2/contacts/'.length);
+  if (!contactId) return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'contact id is required' } }, 400);
+
+  try {
+    const contact = await internalApiGet<unknown>(`/contacts/${encodeURIComponent(contactId)}`, apiKey);
+    return jsonResponse(contact);
+  } catch (err) {
+    return internalErrorResponse(err);
+  }
+}
+
+// ── Contact writes ──
+
+const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/;
+
+/** Use the client-supplied idempotency key when valid, else mint one per request. */
+function readIdempotencyKey(url: URL): string {
+  const provided = url.searchParams.get('idempotencyKey');
+  if (provided && IDEMPOTENCY_KEY_PATTERN.test(provided)) return provided;
+  return crypto.randomUUID();
+}
+
+/** Write errors surface a friendly `{ error: string }` for the popups. */
+function internalWriteError(err: unknown): Response {
+  if (err instanceof InternalApiError) {
+    if (err.code === 'AUTH_INVALID') return jsonResponse({ error: 'Configuración del servidor inválida.' }, 500);
+    if (err.code === 'DATA_NOT_READY') return jsonResponse({ error: 'Sincronizando datos… inténtalo de nuevo en un momento.' }, 503);
+    if (err.status === 409) return jsonResponse({ error: 'La operación ya se procesó o está en curso.' }, 409);
+    if (err.code === 'INVALID_REQUEST' && err.detail) return jsonResponse({ error: err.detail }, 400);
+    return jsonResponse({ error: err.detail || 'No se pudo completar la operación.' }, err.status >= 400 ? err.status : 502);
+  }
+  return jsonResponse({ error: 'Error inesperado.' }, 502);
+}
+
+async function readJsonBody(request: Request): Promise<{ ok: true; body: unknown } | { ok: false }> {
+  try {
+    return { ok: true, body: JSON.parse((await request.text()) || '{}') };
+  } catch {
+    return { ok: false };
+  }
+}
+
+async function handleV2CreateContact(request: Request, url: URL, env: Env): Promise<Response> {
+  const apiKey = env.EF_INTERNAL_API_KEY;
+  if (!apiKey) return jsonResponse({ error: 'Internal API key not configured in worker' }, 500);
+
+  const parsed = await readJsonBody(request);
+  if (!parsed.ok) return jsonResponse({ error: 'Cuerpo JSON no válido.' }, 400);
+
+  try {
+    const contact = await internalApiPost<unknown>('/contacts', apiKey, parsed.body, readIdempotencyKey(url));
+    return jsonResponse(contact, 201);
+  } catch (err) {
+    return internalWriteError(err);
+  }
+}
+
+async function handleV2AddShippingAddress(request: Request, url: URL, env: Env): Promise<Response> {
+  const apiKey = env.EF_INTERNAL_API_KEY;
+  if (!apiKey) return jsonResponse({ error: 'Internal API key not configured in worker' }, 500);
+
+  const match = url.pathname.match(/^\/v2\/contacts\/([^/]+)\/shipping-addresses$/);
+  const contactId = match ? decodeURIComponent(match[1]) : '';
+  if (!contactId) return jsonResponse({ error: 'Falta el identificador del contacto.' }, 400);
+
+  const parsed = await readJsonBody(request);
+  if (!parsed.ok) return jsonResponse({ error: 'Cuerpo JSON no válido.' }, 400);
+
+  try {
+    const result = await internalApiPost<unknown>(
+      `/contacts/${encodeURIComponent(contactId)}/shipping-addresses`,
+      apiKey,
+      parsed.body,
+      readIdempotencyKey(url),
+    );
+    return jsonResponse(result, 201);
+  } catch (err) {
+    return internalWriteError(err);
   }
 }
 
@@ -347,88 +415,27 @@ export default {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
 
-    if (!getV2ApiKey(env) && !getV1ApiKey(env)) {
-      return jsonResponse({ error: 'Holded API secret not configured in worker' }, 500);
-    }
-
     const url = new URL(request.url);
 
-    // Custom endpoints
+    if (request.method === 'GET' && url.pathname === '/v2/documents/search') {
+      return handleV2DocumentsSearch(url, env);
+    }
+    if (request.method === 'POST' && url.pathname === '/v2/contacts') {
+      return handleV2CreateContact(request, url, env);
+    }
+    if (request.method === 'POST' && /^\/v2\/contacts\/[^/]+\/shipping-addresses$/.test(url.pathname)) {
+      return handleV2AddShippingAddress(request, url, env);
+    }
+    if (request.method === 'GET' && url.pathname.startsWith('/v2/contacts/')) {
+      return handleV2ContactDetail(url, env);
+    }
     if (request.method === 'GET' && url.pathname === '/contacts/search') {
       return handleContactsSearch(url, env);
-    }
-    if (request.method === 'POST' && url.pathname === '/contacts/refresh') {
-      return handleContactsRefresh(env);
     }
     if (request.method === 'GET' && url.pathname === '/projects/search') {
       return handleProjectsSearch(url, env);
     }
-    if (request.method === 'POST' && url.pathname === '/projects/refresh') {
-      return handleProjectsRefresh(env);
-    }
-    if (request.method === 'GET' && url.pathname === '/sales-orders/search') {
-      return handleSalesOrdersSearch(url, env);
-    }
-    if (request.method === 'GET' && url.pathname === '/documents/search') {
-      return handleDocumentsSearch(url, env);
-    }
 
-    // Proxy pass-through for other Holded API calls (create contact, etc.)
-    const method = request.method;
-    if (method !== 'GET' && method !== 'POST' && method !== 'PUT') {
-      return jsonResponse({ error: 'Method not allowed' }, 405);
-    }
-
-    const path = url.pathname + url.search;
-
-    const isV1Path = url.pathname.startsWith('/api/invoicing/v1/');
-    const headers: Record<string, string> = {
-      Accept: 'application/json',
-    };
-
-    if (isV1Path) {
-      const apiKey = getV1ApiKey(env);
-      if (!apiKey) return jsonResponse({ error: 'HOLDED_API_KEY secret not configured for V1 Holded calls' }, 500);
-      headers.key = apiKey;
-    } else {
-      const apiKey = getV2ApiKey(env);
-      if (!apiKey) return jsonResponse({ error: 'HOLDED_API_V2 secret not configured for V2 Holded calls' }, 500);
-      headers.Authorization = `Bearer ${apiKey}`;
-    }
-
-    const fetchOptions: RequestInit = {
-      method,
-      headers,
-    };
-
-    if (method === 'POST' || method === 'PUT') {
-      (fetchOptions.headers as Record<string, string>)['Content-Type'] = 'application/json';
-      fetchOptions.body = await request.text();
-    }
-
-    const response = await fetch(`${HOLDED_BASE}${path}`, fetchOptions);
-
-    const body = await response.text();
-    const contentType = response.headers.get('Content-Type') || '';
-
-    if (contentType.includes('text/html')) {
-      return jsonResponse({ error: 'Invalid API key or unauthorized' }, 401);
-    }
-
-    if (response.status !== 200) {
-      try {
-        JSON.parse(body);
-      } catch {
-        return jsonResponse({ error: `Unexpected Holded API response (${response.status})` }, 502);
-      }
-    }
-
-    return new Response(body, {
-      status: response.status,
-      headers: {
-        ...CORS_HEADERS,
-        'Content-Type': contentType || 'application/json',
-      },
-    });
+    return jsonResponse({ error: 'Not found' }, 404);
   },
 };

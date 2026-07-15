@@ -1,4 +1,4 @@
-import { searchContacts } from '../holded-api';
+import { searchContacts, getContactDetail } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
@@ -56,8 +56,16 @@ function renderResults(contacts: HoldedContact[], query: string) {
   resultsDiv.querySelectorAll('.result-item').forEach((el) => {
     el.addEventListener('click', async () => {
       const id = (el as HTMLElement).dataset.id!;
-      const contact = contacts.find((c) => c.id === id)!;
-      const contactName = formatSpanishTextCase(contact.name);
+      const summary = contacts.find((c) => c.id === id)!;
+      const contactName = formatSpanishTextCase(summary.name);
+
+      // Search returns summaries; fetch full detail for shipping/bill addresses.
+      let contact = summary;
+      try {
+        contact = await getContactDetail(id);
+      } catch (err) {
+        console.error('Holded: error loading contact detail', err);
+      }
 
       if (contact.shippingAddresses && contact.shippingAddresses.length > 0) {
         const pending = buildPendingContactSelection(contact, contactName);

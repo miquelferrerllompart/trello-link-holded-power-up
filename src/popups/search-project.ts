@@ -1,4 +1,4 @@
-import { searchProjects, refreshProjects } from '../holded-api';
+import { searchProjects } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
 import { addTag } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
@@ -8,19 +8,8 @@ import type { HoldedProject, TrelloContext } from '../types';
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
 const searchInput = document.getElementById('search') as HTMLInputElement;
 const resultsDiv = document.getElementById('results') as HTMLDivElement;
-const reloadBtn = document.getElementById('reload-btn') as HTMLButtonElement;
-const tooltipEl = reloadBtn.querySelector('.tooltip') as HTMLSpanElement;
 
 let debounceTimer: ReturnType<typeof setTimeout>;
-let totalProjects: number | null = null;
-
-function updateTooltip() {
-  if (totalProjects !== null) {
-    tooltipEl.textContent = `${totalProjects} proyectos en caché — pulsa para recargar desde Holded`;
-  } else {
-    tooltipEl.textContent = 'Cargar lista de proyectos desde Holded';
-  }
-}
 
 function renderResults(projects: HoldedProject[], query: string) {
   if (!query) {
@@ -40,12 +29,13 @@ function renderResults(projects: HoldedProject[], query: string) {
     .map(
       (p) => {
         const initials = p.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
+        const subtitle = p.contactName || p.key || '';
         return `
     <div class="result-item" data-id="${p.id}" data-name="${p.name}">
       <div class="result-avatar">${initials}</div>
       <div class="result-info">
         <div class="result-name">${p.name}</div>
-        ${p.status ? `<div class="result-status">${p.status}</div>` : ''}
+        ${subtitle ? `<div class="result-status">${subtitle}</div>` : ''}
       </div>
     </div>`;
       }
@@ -87,9 +77,7 @@ async function doSearch() {
 
   resultsDiv.innerHTML = '<div class="loading">Buscando...</div>';
   try {
-    const { total, results } = await searchProjects(query);
-    totalProjects = total;
-    updateTooltip();
+    const { results } = await searchProjects(query);
     renderResults(results, query);
   } catch (err) {
     resultsDiv.innerHTML = `<div class="error">Error: ${(err as Error).message}</div>`;
@@ -100,28 +88,5 @@ searchInput.addEventListener('input', () => {
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(doSearch, 300);
 });
-
-reloadBtn.addEventListener('click', async () => {
-  reloadBtn.classList.add('spinning');
-  try {
-    const { total } = await refreshProjects();
-    totalProjects = total;
-    updateTooltip();
-    const query = searchInput.value.trim();
-    if (query) {
-      const { results } = await searchProjects(query);
-      renderResults(results, query);
-    }
-  } catch (err) {
-    resultsDiv.innerHTML = `<div class="error">Error: ${(err as Error).message}</div>`;
-  }
-  reloadBtn.classList.remove('spinning');
-});
-
-// Warm up cache
-searchProjects('').then(({ total }) => {
-  totalProjects = total;
-  updateTooltip();
-}).catch(() => {});
 
 renderResults([], '');

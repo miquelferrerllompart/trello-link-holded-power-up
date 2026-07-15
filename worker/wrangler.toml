@@ -1,7 +1,3 @@
 name = "holded-proxy"
 main = "index.ts"
 compatibility_date = "2025-01-01"
-
-[[kv_namespaces]]
-binding = "CACHE"
-id = "de00b46290b64c218b8925a293cfd0a3"

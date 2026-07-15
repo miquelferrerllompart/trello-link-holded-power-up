@@ -116,7 +116,7 @@ function showCreateForm(pending: PendingContactSelection) {
         country: formatSpanishTextCase(countryInput.value),
       };
 
-      await addShippingAddress(pending.contactId, pending.shippingAddresses, newAddr);
+      await addShippingAddress(pending.contactId, newAddr);
       await selectAddress(pending, newAddr.name);
     } catch (err) {
       errorMsg.textContent = (err as Error).message;

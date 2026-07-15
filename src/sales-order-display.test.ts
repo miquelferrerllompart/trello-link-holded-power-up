@@ -1,107 +1,60 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getDocumentStatusPills,
-  getSalesOrderShipmentPill,
-  getSalesOrderStatusLabel,
+  getDocumentStatusPill,
+  getEstimateStatusPill,
+  getPurchaseOrderStatusPill,
+  getSalesOrderStatusPill,
   getWaybillStatusPill,
 } from './sales-order-display';
 
-describe('sales order display labels', () => {
-  it('maps Holded sales order statuses to Spanish labels', () => {
-    expect(getSalesOrderStatusLabel('pending')).toBe('Pendiente');
-    expect(getSalesOrderStatusLabel('completed')).toBe('Completado');
-    expect(getSalesOrderStatusLabel('partial')).toBe('Parcial');
-    expect(getSalesOrderStatusLabel('cancelled')).toBe('Cancelado');
-    expect(getSalesOrderStatusLabel('failed')).toBe('Fallido');
-    expect(getSalesOrderStatusLabel('overdue')).toBe('Vencido');
-    expect(getSalesOrderStatusLabel('custom')).toBe('custom');
+describe('document status pills (internal-API normalized statuses)', () => {
+  it('maps every sales-order internalStatus to its canonical Spanish pill', () => {
+    expect(getSalesOrderStatusPill('requested')).toEqual({ label: 'A revisar', className: 'pending' });
+    expect(getSalesOrderStatusPill('in_process')).toEqual({ label: 'Pendiente preparar', className: 'pending' });
+    expect(getSalesOrderStatusPill('partially_prepared')).toEqual({ label: 'Parcialmente preparado', className: 'partial' });
+    expect(getSalesOrderStatusPill('prepared')).toEqual({ label: 'Preparado', className: 'served' });
+    expect(getSalesOrderStatusPill('partially_delivered')).toEqual({ label: 'Parcialmente entregado', className: 'partial' });
+    expect(getSalesOrderStatusPill('all_delivered')).toEqual({ label: 'Totalmente entregado', className: 'served' });
+    expect(getSalesOrderStatusPill('cancelled')).toEqual({ label: 'Cancelado', className: 'cancelled' });
   });
 
-  it('derives sales order preparation from shipped item quantities', () => {
-    expect(getSalesOrderShipmentPill({
-      count: 1,
-      fields: ['pending', 'sent', 'total'],
-      items: [{ total: 4, sent: 0, pending: 4 }],
-    })).toEqual({ label: 'Pendiente', className: 'pending' });
-
-    expect(getSalesOrderShipmentPill({
-      count: 2,
-      fields: ['pending', 'sent', 'total'],
-      items: [{ total: 10, sent: 2, pending: 8 }, { total: 2, sent: 2, pending: 0 }],
-    })).toEqual({ label: 'Parcial', className: 'partial' });
-
-    expect(getSalesOrderShipmentPill({
-      count: 1,
-      fields: ['pending', 'sent', 'total'],
-      items: [{ total: 4, sent: 4, pending: 0 }],
-    })).toEqual({ label: 'Preparado', className: 'served' });
-
-    expect(getSalesOrderShipmentPill({
-      count: 1,
-      fields: ['pending', 'sent', 'total', 'waybill_id'],
-      items: [{ total: 4, sent: 4, pending: 0, waybill_id: 'waybill-1' }],
-      waybillStatuses: [{ id: 'waybill-1', status: 'completed' }],
-    })).toEqual({ label: 'Entregado', className: 'served' });
-
-    expect(getSalesOrderShipmentPill({
-      count: 1,
-      fields: ['pending', 'sent', 'total', 'waybill_id'],
-      items: [{ total: 4, sent: 4, pending: 0, waybill_id: 'waybill-1' }],
-      waybillStatuses: [{ id: 'waybill-1', status: 'pending' }],
-    })).toEqual({ label: 'Preparado', className: 'served' });
-  });
-
-  it('treats negative shipment quantities from abonos as prepared movement', () => {
-    expect(getSalesOrderShipmentPill({
-      count: 1,
-      fields: ['pending', 'sent', 'total'],
-      items: [{ total: -4, sent: -4, pending: 0 }],
-    })).toEqual({ label: 'Preparado', className: 'served' });
-
-    expect(getSalesOrderShipmentPill({
-      count: 1,
-      fields: ['pending', 'sent', 'total'],
-      items: [{ total: 4, sent: 8, pending: -4 }],
-    })).toEqual({ label: 'Preparado', className: 'served' });
-  });
-
-  it('flags missing sales order shipment data for review', () => {
-    expect(getSalesOrderShipmentPill(undefined)).toEqual({ label: 'Sin datos envío', className: 'review' });
-  });
-
-  it('maps waybill statuses to the warehouse wording', () => {
-    expect(getWaybillStatusPill('pending')).toEqual({ label: 'Pendiente', className: 'pending' });
-    expect(getWaybillStatusPill('completed')).toEqual({ label: 'Aceptado', className: 'served' });
+  it('shows the waybill approval label, never Preparado/Entregado', () => {
+    expect(getWaybillStatusPill('prepared')).toEqual({ label: 'Sin aprobar', className: 'pending' });
+    expect(getWaybillStatusPill('delivered')).toEqual({ label: 'Aprobado', className: 'served' });
     expect(getWaybillStatusPill('cancelled')).toEqual({ label: 'Cancelado', className: 'cancelled' });
   });
 
-  it('uses document-specific status rules', () => {
-    expect(getDocumentStatusPills({
-      type: 'sales-orders',
-      status: 'completed',
-      shippedItems: {
-        count: 1,
-        fields: ['pending', 'sent', 'total'],
-        items: [{ total: 1, sent: 1, pending: 0 }],
-      },
-    })).toEqual([{ label: 'Preparado', className: 'served' }]);
-
-    expect(getDocumentStatusPills({ type: 'waybills', status: 'completed' })).toEqual([
-      { label: 'Aceptado', className: 'served' },
-    ]);
-
-    expect(getDocumentStatusPills({ type: 'purchase-orders', status: 'completed' })).toEqual([
-      { label: 'Completado', className: 'served' },
-    ]);
+  it('maps estimate displayStatus values', () => {
+    expect(getEstimateStatusPill('draft')).toEqual({ label: 'Borrador', className: 'pending' });
+    expect(getEstimateStatusPill('pending')).toEqual({ label: 'Pendiente', className: 'pending' });
+    expect(getEstimateStatusPill('sent')).toEqual({ label: 'Enviado', className: 'pending' });
+    expect(getEstimateStatusPill('accepted')).toEqual({ label: 'Aceptado', className: 'served' });
+    expect(getEstimateStatusPill('rejected')).toEqual({ label: 'Denegado', className: 'cancelled' });
   });
 
-  it('uses estimate-specific wording for accepted and denied estimates', () => {
-    expect(getDocumentStatusPills({ type: 'estimates', status: 'completed' })).toEqual([
-      { label: 'Aceptado', className: 'served' },
-    ]);
+  it('maps purchase-order reception statuses', () => {
+    expect(getPurchaseOrderStatusPill('review')).toEqual({ label: 'A revisar', className: 'pending' });
+    expect(getPurchaseOrderStatusPill('awaiting_receipt')).toEqual({ label: 'Pendiente recibir', className: 'pending' });
+    expect(getPurchaseOrderStatusPill('partially_received_unconfirmed')).toEqual({ label: 'Recepción parcial sin confirmar', className: 'partial' });
+    expect(getPurchaseOrderStatusPill('received_unconfirmed')).toEqual({ label: 'Recepción completa sin confirmar', className: 'partial' });
+    expect(getPurchaseOrderStatusPill('partially_received')).toEqual({ label: 'Parcialmente recibido', className: 'partial' });
+    expect(getPurchaseOrderStatusPill('all_received')).toEqual({ label: 'Totalmente recibido', className: 'served' });
+    expect(getPurchaseOrderStatusPill('cancelled')).toEqual({ label: 'Cancelado', className: 'cancelled' });
+  });
 
-    expect(getDocumentStatusPills({ type: 'estimates', status: 'cancelled' })).toEqual([
-      { label: 'Denegado', className: 'cancelled' },
-    ]);
+  it('falls back to the raw value in a neutral pill for unknown statuses', () => {
+    expect(getSalesOrderStatusPill('mystery')).toEqual({ label: 'mystery', className: 'pending' });
+    expect(getSalesOrderStatusPill(null)).toEqual({ label: 'Sin estado', className: 'pending' });
+  });
+
+  it('reads the server-derived enum appropriate to each document type', () => {
+    expect(getDocumentStatusPill({ type: 'sales-orders', internalStatus: 'prepared' }))
+      .toEqual({ label: 'Preparado', className: 'served' });
+    expect(getDocumentStatusPill({ type: 'waybills', workflowStatus: 'delivered' }))
+      .toEqual({ label: 'Aprobado', className: 'served' });
+    expect(getDocumentStatusPill({ type: 'estimates', displayStatus: 'rejected' }))
+      .toEqual({ label: 'Denegado', className: 'cancelled' });
+    expect(getDocumentStatusPill({ type: 'purchase-orders', internalStatus: 'all_received' }))
+      .toEqual({ label: 'Totalmente recibido', className: 'served' });
   });
 });

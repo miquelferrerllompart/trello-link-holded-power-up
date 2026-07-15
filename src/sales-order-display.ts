@@ -1,99 +1,82 @@
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Pendiente',
-  completed: 'Completado',
-  partial: 'Parcial',
-  cancelled: 'Cancelado',
-  failed: 'Fallido',
-  overdue: 'Vencido',
-};
-
 export interface StatusPill {
   label: string;
   className: string;
 }
 
-export interface ShippedItemsTracking {
-  count: number;
-  fields: string[];
-  items: unknown[];
-  waybillStatuses?: Array<{ id: string; status: string | null }>;
-  error?: string;
+// Pill colour vocabulary (maps to CSS classes on `.document-pill`):
+//   served = green, partial = yellow, pending = neutral, cancelled = red.
+// Labels are the canonical Spanish strings from the internal-API contract.
+
+const SALES_ORDER_STATUS: Record<string, StatusPill> = {
+  requested: { label: 'A revisar', className: 'pending' },
+  in_process: { label: 'Pendiente preparar', className: 'pending' },
+  partially_prepared: { label: 'Parcialmente preparado', className: 'partial' },
+  prepared: { label: 'Preparado', className: 'served' },
+  partially_delivered: { label: 'Parcialmente entregado', className: 'partial' },
+  all_delivered: { label: 'Totalmente entregado', className: 'served' },
+  cancelled: { label: 'Cancelado', className: 'cancelled' },
+};
+
+// The waybill pill shows the approval label, deliberately NOT Preparado/Entregado.
+const WAYBILL_STATUS: Record<string, StatusPill> = {
+  prepared: { label: 'Sin aprobar', className: 'pending' },
+  delivered: { label: 'Aprobado', className: 'served' },
+  cancelled: { label: 'Cancelado', className: 'cancelled' },
+};
+
+const ESTIMATE_STATUS: Record<string, StatusPill> = {
+  draft: { label: 'Borrador', className: 'pending' },
+  pending: { label: 'Pendiente', className: 'pending' },
+  sent: { label: 'Enviado', className: 'pending' },
+  accepted: { label: 'Aceptado', className: 'served' },
+  rejected: { label: 'Denegado', className: 'cancelled' },
+};
+
+const PURCHASE_ORDER_STATUS: Record<string, StatusPill> = {
+  review: { label: 'A revisar', className: 'pending' },
+  awaiting_receipt: { label: 'Pendiente recibir', className: 'pending' },
+  partially_received_unconfirmed: { label: 'Recepción parcial sin confirmar', className: 'partial' },
+  received_unconfirmed: { label: 'Recepción completa sin confirmar', className: 'partial' },
+  partially_received: { label: 'Parcialmente recibido', className: 'partial' },
+  all_received: { label: 'Totalmente recibido', className: 'served' },
+  cancelled: { label: 'Cancelado', className: 'cancelled' },
+};
+
+// Unknown enums fall back to the raw value in a neutral pill rather than hiding it.
+function fromStatusMap(map: Record<string, StatusPill>, value: string | null | undefined): StatusPill {
+  if (value && map[value]) return map[value];
+  if (value) return { label: value, className: 'pending' };
+  return { label: 'Sin estado', className: 'pending' };
+}
+
+export function getSalesOrderStatusPill(status: string | null | undefined): StatusPill {
+  return fromStatusMap(SALES_ORDER_STATUS, status);
+}
+
+export function getWaybillStatusPill(workflowStatus: string | null | undefined): StatusPill {
+  return fromStatusMap(WAYBILL_STATUS, workflowStatus);
+}
+
+export function getEstimateStatusPill(displayStatus: string | null | undefined): StatusPill {
+  return fromStatusMap(ESTIMATE_STATUS, displayStatus);
+}
+
+export function getPurchaseOrderStatusPill(status: string | null | undefined): StatusPill {
+  return fromStatusMap(PURCHASE_ORDER_STATUS, status);
 }
 
 export interface DocumentStatusInput {
   type: 'sales-orders' | 'purchase-orders' | 'waybills' | 'estimates' | string;
-  status?: string | null;
-  shippedItems?: ShippedItemsTracking;
+  // Every field below is a server-derived enum from the internal API, not the
+  // document's approval `status`.
+  internalStatus?: string | null;
+  workflowStatus?: string | null;
+  displayStatus?: string | null;
 }
 
-export function getSalesOrderStatusLabel(status: string | null | undefined): string {
-  if (!status) return 'Sin estado';
-  return STATUS_LABELS[status] || status;
-}
-
-export function getStatusClass(status: string | null | undefined): string {
-  if (status === 'completed') return 'served';
-  if (status === 'partial') return 'partial';
-  if (status === 'cancelled' || status === 'failed') return status;
-  return 'pending';
-}
-
-function getNumberValue(value: unknown): number {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-export function getSalesOrderShipmentPill(tracking: ShippedItemsTracking | undefined): StatusPill {
-  if (!tracking || tracking.error) return { label: 'Sin datos envío', className: 'review' };
-
-  const items = Array.isArray(tracking.items) ? tracking.items : [];
-  let sent = 0;
-  let pending = 0;
-  let total = 0;
-
-  for (const item of items) {
-    const record = item && typeof item === 'object' ? item as Record<string, unknown> : {};
-    sent += getNumberValue(record.sent);
-    pending += getNumberValue(record.pending);
-    total += getNumberValue(record.total);
-  }
-
-  if (pending <= 0 && sent !== 0) {
-    const waybillStatuses = Array.isArray(tracking.waybillStatuses) ? tracking.waybillStatuses : [];
-    if (
-      waybillStatuses.length > 0 &&
-      waybillStatuses.every((waybill) => waybill.status === 'completed')
-    ) {
-      return { label: 'Entregado', className: 'served' };
-    }
-    return { label: 'Preparado', className: 'served' };
-  }
-  if (sent === 0 && pending > 0) return { label: 'Pendiente', className: 'pending' };
-  if (sent > 0 && pending > 0) return { label: 'Parcial', className: 'partial' };
-  return { label: 'Pendiente', className: 'pending' };
-}
-
-export function getWaybillStatusPill(status: string | null | undefined): StatusPill {
-  if (status === 'completed') return { label: 'Aceptado', className: 'served' };
-  if (status === 'pending') return { label: 'Pendiente', className: 'pending' };
-  if (status === 'cancelled' || status === 'failed') {
-    return { label: getSalesOrderStatusLabel(status), className: status };
-  }
-  return { label: getSalesOrderStatusLabel(status), className: getStatusClass(status) };
-}
-
-export function getEstimateStatusPill(status: string | null | undefined): StatusPill {
-  if (status === 'completed') return { label: 'Aceptado', className: 'served' };
-  if (status === 'cancelled') return { label: 'Denegado', className: 'cancelled' };
-  return { label: getSalesOrderStatusLabel(status), className: getStatusClass(status) };
-}
-
-export function getDocumentStatusPills(document: DocumentStatusInput): StatusPill[] {
-  if (document.type === 'sales-orders') return [getSalesOrderShipmentPill(document.shippedItems)];
-  if (document.type === 'waybills') return [getWaybillStatusPill(document.status)];
-  if (document.type === 'estimates') return [getEstimateStatusPill(document.status)];
-  return [{
-    label: getSalesOrderStatusLabel(document.status),
-    className: getStatusClass(document.status),
-  }];
+export function getDocumentStatusPill(document: DocumentStatusInput): StatusPill {
+  if (document.type === 'waybills') return getWaybillStatusPill(document.workflowStatus);
+  if (document.type === 'estimates') return getEstimateStatusPill(document.displayStatus);
+  if (document.type === 'purchase-orders') return getPurchaseOrderStatusPill(document.internalStatus);
+  return getSalesOrderStatusPill(document.internalStatus);
 }
