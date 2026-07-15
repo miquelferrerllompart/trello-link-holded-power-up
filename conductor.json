@@ -1,7 +1,0 @@
-{
-  "scripts": {
-    "setup": "ln -sf \"$CONDUCTOR_ROOT_PATH/.env\" .env && npm ci",
-    "run": "npm run dev"
-  },
-  "runScriptMode": "nonconcurrent"
-}
