@@ -51,8 +51,12 @@ function omitEmpty<T extends Record<string, unknown>>(value: T): T {
   ) as T;
 }
 
-/** Stable-per-submit key so a network retry of the same write can't duplicate it. */
-function generateIdempotencyKey(): string {
+/**
+ * A key identifying one logical write submission. The caller must generate this
+ * once per submission and reuse it across retries (even after a later step in the
+ * workflow fails) so the internal API dedupes instead of creating duplicates.
+ */
+export function generateIdempotencyKey(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return crypto.randomUUID();
   }
@@ -95,9 +99,11 @@ function toInternalContactPayload(payload: CreateContactPayload): Record<string,
   });
 }
 
-export async function createContact(payload: CreateContactPayload): Promise<CreateContactResponse> {
-  const idempotencyKey = generateIdempotencyKey();
-  const response = await fetch(`${PROXY_BASE}/v2/contacts?idempotencyKey=${idempotencyKey}`, {
+export async function createContact(
+  payload: CreateContactPayload,
+  idempotencyKey: string,
+): Promise<CreateContactResponse> {
+  const response = await fetch(`${PROXY_BASE}/v2/contacts?idempotencyKey=${encodeURIComponent(idempotencyKey)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(toInternalContactPayload(payload)),
@@ -121,10 +127,13 @@ export interface NewShippingAddress {
 }
 
 /** Appends a shipping address to an existing contact through the internal API. */
-export async function addShippingAddress(contactId: string, newAddr: NewShippingAddress): Promise<void> {
-  const idempotencyKey = generateIdempotencyKey();
+export async function addShippingAddress(
+  contactId: string,
+  newAddr: NewShippingAddress,
+  idempotencyKey: string,
+): Promise<void> {
   const response = await fetch(
-    `${PROXY_BASE}/v2/contacts/${encodeURIComponent(contactId)}/shipping-addresses?idempotencyKey=${idempotencyKey}`,
+    `${PROXY_BASE}/v2/contacts/${encodeURIComponent(contactId)}/shipping-addresses?idempotencyKey=${encodeURIComponent(idempotencyKey)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

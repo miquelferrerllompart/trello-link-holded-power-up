@@ -29,7 +29,7 @@ function renderResults(projects: HoldedProject[], query: string) {
     .map(
       (p) => {
         const initials = p.name.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase();
-        const subtitle = p.contactName || p.key || '';
+        const subtitle = [p.contactName, p.key].filter(Boolean).join(' · ');
         return `
     <div class="result-item" data-id="${p.id}" data-name="${p.name}">
       <div class="result-avatar">${initials}</div>

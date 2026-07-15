@@ -72,10 +72,10 @@ describe('Holded frontend API client', () => {
         salesTax: ['s_iva_21'],
         purchasesTax: ['p_iva_21'],
       },
-    });
+    }, 'idem-create-1');
 
     expect(result).toEqual({ id: 'contact-1' });
-    expect(fetchImpl.mock.calls[0][0]).toContain('/v2/contacts?idempotencyKey=');
+    expect(fetchImpl.mock.calls[0][0]).toContain('/v2/contacts?idempotencyKey=idem-create-1');
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toEqual({
       name: 'Cliente Uno',
       code: 'B123',
@@ -109,9 +109,9 @@ describe('Holded frontend API client', () => {
       city: 'Inca',
       postalCode: '07300',
       province: 'Illes Balears',
-    });
+    }, 'idem-ship-1');
 
-    expect(fetchImpl.mock.calls[0][0]).toContain('/v2/contacts/contact-1/shipping-addresses?idempotencyKey=');
+    expect(fetchImpl.mock.calls[0][0]).toContain('/v2/contacts/contact-1/shipping-addresses?idempotencyKey=idem-ship-1');
     expect(fetchImpl.mock.calls[0][1].method).toBe('POST');
     expect(JSON.parse(fetchImpl.mock.calls[0][1].body as string)).toEqual({
       name: 'Obra Norte',

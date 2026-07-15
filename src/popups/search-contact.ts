@@ -13,6 +13,15 @@ const resultsDiv = document.getElementById('results') as HTMLDivElement;
 
 let debounceTimer: ReturnType<typeof setTimeout>;
 
+function clearSelectionError() {
+  resultsDiv.querySelector('.selection-error')?.remove();
+}
+
+function showSelectionError(message: string) {
+  clearSelectionError();
+  resultsDiv.insertAdjacentHTML('afterbegin', `<div class="error selection-error">${message}</div>`);
+}
+
 function addCreateButton() {
   resultsDiv.insertAdjacentHTML('beforeend',
     '<button class="create-btn" id="create-contact-btn">+ Crear contacto nuevo</button>');
@@ -59,12 +68,17 @@ function renderResults(contacts: HoldedContact[], query: string) {
       const summary = contacts.find((c) => c.id === id)!;
       const contactName = formatSpanishTextCase(summary.name);
 
-      // Search returns summaries; fetch full detail for shipping/bill addresses.
-      let contact = summary;
+      // Search returns summaries; the addresses come from the full detail. If that
+      // fetch fails, stop — linking without it could drop the contact's address.
+      // Show a retryable error and let the user click the contact again.
+      clearSelectionError();
+      let contact: HoldedContact;
       try {
         contact = await getContactDetail(id);
       } catch (err) {
         console.error('Holded: error loading contact detail', err);
+        showSelectionError('No se pudo cargar el contacto. Pulsa de nuevo para reintentar.');
+        return;
       }
 
       if (contact.shippingAddresses && contact.shippingAddresses.length > 0) {
