@@ -191,6 +191,7 @@ export interface TrelloContext {
     title: string;
     url: string;
     height?: number;
+    mouseEvent?: MouseEvent;
   }): void;
   closePopup(): void;
   sizeTo(selector: string | HTMLElement): Promise<void>;

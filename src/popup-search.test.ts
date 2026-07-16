@@ -66,6 +66,28 @@ describe('popup search behavior', () => {
     dom.window.close();
   });
 
+  it('forwards the create-contact click event when opening its popup', async () => {
+    const { dom, trello } = installPopupDom(`
+      <input id="search" />
+      <div id="results"></div>
+    `);
+
+    await import('./popups/search-contact');
+
+    const createButton = dom.window.document.getElementById('create-contact-btn')!;
+    const clickEvent = new dom.window.MouseEvent('click', { bubbles: true });
+    createButton.dispatchEvent(clickEvent);
+
+    expect(trello.popup).toHaveBeenCalledWith({
+      title: 'Crear contacto',
+      url: './create-contact.html',
+      height: 420,
+      mouseEvent: clickEvent,
+    });
+
+    dom.window.close();
+  });
+
   it('shows both the linked client and project code in project results', async () => {
     const { dom } = installPopupDom(`
       <input id="search" />

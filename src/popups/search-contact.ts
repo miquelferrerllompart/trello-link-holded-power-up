@@ -25,8 +25,13 @@ function showSelectionError(message: string) {
 function addCreateButton() {
   resultsDiv.insertAdjacentHTML('beforeend',
     '<button class="create-btn" id="create-contact-btn">+ Crear contacto nuevo</button>');
-  document.getElementById('create-contact-btn')!.addEventListener('click', () => {
-    t.popup({ title: 'Crear contacto', url: './create-contact.html', height: 420 });
+  document.getElementById('create-contact-btn')!.addEventListener('click', (event) => {
+    t.popup({
+      title: 'Crear contacto',
+      url: './create-contact.html',
+      height: 420,
+      mouseEvent: event,
+    });
   });
 }
 
