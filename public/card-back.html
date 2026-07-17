@@ -867,15 +867,33 @@
       '</span>';
     }
 
+    function getCurrencySymbol(currency) {
+      var code = String(currency || '').trim();
+      if (!code) return '';
+
+      try {
+        var parts = new Intl.NumberFormat('es-ES', {
+          style: 'currency',
+          currency: code.toUpperCase(),
+          currencyDisplay: 'narrowSymbol'
+        }).formatToParts(0);
+        var currencyPart = parts.find(function(part) { return part.type === 'currency'; });
+        return currencyPart ? currencyPart.value : code;
+      } catch (_) {
+        return code;
+      }
+    }
+
     function formatDecimalAmount(value, currency) {
       var text = String(value == null ? '0' : value).trim();
+      var currencySymbol = getCurrencySymbol(currency);
       var match = text.match(/^(-?)(\d+)(?:\.(\d+))?$/);
-      if (!match) return text + (currency ? ' ' + currency : '');
+      if (!match) return text + (currencySymbol ? ' ' + currencySymbol : '');
 
       var integer = match[2].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
       var decimals = (match[3] || '').padEnd(2, '0').slice(0, 2);
       var amount = match[1] + integer + ',' + decimals;
-      return currency === 'EUR' ? amount + ' €' : amount + (currency ? ' ' + currency : '');
+      return amount + (currencySymbol ? ' ' + currencySymbol : '');
     }
 
     function hasPositiveAmount(value) {

@@ -213,6 +213,26 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).not.toContain('Completado');
   });
 
+  it('shows currency symbols instead of three-letter codes for estimate totals', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      waybills: [],
+      estimates: [
+        { id: 'est-eur', type: 'estimates', documentNumber: 'PRE-EUR', displayStatus: 'sent', issueDate: '2026-07-01', total: 1234.56, currency: 'eur', projects: [] },
+        { id: 'est-usd', type: 'estimates', documentNumber: 'PRE-USD', displayStatus: 'sent', issueDate: '2026-07-02', total: 50, currency: 'USD', projects: [] },
+      ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+    dom.window.document.querySelector('[data-tab="estimates"]')?.click();
+    await waitForRender();
+
+    const totals = Array.from(dom.window.document.querySelectorAll('.document-total'))
+      .map((element) => element.textContent);
+    expect(totals).toEqual(['1.234,56 €', '50,00 $']);
+  });
+
   it('shows invoices for the card-linked customer and project with status and exact amounts', async () => {
     const { dom, urls } = loadCardBack({
       salesOrders: [],
