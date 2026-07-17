@@ -382,7 +382,7 @@
       font-weight: 600;
       line-height: 16px;
     }
-    .invoice-amounts {
+    .document-amounts {
       display: inline-flex;
       align-items: baseline;
       gap: 5px;
@@ -393,8 +393,8 @@
       line-height: 16px;
       white-space: nowrap;
     }
-    .invoice-total { font-weight: 700; }
-    .invoice-pending { color: #7f5f01; }
+    .document-total { font-weight: 700; }
+    .document-pending-amount { color: #7f5f01; }
     /* Relation rail — purchase orders render as tree children of their sales order. */
     .relation-rail {
       display: grid;
@@ -613,8 +613,8 @@
       .document-pill.cancelled,
       .document-pill.failed { background: rgba(248, 113, 104, 0.16); color: #f87168; }
       .document-project-chip { background: #a1bdd914; color: #8c9bab; }
-      .invoice-amounts { color: #b6c2cf; }
-      .invoice-pending { color: #f5cd47; }
+      .document-amounts { color: #b6c2cf; }
+      .document-pending-amount { color: #f5cd47; }
       .relation-rail { border-left-color: #454168; }
       .purchase-order-row { color: #b8acf6; }
       .purchase-order-row::before { background: #454168; }
@@ -882,14 +882,27 @@
       return !/^[+-]?0*(?:\.0*)?$/.test(String(value == null ? '0' : value).trim());
     }
 
-    function renderInvoiceAmounts(documentItem) {
-      if (documentItem.type !== 'invoices' || !documentItem.amounts) return '';
-      var amounts = documentItem.amounts;
-      var total = formatDecimalAmount(amounts.total, amounts.currency);
-      var pending = hasPositiveAmount(amounts.pending)
-        ? '<span class="invoice-pending">Pendiente ' + escapeHtml(formatDecimalAmount(amounts.pending, amounts.currency)) + '</span>'
+    function renderDocumentAmounts(documentItem) {
+      var totalValue;
+      var pendingValue;
+      var currency;
+
+      if (documentItem.type === 'invoices' && documentItem.amounts) {
+        totalValue = documentItem.amounts.total;
+        pendingValue = documentItem.amounts.pending;
+        currency = documentItem.amounts.currency;
+      } else if (documentItem.type === 'estimates' && documentItem.total != null) {
+        totalValue = documentItem.total;
+        currency = documentItem.currency;
+      } else {
+        return '';
+      }
+
+      var total = formatDecimalAmount(totalValue, currency);
+      var pending = hasPositiveAmount(pendingValue)
+        ? '<span class="document-pending-amount">Pendiente ' + escapeHtml(formatDecimalAmount(pendingValue, currency)) + '</span>'
         : '';
-      return '<span class="invoice-amounts"><span class="invoice-total">' + escapeHtml(total) + '</span>' + pending + '</span>';
+      return '<span class="document-amounts"><span class="document-total">' + escapeHtml(total) + '</span>' + pending + '</span>';
     }
 
     // In "Todos", a row whose project differs from the linked one carries a muted
@@ -913,7 +926,7 @@
         '<span class="document-meta">' +
           renderPill(getDocumentPill(documentItem)) +
           renderProjectChip(documentItem, data, scope) +
-          renderInvoiceAmounts(documentItem) +
+          renderDocumentAmounts(documentItem) +
         '</span>' +
         '<span class="document-date">' + escapeHtml(getDocumentDateText(documentItem)) + '</span>' +
       '</a>';

@@ -196,7 +196,7 @@ describe('card-back document view (internal API v2)', () => {
       salesOrders: [],
       waybills: [],
       estimates: [
-        { id: 'est-1', type: 'estimates', documentNumber: 'PRE-1', displayStatus: 'accepted', issueDate: '2026-07-01', total: 100, currency: 'EUR', projects: [] },
+        { id: 'est-1', type: 'estimates', documentNumber: 'PRE-1', displayStatus: 'accepted', issueDate: '2026-07-01', total: 1234.56, currency: 'EUR', projects: [] },
         { id: 'est-2', type: 'estimates', documentNumber: 'PRE-2', displayStatus: 'rejected', issueDate: '2026-07-02', total: 50, currency: 'EUR', projects: [] },
       ],
     });
@@ -209,6 +209,7 @@ describe('card-back document view (internal API v2)', () => {
     const text = contentText(dom);
     expect(text).toContain('Aceptado');
     expect(text).toContain('Denegado');
+    expect(text).toContain('1.234,56 €');
     expect(text).not.toContain('Completado');
   });
 
