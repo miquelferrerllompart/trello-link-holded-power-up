@@ -215,7 +215,7 @@
     }
     .documents-tabs {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 4px;
       margin-bottom: 6px;
       padding: 2px;
@@ -363,7 +363,7 @@
       white-space: nowrap;
       vertical-align: bottom;
     }
-    .document-pill.served { background: #dcfff1; color: #216e4e; }
+    .document-pill.done { background: #dcfff1; color: #216e4e; }
     .document-pill.partial { background: #fff7d6; color: #7f5f01; }
     .document-pill.pending { background: #f1f2f4; color: #44546f; }
     .document-pill.review { background: #fff7d6; color: #7f5f01; }
@@ -382,6 +382,19 @@
       font-weight: 600;
       line-height: 16px;
     }
+    .document-amounts {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 5px;
+      min-width: 0;
+      color: #44546f;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      line-height: 16px;
+      white-space: nowrap;
+    }
+    .document-total { font-weight: 700; }
+    .document-pending-amount { color: #7f5f01; }
     /* Relation rail — purchase orders render as tree children of their sales order. */
     .relation-rail {
       display: grid;
@@ -593,13 +606,15 @@
       .document-row:hover { background: #a6c5e229; }
       .document-number { color: #579dff; }
       .document-pill { background: #a1bdd914; color: #b6c2cf; }
-      .document-pill.served { background: rgba(75, 206, 151, 0.16); color: #4bce97; }
+      .document-pill.done { background: rgba(75, 206, 151, 0.16); color: #4bce97; }
       .document-pill.partial { background: rgba(245, 205, 71, 0.14); color: #f5cd47; }
       .document-pill.pending { background: #a1bdd914; color: #b6c2cf; }
       .document-pill.review { background: rgba(245, 205, 71, 0.14); color: #f5cd47; }
       .document-pill.cancelled,
       .document-pill.failed { background: rgba(248, 113, 104, 0.16); color: #f87168; }
       .document-project-chip { background: #a1bdd914; color: #8c9bab; }
+      .document-amounts { color: #b6c2cf; }
+      .document-pending-amount { color: #f5cd47; }
       .relation-rail { border-left-color: #454168; }
       .purchase-order-row { color: #b8acf6; }
       .purchase-order-row::before { background: #454168; }
@@ -725,22 +740,31 @@
       requested: { label: 'A revisar', className: 'pending' },
       in_process: { label: 'Pendiente preparar', className: 'pending' },
       partially_prepared: { label: 'Parcialmente preparado', className: 'partial' },
-      prepared: { label: 'Preparado', className: 'served' },
+      prepared: { label: 'Preparado', className: 'done' },
       partially_delivered: { label: 'Parcialmente entregado', className: 'partial' },
-      all_delivered: { label: 'Totalmente entregado', className: 'served' },
+      all_delivered: { label: 'Totalmente entregado', className: 'done' },
       cancelled: { label: 'Cancelado', className: 'cancelled' }
     };
     var WAYBILL_STATUS = {
       prepared: { label: 'Sin aprobar', className: 'pending' },
-      delivered: { label: 'Aprobado', className: 'served' },
+      delivered: { label: 'Aprobado', className: 'done' },
       cancelled: { label: 'Cancelado', className: 'cancelled' }
     };
     var ESTIMATE_STATUS = {
       draft: { label: 'Borrador', className: 'pending' },
       pending: { label: 'Pendiente', className: 'pending' },
       sent: { label: 'Enviado', className: 'pending' },
-      accepted: { label: 'Aceptado', className: 'served' },
+      accepted: { label: 'Aceptado', className: 'done' },
       rejected: { label: 'Denegado', className: 'cancelled' }
+    };
+    var INVOICE_STATUS = {
+      draft: { label: 'Borrador', className: 'pending' },
+      pending: { label: 'Pendiente', className: 'pending' },
+      partial: { label: 'Parcial', className: 'partial' },
+      overdue: { label: 'Vencida', className: 'failed' },
+      paid: { label: 'Cobrada', className: 'done' },
+      cancelled: { label: 'Cancelada', className: 'cancelled' },
+      failed: { label: 'Fallida', className: 'failed' }
     };
     var PURCHASE_ORDER_STATUS = {
       review: { label: 'A revisar', className: 'pending' },
@@ -748,7 +772,7 @@
       partially_received_unconfirmed: { label: 'Recepción parcial sin confirmar', className: 'partial' },
       received_unconfirmed: { label: 'Recepción completa sin confirmar', className: 'partial' },
       partially_received: { label: 'Parcialmente recibido', className: 'partial' },
-      all_received: { label: 'Totalmente recibido', className: 'served' },
+      all_received: { label: 'Totalmente recibido', className: 'done' },
       cancelled: { label: 'Cancelado', className: 'cancelled' }
     };
 
@@ -761,6 +785,7 @@
     function getDocumentPill(documentItem) {
       if (documentItem.type === 'waybills') return statusFromMap(WAYBILL_STATUS, documentItem.workflowStatus);
       if (documentItem.type === 'estimates') return statusFromMap(ESTIMATE_STATUS, documentItem.displayStatus);
+      if (documentItem.type === 'invoices') return statusFromMap(INVOICE_STATUS, documentItem.displayStatus);
       if (documentItem.type === 'purchase-orders') return statusFromMap(PURCHASE_ORDER_STATUS, documentItem.internalStatus);
       return statusFromMap(SALES_ORDER_STATUS, documentItem.internalStatus);
     }
@@ -768,6 +793,7 @@
     var DOCUMENT_TABS = [
       { key: 'salesOrders', type: 'sales-orders', label: 'Pedidos venta', loadingLabel: 'pedidos de venta', emptyAll: 'Este cliente no tiene pedidos de venta.', emptyProject: 'No hay pedidos de venta en el proyecto vinculado.' },
       { key: 'waybills', type: 'waybills', label: 'Albaranes', loadingLabel: 'albaranes', emptyAll: 'Este cliente no tiene albaranes.', emptyProject: 'No hay albaranes en el proyecto vinculado.' },
+      { key: 'invoices', type: 'invoices', label: 'Facturas', loadingLabel: 'facturas', emptyAll: 'Este cliente no tiene facturas.', emptyProject: 'No hay facturas en el proyecto vinculado.' },
       { key: 'estimates', type: 'estimates', label: 'Presupuestos', loadingLabel: 'presupuestos', emptyAll: 'Este cliente no tiene presupuestos.', emptyProject: 'No hay presupuestos en el proyecto vinculado.' },
     ];
     var DOCUMENT_PAGE_SIZE = 10;
@@ -825,7 +851,8 @@
     function getDocumentNumber(documentItem) {
       var fallback = documentItem.type === 'sales-orders' ? 'PV ' :
         documentItem.type === 'purchase-orders' ? 'PC ' :
-        documentItem.type === 'estimates' ? 'PRE ' : 'ALB ';
+        documentItem.type === 'estimates' ? 'PRE ' :
+        documentItem.type === 'invoices' ? 'FAC ' : 'ALB ';
       return documentItem.documentNumber || (fallback + documentItem.id.slice(-6));
     }
 
@@ -838,6 +865,44 @@
       return '<span class="document-pill ' + pill.className + '" title="' + escapeHtml(pill.label) + '">' +
         escapeHtml(pill.label) +
       '</span>';
+    }
+
+    function formatDecimalAmount(value, currency) {
+      var text = String(value == null ? '0' : value).trim();
+      var match = text.match(/^(-?)(\d+)(?:\.(\d+))?$/);
+      if (!match) return text + (currency ? ' ' + currency : '');
+
+      var integer = match[2].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      var decimals = (match[3] || '').padEnd(2, '0').slice(0, 2);
+      var amount = match[1] + integer + ',' + decimals;
+      return currency === 'EUR' ? amount + ' €' : amount + (currency ? ' ' + currency : '');
+    }
+
+    function hasPositiveAmount(value) {
+      return !/^[+-]?0*(?:\.0*)?$/.test(String(value == null ? '0' : value).trim());
+    }
+
+    function renderDocumentAmounts(documentItem) {
+      var totalValue;
+      var pendingValue;
+      var currency;
+
+      if (documentItem.type === 'invoices' && documentItem.amounts) {
+        totalValue = documentItem.amounts.total;
+        pendingValue = documentItem.amounts.pending;
+        currency = documentItem.amounts.currency;
+      } else if (documentItem.type === 'estimates' && documentItem.total != null) {
+        totalValue = documentItem.total;
+        currency = documentItem.currency;
+      } else {
+        return '';
+      }
+
+      var total = formatDecimalAmount(totalValue, currency);
+      var pending = hasPositiveAmount(pendingValue)
+        ? '<span class="document-pending-amount">Pendiente ' + escapeHtml(formatDecimalAmount(pendingValue, currency)) + '</span>'
+        : '';
+      return '<span class="document-amounts"><span class="document-total">' + escapeHtml(total) + '</span>' + pending + '</span>';
     }
 
     // In "Todos", a row whose project differs from the linked one carries a muted
@@ -861,6 +926,7 @@
         '<span class="document-meta">' +
           renderPill(getDocumentPill(documentItem)) +
           renderProjectChip(documentItem, data, scope) +
+          renderDocumentAmounts(documentItem) +
         '</span>' +
         '<span class="document-date">' + escapeHtml(getDocumentDateText(documentItem)) + '</span>' +
       '</a>';
