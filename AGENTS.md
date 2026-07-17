@@ -7,7 +7,7 @@
 ## Project overview
 
 Trello Power-Up that links Trello cards with Eléctrica Ferrer's Holded CRM data (contacts, projects,
-sales orders, purchase orders, waybills, estimates). Internal tool; UI strings are in **Spanish**.
+sales orders, purchase orders, waybills, invoices, estimates). Internal tool; UI strings are in **Spanish**.
 
 ## Development practices (read first)
 
@@ -122,18 +122,18 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 |---|---|---|
 | `GET /contacts/search?q=` | `GET /contacts?query=` | Contact search (summaries) for the search popup |
 | `GET /projects/search?q=` | `GET /projects?query=` | Project search → `{ id, name, contactName, key }` |
-| `GET /v2/documents/search?contactId=&projectId=&type=&scope=&page=&cursor=` | `/sales-orders` \| `/waybills` \| `/estimates` (+ `/purchase-orders`) | One page of docs for the active card-back tab |
+| `GET /v2/documents/search?contactId=&projectId=&type=&scope=&page=&cursor=` | `/sales-orders` \| `/waybills` \| `/invoices` \| `/estimates` (+ `/purchase-orders`) | One page of docs for the active card-back tab |
 | `GET /v2/contacts/:id` | `GET /contacts/:id` | Contact detail (camelCase `customFields`) for the "Importante" box + address picker |
 | `POST /v2/contacts?idempotencyKey=` | `POST /contacts` | Create contact (camelCase payload incl. `defaults`) |
 | `POST /v2/contacts/:id/shipping-addresses?idempotencyKey=` | `POST /contacts/:id/shipping-addresses` | Append a shipping address |
 
 - The bearer key is **never** returned in any error. Writes forward a per-submit `Idempotency-Key`.
-- `type` ∈ `sales-orders` \| `waybills` \| `estimates`. `scope` ∈ `matched` (sends `projectId`) \| `all`
+- `type` ∈ `sales-orders` \| `waybills` \| `invoices` \| `estimates`. `scope` ∈ `matched` (sends `projectId`) \| `all`
   (drops it → all of the customer's docs).
-- Sales orders and waybills page by `page` (`pageSize` fixed 10); estimates page by `cursor`
+- Sales orders, waybills, and invoices page by `page` (`pageSize` fixed 10); estimates page by `cursor`
   (`hasMore` + `nextCursor`). No totals — the UI shows `‹ Página N ›`. Sorted newest-first by issue date.
 - Status pills come from server-derived enums — `internalStatus` (sales/purchase orders),
-  `workflowStatus` (waybills), `displayStatus` (estimates) — mapped to canonical Spanish labels in
+  `workflowStatus` (waybills), `displayStatus` (invoices/estimates) — mapped to canonical Spanish labels in
   `src/sales-order-display.ts` (mirrored inline in `card-back.html`).
 - **Purchase orders** are fetched per sales-orders page (bounded loop over `/purchase-orders`) and nested
   under each order by `sourceOrder.id`; orphan/off-page POs are dropped; a degraded fetch adds
@@ -145,7 +145,7 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 ## Card-back document view
 
 `public/card-back.html` (inline JS). Auto-loads the first tab (Pedidos de venta) when a **customer** is
-linked; other tabs lazy-load on click. Scope toggle is `Proyecto vinculado | Todos`. Purchase orders
+linked; other tabs (Albaranes, Facturas, Presupuestos) lazy-load on click. Scope toggle is `Proyecto vinculado | Todos`. Purchase orders
 nest under their sales order on a purple "relation rail". States: skeleton load, `DATA_NOT_READY`
 ("Sincronizando…") + retry, quiet PO-degraded note.
 

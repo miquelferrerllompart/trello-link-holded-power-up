@@ -395,6 +395,97 @@ describe('Worker /v2 internal-API document routes', () => {
     });
   });
 
+  it('maps invoices for the card-linked customer and project with amounts and source relationships', async () => {
+    const fetchImpl = vi.fn().mockResolvedValueOnce(internalJson({
+      items: [{
+        id: 'invoice-1',
+        docNumber: 'F-26-000321',
+        issueDate: '2026-07-15',
+        dueDate: '2026-08-15',
+        accountingDate: '2026-07-15',
+        forecastDate: '2026-08-15',
+        customer: { id: 'contact-1', name: 'Acme' },
+        projects: [
+          { id: 'project-1', name: 'Obra Norte', color: '#4bce97' },
+          { id: 'project-2', name: 'Ampliación', color: null },
+        ],
+        rawStatus: 'paid',
+        isDraft: false,
+        approvedAt: '2026-07-15T09:00:00Z',
+        lifecycleStatus: 'issued',
+        collectionStatus: 'partial',
+        isOverdue: false,
+        displayStatus: 'partial',
+        amounts: {
+          subtotal: '1000.00',
+          tax: '210.00',
+          total: '1210.00',
+          paid: '210.00',
+          pending: '1000.00',
+          refunded: '0.00',
+          currency: 'EUR',
+        },
+        paymentMethodId: null,
+        siiStatus: null,
+        verifactuStatus: null,
+        sourceDocuments: [
+          { type: 'waybill', id: 'wb-1', docNumber: 'ALB-26-000123' },
+          { type: 'salesorder', id: 'so-1', docNumber: 'PV-26-008005' },
+        ],
+      }],
+      pagination: { page: 2, pageSize: 10, hasMore: true },
+      readiness: 'ready',
+    }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=invoices&page=2&scope=matched&projectId=project-1'),
+      envV2,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      `${INTERNAL_BASE}/invoices?customerId=contact-1&projectId=project-1&page=2&pageSize=10`,
+    );
+    expect(body).toEqual({
+      type: 'invoices',
+      scope: 'matched',
+      page: 2,
+      pageSize: 10,
+      hasMore: true,
+      results: [{
+        type: 'invoices',
+        id: 'invoice-1',
+        documentNumber: 'F-26-000321',
+        url: 'https://app.holded.com/sales/revenue#open:invoice-invoice-1',
+        issueDate: '2026-07-15',
+        dueDate: '2026-08-15',
+        lifecycleStatus: 'issued',
+        collectionStatus: 'partial',
+        isOverdue: false,
+        displayStatus: 'partial',
+        amounts: {
+          subtotal: '1000.00',
+          tax: '210.00',
+          total: '1210.00',
+          paid: '210.00',
+          pending: '1000.00',
+          refunded: '0.00',
+          currency: 'EUR',
+        },
+        projects: [
+          { id: 'project-1', name: 'Obra Norte', color: '#4bce97' },
+          { id: 'project-2', name: 'Ampliación', color: null },
+        ],
+        sourceDocuments: [
+          { type: 'waybill', id: 'wb-1', docNumber: 'ALB-26-000123' },
+          { type: 'salesorder', id: 'so-1', docNumber: 'PV-26-008005' },
+        ],
+      }],
+    });
+  });
+
   it('omits projectId in the "all" scope and rejects an unknown scope', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(internalJson({ items: [], pagination: { hasMore: false }, readiness: 'ready' }));
     vi.stubGlobal('fetch', fetchImpl);

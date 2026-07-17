@@ -9,6 +9,7 @@ const TYPE_TO_KEY = {
   'sales-orders': 'salesOrders',
   waybills: 'waybills',
   estimates: 'estimates',
+  invoices: 'invoices',
 };
 
 // Mirrors the worker's /v2/documents/search response shape.
@@ -211,6 +212,52 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).not.toContain('Completado');
   });
 
+  it('shows invoices for the card-linked customer and project with status and exact amounts', async () => {
+    const { dom, urls } = loadCardBack({
+      salesOrders: [],
+      waybills: [],
+      estimates: [],
+      invoices: [{
+        id: 'invoice-1',
+        type: 'invoices',
+        documentNumber: 'F-26-000321',
+        url: 'https://app.holded.com/sales/revenue#open:invoice-invoice-1',
+        issueDate: '2026-07-15',
+        dueDate: '2026-08-15',
+        displayStatus: 'partial',
+        lifecycleStatus: 'issued',
+        collectionStatus: 'partial',
+        isOverdue: false,
+        amounts: {
+          total: '1210.00',
+          paid: '210.00',
+          pending: '1000.00',
+          currency: 'EUR',
+        },
+        projects: [{ id: 'project-1', name: 'Obra', color: null }],
+        sourceDocuments: [],
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+    dom.window.document.querySelector('[data-tab="invoices"]')?.click();
+    await waitForRender();
+
+    const row = dom.window.document.querySelector('.document-row');
+    expect(row?.getAttribute('href')).toBe('https://app.holded.com/sales/revenue#open:invoice-invoice-1');
+    expect(row?.textContent).toContain('#F-26-000321');
+    expect(row?.textContent).toContain('Parcial');
+    expect(row?.textContent).toContain('1.210,00 €');
+    expect(row?.textContent).toContain('Pendiente 1.000,00 €');
+
+    const invoiceCall = urls.find((url) => url.includes('type=invoices'));
+    expect(invoiceCall).toContain('contactId=contact-1');
+    expect(invoiceCall).toContain('scope=matched');
+    expect(invoiceCall).toContain('projectId=project-1');
+    expect(invoiceCall).toContain('page=1');
+  });
+
   it('offers Proyecto vinculado | Todos (no counts) and drops projectId in Todos', async () => {
     const { dom, urls } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1')],
@@ -365,9 +412,9 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).toContain('Rexel');
     expect(text).toContain('Pendiente recibir');
 
-    // Still a three-tab view — purchase orders are not a tab.
+    // Purchase orders remain nested; invoices are the fourth top-level tab.
     expect(Array.from(dom.window.document.querySelectorAll('.documents-tab')).map((t) => t.textContent?.trim()))
-      .toEqual(['Pedidos venta', 'Albaranes', 'Presupuestos']);
+      .toEqual(['Pedidos venta', 'Albaranes', 'Facturas', 'Presupuestos']);
   });
 
   it('keeps sales orders visible and warns quietly when purchase orders fail to load', async () => {

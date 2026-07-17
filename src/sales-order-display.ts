@@ -4,23 +4,23 @@ export interface StatusPill {
 }
 
 // Pill colour vocabulary (maps to CSS classes on `.document-pill`):
-//   served = green, partial = yellow, pending = neutral, cancelled = red.
+//   done = green, partial = yellow, pending = neutral, cancelled = red.
 // Labels are the canonical Spanish strings from the internal-API contract.
 
 const SALES_ORDER_STATUS: Record<string, StatusPill> = {
   requested: { label: 'A revisar', className: 'pending' },
   in_process: { label: 'Pendiente preparar', className: 'pending' },
   partially_prepared: { label: 'Parcialmente preparado', className: 'partial' },
-  prepared: { label: 'Preparado', className: 'served' },
+  prepared: { label: 'Preparado', className: 'done' },
   partially_delivered: { label: 'Parcialmente entregado', className: 'partial' },
-  all_delivered: { label: 'Totalmente entregado', className: 'served' },
+  all_delivered: { label: 'Totalmente entregado', className: 'done' },
   cancelled: { label: 'Cancelado', className: 'cancelled' },
 };
 
 // The waybill pill shows the approval label, deliberately NOT Preparado/Entregado.
 const WAYBILL_STATUS: Record<string, StatusPill> = {
   prepared: { label: 'Sin aprobar', className: 'pending' },
-  delivered: { label: 'Aprobado', className: 'served' },
+  delivered: { label: 'Aprobado', className: 'done' },
   cancelled: { label: 'Cancelado', className: 'cancelled' },
 };
 
@@ -28,8 +28,18 @@ const ESTIMATE_STATUS: Record<string, StatusPill> = {
   draft: { label: 'Borrador', className: 'pending' },
   pending: { label: 'Pendiente', className: 'pending' },
   sent: { label: 'Enviado', className: 'pending' },
-  accepted: { label: 'Aceptado', className: 'served' },
+  accepted: { label: 'Aceptado', className: 'done' },
   rejected: { label: 'Denegado', className: 'cancelled' },
+};
+
+const INVOICE_STATUS: Record<string, StatusPill> = {
+  draft: { label: 'Borrador', className: 'pending' },
+  pending: { label: 'Pendiente', className: 'pending' },
+  partial: { label: 'Parcial', className: 'partial' },
+  overdue: { label: 'Vencida', className: 'failed' },
+  paid: { label: 'Cobrada', className: 'done' },
+  cancelled: { label: 'Cancelada', className: 'cancelled' },
+  failed: { label: 'Fallida', className: 'failed' },
 };
 
 const PURCHASE_ORDER_STATUS: Record<string, StatusPill> = {
@@ -38,7 +48,7 @@ const PURCHASE_ORDER_STATUS: Record<string, StatusPill> = {
   partially_received_unconfirmed: { label: 'Recepción parcial sin confirmar', className: 'partial' },
   received_unconfirmed: { label: 'Recepción completa sin confirmar', className: 'partial' },
   partially_received: { label: 'Parcialmente recibido', className: 'partial' },
-  all_received: { label: 'Totalmente recibido', className: 'served' },
+  all_received: { label: 'Totalmente recibido', className: 'done' },
   cancelled: { label: 'Cancelado', className: 'cancelled' },
 };
 
@@ -61,6 +71,10 @@ export function getEstimateStatusPill(displayStatus: string | null | undefined):
   return fromStatusMap(ESTIMATE_STATUS, displayStatus);
 }
 
+export function getInvoiceStatusPill(displayStatus: string | null | undefined): StatusPill {
+  return fromStatusMap(INVOICE_STATUS, displayStatus);
+}
+
 export function getPurchaseOrderStatusPill(status: string | null | undefined): StatusPill {
   return fromStatusMap(PURCHASE_ORDER_STATUS, status);
 }
@@ -77,6 +91,7 @@ export interface DocumentStatusInput {
 export function getDocumentStatusPill(document: DocumentStatusInput): StatusPill {
   if (document.type === 'waybills') return getWaybillStatusPill(document.workflowStatus);
   if (document.type === 'estimates') return getEstimateStatusPill(document.displayStatus);
+  if (document.type === 'invoices') return getInvoiceStatusPill(document.displayStatus);
   if (document.type === 'purchase-orders') return getPurchaseOrderStatusPill(document.internalStatus);
   return getSalesOrderStatusPill(document.internalStatus);
 }

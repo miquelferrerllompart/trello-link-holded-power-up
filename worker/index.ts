@@ -97,8 +97,8 @@ async function handleProjectsSearch(url: URL, env: Env): Promise<Response> {
 // ── Card-back document tabs ──
 
 const V2_PAGE_SIZE = 10;
-type V2DocumentType = 'sales-orders' | 'waybills' | 'estimates';
-const V2_DOCUMENT_TYPES: V2DocumentType[] = ['sales-orders', 'waybills', 'estimates'];
+type V2DocumentType = 'sales-orders' | 'waybills' | 'estimates' | 'invoices';
+const V2_DOCUMENT_TYPES: V2DocumentType[] = ['sales-orders', 'waybills', 'estimates', 'invoices'];
 
 interface InternalProjectRef {
   id: string;
@@ -167,6 +167,24 @@ function mapInternalEstimate(item: Record<string, any>) {
     total: item.total ?? null,
     currency: item.currency ?? null,
     projects: (item.projects ?? []) as InternalProjectRef[],
+  };
+}
+
+function mapInternalInvoice(item: Record<string, any>) {
+  return {
+    type: 'invoices' as const,
+    id: item.id,
+    documentNumber: item.docNumber ?? null,
+    url: buildDocumentUrl('invoices', item.id),
+    issueDate: item.issueDate ?? null,
+    dueDate: item.dueDate ?? null,
+    lifecycleStatus: item.lifecycleStatus ?? null,
+    collectionStatus: item.collectionStatus ?? null,
+    isOverdue: Boolean(item.isOverdue),
+    displayStatus: item.displayStatus ?? null,
+    amounts: item.amounts ?? null,
+    projects: (item.projects ?? []) as InternalProjectRef[],
+    sourceDocuments: item.sourceDocuments ?? [],
   };
 }
 
@@ -250,7 +268,7 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
 
   if (!contactId) return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'contactId is required' } }, 400);
   if (!type || !V2_DOCUMENT_TYPES.includes(type)) {
-    return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'type must be sales-orders, waybills, or estimates' } }, 400);
+    return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'type must be sales-orders, waybills, estimates, or invoices' } }, 400);
   }
   if (scope !== 'matched' && scope !== 'all') {
     return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'scope must be matched or all' } }, 400);
@@ -276,7 +294,7 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
     }
 
     const requestedPage = parsePositiveInteger(url.searchParams.get('page'), 1, 10_000);
-    const path = type === 'sales-orders' ? '/sales-orders' : '/waybills';
+    const path = type === 'sales-orders' ? '/sales-orders' : type === 'invoices' ? '/invoices' : '/waybills';
     const page = await internalApiGet<InternalPage>(path, apiKey, {
       query: {
         customerId: contactId,
@@ -306,6 +324,17 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
         hasMore: Boolean(page.pagination?.hasMore),
         results,
         ...(purchaseOrdersError ? { purchaseOrdersError: true } : {}),
+      });
+    }
+
+    if (type === 'invoices') {
+      return jsonResponse({
+        type,
+        scope,
+        page: requestedPage,
+        pageSize: V2_PAGE_SIZE,
+        hasMore: Boolean(page.pagination?.hasMore),
+        results: (page.items ?? []).map(mapInternalInvoice),
       });
     }
 
