@@ -139,15 +139,26 @@ const salesOrder = (id, documentNumber, extra = {}) => ({
 });
 
 describe('card-back document view (internal API v2)', () => {
-  it('renders the full customer address and color-inheriting open-link icons', async () => {
+  it('renders the full customer address and dual app destinations for the customer and project', async () => {
     const { dom } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
     await waitForRender();
 
-    const openIcon = dom.window.document.querySelector('.tag-open-icon');
     expect(contentText(dom)).toContain('Calle Mayor 123, Palma');
     expect(contentText(dom)).not.toContain('Calle Ma…');
-    expect(openIcon).not.toBeNull();
-    expect(dom.window.getComputedStyle(openIcon).fill.toLowerCase()).toBe('currentcolor');
+
+    const contact = dom.window.document.querySelector('.tag-contact');
+    expect(contact?.tagName).toBe('DIV');
+    expect(contact?.querySelector('.document-link--ef')?.getAttribute('href'))
+      .toBe('https://app.electricaferrer.es/contacto/contact-1');
+    expect(contact?.querySelector('.document-link--holded')?.getAttribute('href'))
+      .toBe('https://app.holded.com/contacts/contact-1');
+
+    const project = dom.window.document.querySelector('.tag-project');
+    expect(project?.tagName).toBe('DIV');
+    expect(project?.querySelector('.document-link--ef')?.getAttribute('href'))
+      .toBe('https://app.electricaferrer.es/proyecto/project-1');
+    expect(project?.querySelector('.document-link--holded')?.getAttribute('href'))
+      .toBe('https://app.holded.com/projects/p/project-1');
   });
 
   it('fetches the linked contact detail from /v2/contacts/:id', async () => {
@@ -168,6 +179,40 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(contentText(dom)).toContain('Parcialmente preparado');
     expect(contentText(dom)).not.toContain('Completado');
+  });
+
+  it('offers branded Holded and Eléctrica Ferrer destinations for sales orders', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so/with spaces', 'PV-1', {
+        url: 'https://app.holded.com/sales/orders#open:salesorder-so-1',
+      })],
+      waybills: [],
+      estimates: [],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const row = dom.window.document.querySelector('.document-row');
+    const links = row?.querySelectorAll('.document-link');
+    expect(row?.tagName).toBe('DIV');
+    expect(links).toHaveLength(2);
+    expect(row?.querySelector('.document-link--ef')?.getAttribute('href'))
+      .toBe('https://app.electricaferrer.es/pedido/so%2Fwith%20spaces');
+    expect(row?.querySelector('.document-link--holded')?.getAttribute('href'))
+      .toBe('https://app.holded.com/sales/orders#open:salesorder-so-1');
+    expect(row?.querySelector('.document-link--ef')?.getAttribute('aria-label'))
+      .toBe('Abrir PV-1 en Eléctrica Ferrer (pestaña nueva)');
+    expect(row?.querySelector('.document-link--holded')?.getAttribute('aria-label'))
+      .toBe('Abrir PV-1 en Holded (pestaña nueva)');
+    expect(row?.querySelector('.document-link--ef img')?.getAttribute('src')).toBe('/icons/ef-app.png');
+    expect(row?.querySelector('.document-link--holded img')?.getAttribute('src')).toBe('/icons/holded-app.jpg');
+    expect(Array.from(links || []).every((link) => link.getAttribute('target') === '_blank')).toBe(true);
+    expect(row?.querySelector('.document-link--ef')?.getAttribute('title'))
+      .toBe('Abrir en la app de Eléctrica Ferrer');
+    expect(row?.querySelector('.document-link--holded')?.getAttribute('title')).toBe('Abrir en Holded');
+    expect(dom.window.getComputedStyle(row?.querySelector('.document-actions')).gap).toBe('6px');
+    expect(dom.window.getComputedStyle(row?.querySelector('.document-app-icon')).width).toBe('28px');
   });
 
   it('shows waybill approval labels (Sin aprobar / Aprobado)', async () => {
@@ -266,7 +311,10 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     const row = dom.window.document.querySelector('.document-row');
-    expect(row?.getAttribute('href')).toBe('https://app.holded.com/sales/revenue#open:invoice-invoice-1');
+    expect(row?.querySelectorAll('.document-link')).toHaveLength(1);
+    expect(row?.querySelector('.document-link--ef')).toBeNull();
+    expect(row?.querySelector('.document-link--holded')?.getAttribute('href'))
+      .toBe('https://app.holded.com/sales/revenue#open:invoice-invoice-1');
     expect(row?.textContent).toContain('#F-26-000321');
     expect(row?.textContent).toContain('Parcial');
     expect(row?.textContent).toContain('1.210,00 €');
@@ -427,7 +475,10 @@ describe('card-back document view (internal API v2)', () => {
 
     const subRow = dom.window.document.querySelector('.purchase-order-row');
     expect(subRow).not.toBeNull();
-    expect(subRow.getAttribute('href')).toBe('https://app.holded.com/sales/orders#open:order-po-1');
+    expect(subRow.querySelector('.document-link--ef')?.getAttribute('href'))
+      .toBe('https://app.electricaferrer.es/pedido-compra/po-1');
+    expect(subRow.querySelector('.document-link--holded')?.getAttribute('href'))
+      .toBe('https://app.holded.com/sales/orders#open:order-po-1');
     const text = contentText(dom);
     expect(text).toContain('#PC-1');
     expect(text).toContain('Rexel');

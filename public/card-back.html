@@ -6,6 +6,8 @@
   <title>Holded Info</title>
   <style>
     body {
+      --document-row-hover: #091e420f;
+      --purchase-row-hover: #f3f0ff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       margin: 0;
       padding: 0;
@@ -25,26 +27,27 @@
     }
     .tag {
       display: grid;
-      grid-template-columns: 16px 12px minmax(0, 1fr) 18px;
+      grid-template-columns: 16px minmax(0, 1fr);
       align-items: center;
       gap: 6px;
-      min-height: 28px;
+      box-sizing: border-box;
+      min-height: 38px;
       padding: 4px 7px;
       border-radius: 8px;
       font-size: 14px;
       font-weight: 500;
-      text-decoration: none;
-      cursor: pointer;
       position: relative;
       max-width: 100%;
       line-height: 20px;
       transition: background 0.15s, color 0.15s;
     }
     .tag-contact {
+      --tag-background: #e4f0f6;
       background: #e4f0f6;
       color: #0c66a1;
     }
     .tag-project {
+      --tag-background: #e6f4ea;
       background: #e6f4ea;
       color: #1b7742;
     }
@@ -53,19 +56,6 @@
       height: 14px;
       flex-shrink: 0;
     }
-    .tag-open-icon {
-      width: 10px;
-      height: 10px;
-      opacity: 0;
-      transform: translate(-2px, 2px);
-      transition: opacity 0.15s, transform 0.15s;
-      fill: currentColor;
-    }
-    .tag:hover .tag-open-icon,
-    .tag:focus-visible .tag-open-icon {
-      opacity: 1;
-      transform: translate(0, 0);
-    }
     .tag-name {
       overflow: hidden;
       text-overflow: ellipsis;
@@ -73,7 +63,7 @@
       min-width: 0;
     }
     .tag:hover .tag-name,
-    .tag:focus-visible .tag-name {
+    .tag:focus-within .tag-name {
       overflow: visible;
       white-space: normal;
       overflow-wrap: anywhere;
@@ -86,21 +76,34 @@
       white-space: nowrap;
     }
     .tag-close {
+      appearance: none;
+      position: absolute;
+      z-index: 2;
+      top: 50%;
+      right: 5px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 18px;
-      height: 18px;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      border: 0;
       border-radius: 50%;
+      background: transparent;
+      color: inherit;
       flex-shrink: 0;
       cursor: pointer;
       opacity: 0;
-      transition: opacity 0.15s, background 0.15s;
+      transform: translateY(-50%);
+      transition: opacity 0.15s, background 0.15s, transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
     }
     .tag:hover .tag-close,
     .tag:focus-within .tag-close {
       opacity: 1;
     }
+    .tag-close:hover { background: #ffffff73; }
+    .tag-close:active { transform: translateY(-50%) scale(0.94); }
+    .tag-close:focus-visible { outline: 2px solid #388bff; outline-offset: 1px; opacity: 1; }
     .tag-close-icon {
       width: 10px;
       height: 10px;
@@ -205,7 +208,7 @@
     .documents-tab:focus-visible,
     .documents-scope-button:focus-visible,
     .documents-page-button:focus-visible,
-    .document-row:focus-visible {
+    .document-link:focus-visible {
       outline: 2px solid #388bff;
       outline-offset: 2px;
     }
@@ -312,26 +315,84 @@
       gap: 4px;
     }
     .document-row {
+      position: relative;
       display: grid;
-      grid-template-columns: 12px minmax(74px, auto) 1fr auto;
+      grid-template-columns: minmax(74px, auto) 1fr auto;
       align-items: center;
       gap: 6px;
+      box-sizing: border-box;
+      min-height: 38px;
       padding: 6px 8px;
       border-radius: 6px;
       color: #172b4d;
-      text-decoration: none;
     }
-    .document-row:hover {
-      background: #091e420f;
-    }
-    .document-row .tag-open-icon {
+    .document-actions {
+      position: absolute;
+      z-index: 1;
+      top: 50%;
+      right: 5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px;
+      border: 1px solid #091e4224;
+      border-radius: 9px;
+      background: #ffffff;
+      box-shadow: -10px 0 12px #ffffff, 0 2px 5px #091e4224;
       opacity: 0;
-      transform: translate(-2px, 2px);
+      pointer-events: none;
+      transform: translateY(-50%) translateX(2px) scale(0.98);
+      transform-origin: right center;
+      transition: opacity 120ms ease, transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
     }
-    .document-row:hover .tag-open-icon,
-    .document-row:focus-visible .tag-open-icon {
+    .document-row:focus-within .document-actions,
+    .purchase-order-row:focus-within .document-actions,
+    .tag:focus-within .document-actions {
       opacity: 1;
-      transform: translate(0, 0);
+      pointer-events: auto;
+      transform: translateY(-50%) translateX(0) scale(1);
+      transition-duration: 0ms;
+    }
+    .tag .document-actions {
+      right: 33px;
+      background: var(--tag-background);
+      box-shadow: -10px 0 12px var(--tag-background), 0 2px 5px #091e4224;
+    }
+    .document-link {
+      position: relative;
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      text-decoration: none;
+      transition: transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .document-link:active { transform: scale(0.94); }
+    .document-app-icon {
+      display: block;
+      box-sizing: border-box;
+      width: 28px;
+      height: 28px;
+      border: 1px solid #091e4224;
+      border-radius: 7px;
+      object-fit: cover;
+      box-shadow: 0 1px 2px #091e4224;
+    }
+    .document-link-arrow {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 9px;
+      height: 9px;
+      padding: 1px;
+      border-radius: 3px;
+      background: #172b4dcc;
+      color: #ffffff;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 2.4;
     }
     .document-number {
       color: #0c66a1;
@@ -406,13 +467,14 @@
     .purchase-order-row {
       position: relative;
       display: grid;
-      grid-template-columns: 10px minmax(58px, auto) 1fr auto;
+      grid-template-columns: minmax(58px, auto) 1fr auto;
       align-items: center;
       gap: 6px;
+      box-sizing: border-box;
+      min-height: 38px;
       padding: 3px 8px 3px 4px;
       border-radius: 6px;
       color: #5e4db2;
-      text-decoration: none;
     }
     .purchase-order-row::before {
       content: '';
@@ -423,10 +485,6 @@
       height: 2px;
       background: #dcd6f7;
     }
-    .purchase-order-row:hover { background: #f3f0ff; }
-    .purchase-order-row .tag-open-icon { opacity: 0; transform: translate(-2px, 2px); }
-    .purchase-order-row:hover .tag-open-icon,
-    .purchase-order-row:focus-visible .tag-open-icon { opacity: 1; transform: translate(0, 0); }
     .purchase-order-number {
       color: #5e4db2;
       font-size: 12px;
@@ -556,13 +614,19 @@
 
     /* Dark mode */
     @media (prefers-color-scheme: dark) {
-      body { color: #b6c2cf; }
+      body {
+        --document-row-hover: #a6c5e229;
+        --purchase-row-hover: rgba(159, 143, 239, 0.16);
+        color: #b6c2cf;
+      }
       .section-label { color: #a9abaf; }
       .tag-contact {
+        --tag-background: rgba(0, 121, 191, 0.2);
         background: rgba(0, 121, 191, 0.2);
         color: #579dff;
       }
       .tag-project {
+        --tag-background: rgba(27, 119, 66, 0.2);
         background: rgba(27, 119, 66, 0.2);
         color: #4bce97;
       }
@@ -603,7 +667,12 @@
       .documents-scope-count { background: #a6c5e229; }
       .documents-scope-button[aria-pressed="true"] .documents-scope-count { background: #579dff24; }
       .document-row { color: #b6c2cf; }
-      .document-row:hover { background: #a6c5e229; }
+      .document-actions {
+        border-color: #a6c5e229;
+        background: #22272b;
+        box-shadow: -10px 0 12px #22272b, 0 2px 5px #030404;
+      }
+      .document-app-icon { border-color: #a6c5e23d; box-shadow: 0 1px 2px #030404; }
       .document-number { color: #579dff; }
       .document-pill { background: #a1bdd914; color: #b6c2cf; }
       .document-pill.done { background: rgba(75, 206, 151, 0.16); color: #4bce97; }
@@ -618,7 +687,6 @@
       .relation-rail { border-left-color: #454168; }
       .purchase-order-row { color: #b8acf6; }
       .purchase-order-row::before { background: #454168; }
-      .purchase-order-row:hover { background: rgba(159, 143, 239, 0.16); }
       .purchase-order-number { color: #b8acf6; }
       .purchase-order-supplier { color: #8c9bab; }
       .documents-page-button { background: #a6c5e229; color: #b6c2cf; }
@@ -629,6 +697,35 @@
     }
     @media (prefers-reduced-motion: reduce) {
       .documents-skeleton-row::after { animation: none; }
+      .document-actions {
+        transform: translateY(-50%);
+        transition: opacity 120ms ease;
+      }
+      .document-row:focus-within .document-actions,
+      .purchase-order-row:focus-within .document-actions,
+      .tag:focus-within .document-actions { transform: translateY(-50%); }
+      .document-link { transition: none; }
+    }
+    @media (hover: hover) and (pointer: fine) {
+      .document-row:hover { background: var(--document-row-hover); }
+      .purchase-order-row:hover { background: var(--purchase-row-hover); }
+      .document-row:hover .document-actions,
+      .purchase-order-row:hover .document-actions,
+      .tag:hover .document-actions {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(-50%) translateX(0) scale(1);
+      }
+    }
+    @media (hover: none), (pointer: coarse) {
+      .document-actions {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateY(-50%);
+      }
+      .document-date { padding-right: 76px; }
+      .tag-close { opacity: 1; }
+      .tag-name { padding-right: 112px; }
     }
     @media (max-width: 480px) {
       .documents-scope-row {
@@ -646,14 +743,14 @@
         justify-content: center;
       }
       .document-row {
-        grid-template-columns: 12px minmax(0, 1fr) auto;
+        grid-template-columns: minmax(0, 1fr) auto;
       }
       .document-meta {
-        grid-column: 2 / 4;
+        grid-column: 1 / 3;
         grid-row: 2;
       }
       .document-date {
-        grid-column: 3;
+        grid-column: 2;
         grid-row: 1;
       }
       .documents-skeleton-row { height: 48px; }
@@ -667,6 +764,7 @@
     var HOLDED_CONTACT_URL = 'https://app.holded.com/contacts/';
     var HOLDED_PROJECT_URL = 'https://app.holded.com/projects/p/';
     var HOLDED_PROXY_URL = 'https://holded-proxy.electricaferrer.workers.dev';
+    var EF_APP_URL = 'https://app.electricaferrer.es';
 
     var CONTACT_SVG = '<svg class="tag-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M384 48c8.8 0 16 7.2 16 16l0 384c0 8.8-7.2 16-16 16L96 464c-8.8 0-16-7.2-16-16L80 64c0-8.8 7.2-16 16-16l288 0zM96 0C60.7 0 32 28.7 32 64l0 384c0 35.3 28.7 64 64 64l288 0c35.3 0 64-28.7 64-64l0-384c0-35.3-28.7-64-64-64L96 0zM240 248a56 56 0 1 0 0-112 56 56 0 1 0 0 112zm-32 40c-44.2 0-80 35.8-80 80 0 8.8 7.2 16 16 16l192 0c8.8 0 16-7.2 16-16 0-44.2-35.8-80-80-80l-64 0zM512 80c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64zM496 192c-8.8 0-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64c0-8.8-7.2-16-16-16zm16 144c0-8.8-7.2-16-16-16s-16 7.2-16 16l0 64c0 8.8 7.2 16 16 16s16-7.2 16-16l0-64z"/></svg>';
 
@@ -674,7 +772,7 @@
 
     var CLOSE_SVG = '<svg class="tag-close-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512"><path d="M342.6 150.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0L192 210.7 86.6 105.4c-12.5-12.5-32.8-12.5-45.3 0s-12.5 32.8 0 45.3L146.7 256 41.4 361.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L192 301.3 297.4 406.6c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L237.3 256 342.6 150.6z"/></svg>';
 
-    var OPEN_LINK_SVG = '<svg class="tag-open-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><path d="M320 0c-17.7 0-32 14.3-32 32s14.3 32 32 32l82.7 0L201.4 265.4c-12.5 12.5-12.5 32.8 0 45.3s32.8 12.5 45.3 0L448 109.3l0 82.7c0 17.7 14.3 32 32 32s32-14.3 32-32l0-160c0-17.7-14.3-32-32-32L320 0zM80 32C35.8 32 0 67.8 0 112l0 320c0 44.2 35.8 80 80 80l320 0c44.2 0 80-35.8 80-80l0-112c0-17.7-14.3-32-32-32s-32 14.3-32 32l0 112c0 8.8-7.2 16-16 16L80 448c-8.8 0-16-7.2-16-16l0-320c0-8.8 7.2-16 16-16l112 0c17.7 0 32-14.3 32-32s-14.3-32-32-32L80 32z"/></svg>';
+    var DESTINATION_ARROW_SVG = '<svg class="document-link-arrow" aria-hidden="true" viewBox="0 0 12 12"><path d="M3.25 8.75 8.75 3.25M4.25 3.25h4.5v4.5" fill="none"/></svg>';
 
     // Unlinking (clearing storage + removing the description tag) runs in the
     // unlink popup (src/popups/unlink.ts), which has a reliable REST write context.
@@ -935,11 +1033,59 @@
       return '<span class="document-project-chip" title="' + escapeHtml(name) + '">' + escapeHtml(name) + '</span>';
     }
 
+    function buildEfDocumentUrl(documentItem) {
+      var paths = {
+        'sales-orders': 'pedido',
+        'waybills': 'albaran',
+        'purchase-orders': 'pedido-compra',
+        'estimates': 'presupuesto/editar'
+      };
+      var path = paths[documentItem.type];
+      var id = String(documentItem.id == null ? '' : documentItem.id).trim();
+      if (!path || !id) return '';
+      return EF_APP_URL + '/' + path + '/' + encodeURIComponent(id);
+    }
+
+    function buildEfEntityUrl(type, idValue) {
+      var paths = { contact: 'contacto', project: 'proyecto' };
+      var path = paths[type];
+      var id = String(idValue == null ? '' : idValue).trim();
+      if (!path || !id) return '';
+      return EF_APP_URL + '/' + path + '/' + encodeURIComponent(id);
+    }
+
+    function renderDestinationLink(kind, url, documentNumber) {
+      if (!url) return '';
+      var isEf = kind === 'ef';
+      var appName = isEf ? 'Eléctrica Ferrer' : 'Holded';
+      var tooltip = isEf ? 'Abrir en la app de Eléctrica Ferrer' : 'Abrir en Holded';
+      var iconUrl = isEf ? '/icons/ef-app.png' : '/icons/holded-app.jpg';
+      var label = 'Abrir ' + documentNumber + ' en ' + appName + ' (pestaña nueva)';
+      return '<a class="document-link document-link--' + kind + '" href="' + escapeHtml(url) + '"' +
+        ' target="_blank" rel="noopener noreferrer" aria-label="' + escapeHtml(label) + '"' +
+        ' title="' + escapeHtml(tooltip) + '">' +
+          '<img class="document-app-icon" src="' + iconUrl + '" alt="" />' +
+          DESTINATION_ARROW_SVG +
+        '</a>';
+    }
+
+    function renderDocumentActions(documentItem, documentNumber) {
+      var efLink = renderDestinationLink('ef', buildEfDocumentUrl(documentItem), documentNumber);
+      var holdedLink = renderDestinationLink('holded', documentItem.url || '', documentNumber);
+      var links = efLink + holdedLink;
+      if (!links) return '';
+      return '<span class="document-actions' + (efLink && holdedLink ? '' : ' document-actions--single') + '">' + links + '</span>';
+    }
+
+    function renderEntityActions(type, id, holdedUrl, label) {
+      var efLink = renderDestinationLink('ef', buildEfEntityUrl(type, id), label);
+      var holdedLink = renderDestinationLink('holded', holdedUrl, label);
+      return '<span class="document-actions">' + efLink + holdedLink + '</span>';
+    }
+
     function renderDocumentRow(documentItem, data, scope) {
       var number = getDocumentNumber(documentItem);
-      var url = documentItem.url || '#';
-      return '<a class="document-row" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' +
-        OPEN_LINK_SVG +
+      return '<div class="document-row">' +
         '<span class="document-number">#' + escapeHtml(number) + '</span>' +
         '<span class="document-meta">' +
           renderPill(getDocumentPill(documentItem)) +
@@ -947,19 +1093,19 @@
           renderDocumentAmounts(documentItem) +
         '</span>' +
         '<span class="document-date">' + escapeHtml(getDocumentDateText(documentItem)) + '</span>' +
-      '</a>';
+        renderDocumentActions(documentItem, number) +
+      '</div>';
     }
 
     function renderPurchaseOrderRow(purchaseOrder) {
       var number = getDocumentNumber(purchaseOrder);
-      var url = purchaseOrder.url || '#';
       var supplier = purchaseOrder.supplier && purchaseOrder.supplier.name ? purchaseOrder.supplier.name : '';
-      return '<a class="purchase-order-row" href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">' +
-        OPEN_LINK_SVG +
+      return '<div class="purchase-order-row">' +
         '<span class="purchase-order-number">#' + escapeHtml(number) + '</span>' +
         '<span class="purchase-order-supplier">' + escapeHtml(supplier) + '</span>' +
         renderPill(getDocumentPill(purchaseOrder)) +
-      '</a>';
+        renderDocumentActions(purchaseOrder, number) +
+      '</div>';
     }
 
     function renderSalesOrderGroup(order, data, scope) {
@@ -1260,19 +1406,18 @@
           var tags = [];
 
           if (data.contactName) {
-            var href = data.contactId ? HOLDED_CONTACT_URL + data.contactId : '#';
-            var target = data.contactId ? ' target="_blank"' : '';
+            var contactHoldedUrl = data.contactId ? HOLDED_CONTACT_URL + data.contactId : '';
             var addrHtml = '';
             if (data.addressLabel) {
               addrHtml = ' <span class="tag-address" title="' + escapeHtml(data.addressLabel) + '">| ' + escapeHtml(data.addressLabel) + '</span>';
             }
             tags.push(
-              '<a class="tag tag-contact" href="' + escapeHtml(href) + '"' + target + '>' +
+              '<div class="tag tag-contact">' +
                 CONTACT_SVG +
-                OPEN_LINK_SVG +
                 '<span class="tag-name">' + escapeHtml(data.contactName) + addrHtml + '</span>' +
-                '<span class="tag-close" data-field="contact">' + CLOSE_SVG + '</span>' +
-              '</a>'
+                renderEntityActions('contact', data.contactId, contactHoldedUrl, data.contactName) +
+                '<button type="button" class="tag-close" data-field="contact" aria-label="Desvincular cliente" title="Desvincular cliente">' + CLOSE_SVG + '</button>' +
+              '</div>'
             );
           } else {
             tags.push(
@@ -1284,15 +1429,14 @@
           }
 
           if (data.projectName) {
-            var href = data.projectId ? HOLDED_PROJECT_URL + data.projectId : '#';
-            var target = data.projectId ? ' target="_blank"' : '';
+            var projectHoldedUrl = data.projectId ? HOLDED_PROJECT_URL + data.projectId : '';
             tags.push(
-              '<a class="tag tag-project" href="' + escapeHtml(href) + '"' + target + '>' +
+              '<div class="tag tag-project">' +
                 PROJECT_SVG +
-                OPEN_LINK_SVG +
                 '<span class="tag-name">' + escapeHtml(data.projectName) + '</span>' +
-                '<span class="tag-close" data-field="project">' + CLOSE_SVG + '</span>' +
-              '</a>'
+                renderEntityActions('project', data.projectId, projectHoldedUrl, data.projectName) +
+                '<button type="button" class="tag-close" data-field="project" aria-label="Desvincular proyecto" title="Desvincular proyecto">' + CLOSE_SVG + '</button>' +
+              '</div>'
             );
           } else {
             tags.push(
