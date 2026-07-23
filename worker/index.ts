@@ -119,6 +119,7 @@ function mapInternalSalesOrder(item: Record<string, any>) {
     url: buildDocumentUrl('sales-orders', item.id),
     internalStatus: item.internalStatus ?? null,
     issueDate: item.issueDate ?? null,
+    approvedAt: item.approvedAt ?? null,
     dueDate: item.dueDate ?? null,
     deliveryCount: item.deliveryCount ?? 0,
     totalUnits: item.totalUnits ?? 0,
@@ -132,6 +133,7 @@ function mapInternalWaybill(item: Record<string, any>) {
     id: item.id,
     documentNumber: item.docNumber ?? null,
     url: buildDocumentUrl('waybills', item.id),
+    kind: item.kind ?? null,
     issueDate: item.issueDate ?? null,
     workflowStatus: item.workflowStatus ?? null,
     approvedAt: item.approvedAt ?? null,
@@ -148,6 +150,7 @@ function mapInternalPurchaseOrder(item: Record<string, any>) {
     url: buildDocumentUrl('purchase-orders', item.id),
     internalStatus: item.internalStatus ?? null,
     issueDate: item.issueDate ?? null,
+    approvedAt: item.approvedAt ?? null,
     supplier: (item.supplier ?? null) as { id: string; name: string } | null,
     total: item.total ?? null,
     currency: item.currency ?? null,
@@ -162,6 +165,7 @@ function mapInternalEstimate(item: Record<string, any>) {
     documentNumber: item.docNumber ?? null,
     url: buildDocumentUrl('estimates', item.id),
     issueDate: item.issueDate ?? null,
+    sentAt: item.sentAt ?? null,
     dueDate: item.dueDate ?? null,
     displayStatus: item.displayStatus ?? null,
     total: item.total ?? null,
@@ -177,6 +181,7 @@ function mapInternalInvoice(item: Record<string, any>) {
     documentNumber: item.docNumber ?? null,
     url: buildDocumentUrl('invoices', item.id),
     issueDate: item.issueDate ?? null,
+    approvedAt: item.approvedAt ?? null,
     dueDate: item.dueDate ?? null,
     lifecycleStatus: item.lifecycleStatus ?? null,
     collectionStatus: item.collectionStatus ?? null,
@@ -211,11 +216,12 @@ function internalErrorResponse(err: unknown): Response {
 
 const PURCHASE_ORDER_PAGE_SIZE = 100;
 const PURCHASE_ORDER_MAX_PAGES = 10;
+const RELATED_WAYBILL_PAGE_SIZE = 100;
+const RELATED_WAYBILL_MAX_PAGES = 10;
 
-// Purchase orders are fetched by the customer relation (resolved through each
-// PO's source sales order) with a bounded page loop, then grouped under the
-// sales orders that are visible on the current page. Orphans (no sourceOrder)
-// and POs whose source order is not on this page are dropped.
+// Related documents are fetched by customer/project with bounded page loops,
+// then grouped through sourceOrder under the sales orders visible on the
+// current page. Orphans and relations to off-page sales orders are dropped.
 async function fetchCustomerPurchaseOrders(
   apiKey: string,
   contactId: string,
@@ -237,21 +243,55 @@ async function fetchCustomerPurchaseOrders(
   return items;
 }
 
-function nestPurchaseOrders(
+async function fetchCustomerWaybills(
+  apiKey: string,
+  contactId: string,
+  projectId: string | null,
+): Promise<Array<Record<string, any>>> {
+  const items: Array<Record<string, any>> = [];
+  for (let page = 1; page <= RELATED_WAYBILL_MAX_PAGES; page += 1) {
+    const result = await internalApiGet<InternalPage>('/waybills', apiKey, {
+      query: {
+        customerId: contactId,
+        projectId,
+        page: String(page),
+        pageSize: String(RELATED_WAYBILL_PAGE_SIZE),
+      },
+    });
+    items.push(...(result.items ?? []));
+    if (!result.pagination?.hasMore) break;
+  }
+  return items;
+}
+
+function nestRelatedDocuments(
   salesOrders: ReturnType<typeof mapInternalSalesOrder>[],
   purchaseOrders: Array<Record<string, any>>,
+  waybills: Array<Record<string, any>>,
 ) {
-  const byOrderId = new Map<string, ReturnType<typeof mapInternalPurchaseOrder>[]>();
+  const purchaseOrdersByOrderId = new Map<string, ReturnType<typeof mapInternalPurchaseOrder>[]>();
   for (const purchaseOrder of purchaseOrders) {
     const sourceId = purchaseOrder.sourceOrder?.id;
     if (!sourceId) continue;
-    const bucket = byOrderId.get(sourceId);
+    const bucket = purchaseOrdersByOrderId.get(sourceId);
     if (bucket) bucket.push(mapInternalPurchaseOrder(purchaseOrder));
-    else byOrderId.set(sourceId, [mapInternalPurchaseOrder(purchaseOrder)]);
+    else purchaseOrdersByOrderId.set(sourceId, [mapInternalPurchaseOrder(purchaseOrder)]);
   }
+
+  const waybillsByOrderId = new Map<string, ReturnType<typeof mapInternalWaybill>[]>();
+  for (const waybill of waybills) {
+    if (waybill.kind !== 'material' && waybill.kind !== 'refund') continue;
+    const sourceId = waybill.sourceOrder?.id;
+    if (!sourceId) continue;
+    const bucket = waybillsByOrderId.get(sourceId);
+    if (bucket) bucket.push(mapInternalWaybill(waybill));
+    else waybillsByOrderId.set(sourceId, [mapInternalWaybill(waybill)]);
+  }
+
   return salesOrders.map((order) => ({
     ...order,
-    purchaseOrders: byOrderId.get(order.id) ?? [],
+    purchaseOrders: purchaseOrdersByOrderId.get(order.id) ?? [],
+    waybills: waybillsByOrderId.get(order.id) ?? [],
   }));
 }
 
@@ -306,16 +346,17 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
 
     if (type === 'sales-orders') {
       const salesOrders = (page.items ?? []).map(mapInternalSalesOrder);
-      let results = salesOrders.map((order) => ({ ...order, purchaseOrders: [] as ReturnType<typeof mapInternalPurchaseOrder>[] }));
-      let purchaseOrdersError = false;
-      try {
-        const purchaseOrders = await fetchCustomerPurchaseOrders(apiKey, contactId, effectiveProjectId);
-        results = nestPurchaseOrders(salesOrders, purchaseOrders);
-      } catch {
-        // The relation is supplementary — never fail the whole view because the
-        // purchase-order fetch is degraded.
-        purchaseOrdersError = true;
-      }
+      const [purchaseOrdersResult, waybillsResult] = await Promise.allSettled([
+        fetchCustomerPurchaseOrders(apiKey, contactId, effectiveProjectId),
+        fetchCustomerWaybills(apiKey, contactId, effectiveProjectId),
+      ]);
+      const purchaseOrdersError = purchaseOrdersResult.status === 'rejected';
+      const waybillsError = waybillsResult.status === 'rejected';
+      const results = nestRelatedDocuments(
+        salesOrders,
+        purchaseOrdersResult.status === 'fulfilled' ? purchaseOrdersResult.value : [],
+        waybillsResult.status === 'fulfilled' ? waybillsResult.value : [],
+      );
       return jsonResponse({
         type,
         scope,
@@ -324,6 +365,7 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
         hasMore: Boolean(page.pagination?.hasMore),
         results,
         ...(purchaseOrdersError ? { purchaseOrdersError: true } : {}),
+        ...(waybillsError ? { waybillsError: true } : {}),
       });
     }
 

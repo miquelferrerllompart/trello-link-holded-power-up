@@ -122,7 +122,7 @@ describe('Worker /v2 internal-API document routes', () => {
           status: 'partial',
           rawStatus: 'processing',
           isDraft: false,
-          approvedAt: '2026-07-14',
+          approvedAt: '2026-07-14T08:45:00Z',
           customer: { id: 'contact-1', name: 'Acme' },
           projects: [{ id: 'project-1', name: 'Obra', color: '#fff' }],
           totalUnits: 10,
@@ -145,6 +145,7 @@ describe('Worker /v2 internal-API document routes', () => {
     const calledUrls = fetchImpl.mock.calls.map((call) => call[0]);
     expect(calledUrls).toContain(`${INTERNAL_BASE}/sales-orders?customerId=contact-1&projectId=project-1&page=1&pageSize=10`);
     expect(calledUrls).toContain(`${INTERNAL_BASE}/purchase-orders?customerId=contact-1&projectId=project-1&page=1&pageSize=100`);
+    expect(calledUrls).toContain(`${INTERNAL_BASE}/waybills?customerId=contact-1&projectId=project-1&page=1&pageSize=100`);
     expect(calledUrls.some((url: string) => url.includes('/shipped-items'))).toBe(false);
     expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer efk_test' });
     expect(body).toEqual({
@@ -160,11 +161,13 @@ describe('Worker /v2 internal-API document routes', () => {
         url: 'https://app.holded.com/sales/orders#open:salesorder-so-1',
         internalStatus: 'partially_prepared',
         issueDate: '2026-07-14',
+        approvedAt: '2026-07-14T08:45:00Z',
         dueDate: null,
         deliveryCount: 1,
         totalUnits: 10,
         projects: [{ id: 'project-1', name: 'Obra', color: '#fff' }],
         purchaseOrders: [],
+        waybills: [],
       }],
     });
   });
@@ -193,7 +196,7 @@ describe('Worker /v2 internal-API document routes', () => {
       status: 'partial',
       rawStatus: 'processing',
       isDraft: false,
-      approvedAt: null,
+      approvedAt: '2026-07-13T10:15:00Z',
       supplier: { id: 'supplier-1', name: 'Rexel' },
       projects: [],
       totalUnits: 5,
@@ -241,6 +244,7 @@ describe('Worker /v2 internal-API document routes', () => {
         url: 'https://app.holded.com/sales/orders#open:order-po-1',
         internalStatus: 'awaiting_receipt',
         issueDate: '2026-07-13',
+        approvedAt: '2026-07-13T10:15:00Z',
         supplier: { id: 'supplier-1', name: 'Rexel' },
         total: 250,
         currency: 'EUR',
@@ -252,10 +256,100 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(body.results[1].purchaseOrders).toEqual([]);
   });
 
+  it('nests only material and refund waybills and drops orphan/off-page relations', async () => {
+    const salesOrder = (id: string, docNumber: string) => ({
+      id,
+      docNumber,
+      issueDate: '2026-07-14',
+      dueDate: null,
+      projects: [],
+      totalUnits: 5,
+      deliveryCount: 1,
+      internalStatus: 'in_process',
+    });
+    const waybill = (id: string, docNumber: string, sourceId: string | null, kind: string) => ({
+      id,
+      docNumber,
+      kind,
+      issueDate: '2026-07-15',
+      workflowStatus: 'delivered',
+      approvedAt: '2026-07-16',
+      projects: [],
+      sourceOrder: sourceId ? { id: sourceId, docNumber: 'PV-26-008005' } : null,
+    });
+
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({
+          items: [
+            waybill('wb-1', 'ALB-26-000123', 'so-1', 'material'),
+            waybill('wb-2', 'ALB-26-000124', 'so-1', 'refund'),
+            waybill('wb-3', 'ALB-26-000125', 'so-1', 'labour'),
+            waybill('wb-4', 'ALB-26-000126', 'so-1', 'extra'),
+            waybill('wb-5', 'ALB-26-000127', null, 'material'),
+            waybill('wb-6', 'ALB-26-000128', 'so-off-page', 'refund'),
+          ],
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+        });
+      }
+      return internalJson({
+        items: [salesOrder('so-1', 'PV-26-008005'), salesOrder('so-2', 'PV-26-008006')],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as {
+      results: Array<{ id: string; waybills: Array<Record<string, unknown>> }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=1&pageSize=100`,
+    );
+    expect(body.results[0].waybills).toEqual([
+      {
+        type: 'waybills',
+        id: 'wb-1',
+        documentNumber: 'ALB-26-000123',
+        url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
+        kind: 'material',
+        issueDate: '2026-07-15',
+        workflowStatus: 'delivered',
+        approvedAt: '2026-07-16',
+        sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
+        projects: [],
+      },
+      {
+        type: 'waybills',
+        id: 'wb-2',
+        documentNumber: 'ALB-26-000124',
+        url: 'https://app.holded.com/sales/waybills#open:waybill-wb-2',
+        kind: 'refund',
+        issueDate: '2026-07-15',
+        workflowStatus: 'delivered',
+        approvedAt: '2026-07-16',
+        sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
+        projects: [],
+      },
+    ]);
+    expect(body.results[1].waybills).toEqual([]);
+  });
+
   it('keeps sales orders and flags purchaseOrdersError when the PO fetch fails', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders')) {
         return internalJson({ error: { code: 'SERVICE_UNAVAILABLE', message: 'later' } }, 503);
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
       }
       return internalJson({
         items: [{
@@ -291,6 +385,47 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(body.results[0].purchaseOrders).toEqual([]);
   });
 
+  it('keeps sales orders and flags waybillsError when the related waybill fetch fails', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({ error: { code: 'SERVICE_UNAVAILABLE', message: 'later' } }, 503);
+      }
+      return internalJson({
+        items: [{
+          id: 'so-1',
+          docNumber: 'PV-26-008005',
+          issueDate: '2026-07-14',
+          dueDate: null,
+          projects: [],
+          totalUnits: 5,
+          deliveryCount: 0,
+          internalStatus: 'in_process',
+        }],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as {
+      purchaseOrdersError?: boolean;
+      waybillsError?: boolean;
+      results: Array<{ id: string; waybills: unknown[] }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.purchaseOrdersError).toBeUndefined();
+    expect(body.waybillsError).toBe(true);
+    expect(body.results[0].id).toBe('so-1');
+    expect(body.results[0].waybills).toEqual([]);
+  });
+
   it('maps waybills passing through workflowStatus, approvedAt and sourceOrder', async () => {
     const fetchImpl = vi.fn().mockResolvedValueOnce(internalJson({
       items: [{
@@ -301,6 +436,7 @@ describe('Worker /v2 internal-API document routes', () => {
         rawStatus: 'delivered',
         approvedAt: '2026-07-11',
         workflowStatus: 'delivered',
+        kind: 'material',
         customer: { id: 'contact-1', name: 'Acme' },
         projects: [],
         sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
@@ -332,6 +468,7 @@ describe('Worker /v2 internal-API document routes', () => {
         documentNumber: 'ALB-26-000123',
         url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
         issueDate: '2026-07-10',
+        kind: 'material',
         workflowStatus: 'delivered',
         approvedAt: '2026-07-11',
         sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
@@ -356,7 +493,7 @@ describe('Worker /v2 internal-API document routes', () => {
         status: 'pending',
         rawStatus: 'sent',
         displayStatus: 'sent',
-        sentAt: null,
+        sentAt: '2026-07-01T11:30:00Z',
         freshness: 'live',
         syncPending: false,
       }],
@@ -386,6 +523,7 @@ describe('Worker /v2 internal-API document routes', () => {
         documentNumber: 'PRE-26-000045',
         url: 'https://app.holded.com/sales/estimates#open:estimate-est-1',
         issueDate: '2026-07-01',
+        sentAt: '2026-07-01T11:30:00Z',
         dueDate: null,
         displayStatus: 'sent',
         total: 121,
@@ -460,6 +598,7 @@ describe('Worker /v2 internal-API document routes', () => {
         documentNumber: 'F-26-000321',
         url: 'https://app.holded.com/sales/revenue#open:invoice-invoice-1',
         issueDate: '2026-07-15',
+        approvedAt: '2026-07-15T09:00:00Z',
         dueDate: '2026-08-15',
         lifecycleStatus: 'issued',
         collectionStatus: 'partial',

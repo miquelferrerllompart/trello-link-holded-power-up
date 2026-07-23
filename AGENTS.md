@@ -135,9 +135,13 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 - Status pills come from server-derived enums — `internalStatus` (sales/purchase orders),
   `workflowStatus` (waybills), `displayStatus` (invoices/estimates) — mapped to canonical Spanish labels in
   `src/sales-order-display.ts` (mirrored inline in `card-back.html`).
-- **Purchase orders** are fetched per sales-orders page (bounded loop over `/purchase-orders`) and nested
-  under each order by `sourceOrder.id`; orphan/off-page POs are dropped; a degraded fetch adds
-  `purchaseOrdersError: true`. No PO tab — POs render as tree children (the "relation rail").
+- **Purchase orders and waybills** are fetched alongside sales orders (independent bounded loops over
+  `/purchase-orders` and `/waybills`) and nested under each order by `sourceOrder.id`; orphan/off-page
+  relations are dropped. Only `material` and `refund` waybill kinds render beneath sales orders;
+  every waybill kind remains available with a Spanish kind subtitle in the main Albaranes tab.
+  Degraded relation fetches add
+  `purchaseOrdersError: true` or `waybillsError: true` independently. No extra nested tabs — both
+  relation types render as tree children.
 - `worker/holded-v2.ts` only builds `app.holded.com` deep-link URLs for document rows (no API client left).
 - The internal-API contract is saved under `.context/api-docs/` (`openapi.yaml`, `llms-full.txt`);
   refresh from `https://api.app.electricaferrer.es/internal/v1/openapi.yaml` when it changes.
@@ -145,9 +149,11 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 ## Card-back document view
 
 `public/card-back.html` (inline JS). Auto-loads the first tab (Pedidos de venta) when a **customer** is
-linked; other tabs (Albaranes, Facturas, Presupuestos) lazy-load on click. Scope toggle is `Proyecto vinculado | Todos`. Purchase orders
-nest under their sales order on a purple "relation rail". States: skeleton load, `DATA_NOT_READY`
-("Sincronizando…") + retry, quiet PO-degraded note.
+linked; other tabs (Albaranes, Facturas, Presupuestos) lazy-load on click. Scope toggle is
+`Proyecto vinculado | Todos`. Related material/devolución waybills (blue/red kind subtitles beneath
+the document number, with status grouped beside the identity) and purchase orders (purple) nest under
+their sales order on a shared relation rail. States: skeleton load,
+`DATA_NOT_READY` ("Sincronizando…") + retry, quiet relation-degraded notes.
 
 ## Common issues / gotchas
 

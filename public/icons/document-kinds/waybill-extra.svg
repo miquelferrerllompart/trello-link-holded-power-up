@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42" role="img" aria-labelledby="title">
+  <title id="title">Albarán de trabajo extra</title>
+  <rect width="42" height="42" rx="8" fill="#F59E0B" fill-opacity=".10"/>
+  <g transform="translate(10 10) scale(.9166667)" fill="none" stroke="#92600B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m13 2-9 12h7l-1 8 9-12h-7z"/>
+  </g>
+</svg>
