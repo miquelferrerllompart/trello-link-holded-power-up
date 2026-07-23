@@ -490,7 +490,7 @@ describe('card-back document view (internal API v2)', () => {
       .toEqual(['Pedidos venta', 'Albaranes', 'Facturas', 'Presupuestos']);
   });
 
-  it('shows material and refund waybills with distinct kind badges under their sales order', async () => {
+  it('shows material and refund kinds as subtitles beneath each waybill number', async () => {
     const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', {
         waybills: [
@@ -529,18 +529,21 @@ describe('card-back document view (internal API v2)', () => {
 
     const rows = dom.window.document.querySelectorAll('.related-waybill-row');
     expect(rows).toHaveLength(2);
-    expect(rows[0].textContent).toContain('#ALB-1');
-    expect(rows[0].textContent).toContain('Material');
+    const materialIdentity = rows[0].querySelector('.related-waybill-identity');
+    expect(materialIdentity?.children[0].classList.contains('related-waybill-number')).toBe(true);
+    expect(materialIdentity?.children[0].textContent).toContain('#ALB-1');
+    expect(materialIdentity?.children[1].classList.contains('waybill-kind--material')).toBe(true);
+    expect(materialIdentity?.children[1].textContent).toContain('Material');
     expect(rows[0].textContent).toContain('Aprobado');
-    expect(rows[0].querySelector('.waybill-kind--material')).not.toBeNull();
     expect(rows[0].querySelector('.document-link--ef')?.getAttribute('href'))
       .toBe('https://app.electricaferrer.es/albaran/wb-1');
     expect(rows[0].querySelector('.document-link--holded')?.getAttribute('href'))
       .toBe('https://app.holded.com/sales/waybills#open:waybill-wb-1');
-    expect(rows[1].textContent).toContain('#ALB-2');
-    expect(rows[1].textContent).toContain('Devolución');
+    const refundIdentity = rows[1].querySelector('.related-waybill-identity');
+    expect(refundIdentity?.children[0].textContent).toContain('#ALB-2');
+    expect(refundIdentity?.children[1].classList.contains('waybill-kind--refund')).toBe(true);
+    expect(refundIdentity?.children[1].textContent).toContain('Devolución');
     expect(rows[1].textContent).toContain('Sin aprobar');
-    expect(rows[1].querySelector('.waybill-kind--refund')).not.toBeNull();
   });
 
   it('keeps sales orders visible and warns quietly when purchase orders fail to load', async () => {

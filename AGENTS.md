@@ -149,8 +149,8 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 
 `public/card-back.html` (inline JS). Auto-loads the first tab (Pedidos de venta) when a **customer** is
 linked; other tabs (Albaranes, Facturas, Presupuestos) lazy-load on click. Scope toggle is
-`Proyecto vinculado | Todos`. Related material/devolución waybills (blue/red kind badges) and purchase
-orders (purple) nest under their sales order on a shared relation rail. States: skeleton load,
+`Proyecto vinculado | Todos`. Related material/devolución waybills (blue/red kind subtitles beneath
+the document number) and purchase orders (purple) nest under their sales order on a shared relation rail. States: skeleton load,
 `DATA_NOT_READY` ("Sincronizando…") + retry, quiet relation-degraded notes.
 
 ## Common issues / gotchas

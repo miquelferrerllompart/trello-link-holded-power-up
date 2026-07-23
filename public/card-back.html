@@ -482,6 +482,10 @@
     }
     .related-waybill-row {
       --relation-color: #b8d7ee;
+      grid-template-columns: minmax(76px, 1fr) auto;
+      min-height: 42px;
+      padding-top: 4px;
+      padding-bottom: 4px;
       color: #0c66a1;
     }
     .relation-child-row::before {
@@ -512,6 +516,12 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .related-waybill-identity {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      align-items: flex-start;
+    }
     .related-waybill-number {
       color: #0c66a1;
       font-size: 12px;
@@ -522,23 +532,17 @@
       white-space: nowrap;
     }
     .waybill-kind {
-      justify-self: start;
-      padding: 1px 7px 1px 8px;
-      border-radius: 4px;
       font-size: 10px;
-      font-weight: 700;
+      font-weight: 600;
       letter-spacing: 0.01em;
-      line-height: 16px;
+      line-height: 12px;
       white-space: nowrap;
-      box-shadow: inset 2px 0 currentColor;
     }
     .waybill-kind--material {
-      background: #e9f2ff;
       color: #0c66e4;
     }
     .waybill-kind--refund {
-      background: #fff0ec;
-      color: #ae2a19;
+      color: #c9372c;
     }
     .documents-button:active,
     .documents-scope-button:active,
@@ -727,8 +731,8 @@
       .purchase-order-number { color: #b8acf6; }
       .purchase-order-supplier { color: #8c9bab; }
       .related-waybill-number { color: #85b8ff; }
-      .waybill-kind--material { background: rgba(87, 157, 255, 0.16); color: #85b8ff; }
-      .waybill-kind--refund { background: rgba(248, 113, 104, 0.16); color: #f87168; }
+      .waybill-kind--material { color: #85b8ff; }
+      .waybill-kind--refund { color: #f87168; }
       .documents-page-button { background: #a6c5e229; color: #b6c2cf; }
       .documents-page-button:hover:not([disabled]) { background: #a6c5e23d; }
       .documents-page-label strong { color: #b6c2cf; }
@@ -1162,8 +1166,10 @@
     function renderRelatedWaybillRow(waybill) {
       var number = getDocumentNumber(waybill);
       return '<div class="relation-child-row related-waybill-row">' +
-        '<span class="related-waybill-number">#' + escapeHtml(number) + '</span>' +
-        renderWaybillKind(waybill.kind) +
+        '<span class="related-waybill-identity">' +
+          '<span class="related-waybill-number">#' + escapeHtml(number) + '</span>' +
+          renderWaybillKind(waybill.kind) +
+        '</span>' +
         renderPill(getDocumentPill(waybill)) +
         renderDocumentActions(waybill, number) +
       '</div>';
