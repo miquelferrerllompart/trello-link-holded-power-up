@@ -67,9 +67,9 @@ function renderResults(contacts: HoldedContact[], query: string) {
     addCreateButton();
   }
 
-  resultsDiv.querySelectorAll('.result-item').forEach((el) => {
-    el.addEventListener('click', async () => {
-      const id = (el as HTMLElement).dataset.id!;
+  resultsDiv.querySelectorAll<HTMLElement>('.result-item').forEach((el) => {
+    el.addEventListener('click', async (event) => {
+      const id = el.dataset.id!;
       const summary = contacts.find((c) => c.id === id)!;
       const contactName = formatSpanishTextCase(summary.name);
 
@@ -89,7 +89,12 @@ function renderResults(contacts: HoldedContact[], query: string) {
       if (contact.shippingAddresses && contact.shippingAddresses.length > 0) {
         const pending = buildPendingContactSelection(contact, contactName);
         await savePendingContactSelection(t, pending);
-        t.popup({ title: 'Seleccionar dirección', url: './select-address.html', height: 300 });
+        t.popup({
+          title: 'Seleccionar dirección',
+          url: './select-address.html',
+          height: 300,
+          mouseEvent: event,
+        });
       } else {
         const addressLabel = [
           formatSpanishTextCase(contact.billAddress?.address || ''),

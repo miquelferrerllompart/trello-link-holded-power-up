@@ -88,6 +88,60 @@ describe('popup search behavior', () => {
     dom.window.close();
   });
 
+  it('forwards the contact click event when opening the address-selection popup', async () => {
+    const { dom, trello } = installPopupDom(`
+      <input id="search" />
+      <div id="results"></div>
+    `);
+    trello.card.mockResolvedValue({ id: 'card-1' });
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        total: 1,
+        results: [{ id: 'contact-1', name: 'Cliente Uno' }],
+      })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'contact-1',
+        name: 'Cliente Uno',
+        billAddress: {
+          address: 'C/ Major 1',
+          city: 'Palma',
+          postalCode: '07001',
+          province: 'Illes Balears',
+        },
+        shippingAddresses: [{
+          name: 'Obra Norte',
+          address: 'C/ Nord 2',
+          city: 'Palma',
+          postalCode: '07002',
+          province: 'Illes Balears',
+          country: 'España',
+        }],
+      }))));
+
+    await import('./popups/search-contact');
+
+    const input = dom.window.document.getElementById('search') as HTMLInputElement;
+    input.value = 'Cliente';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.result-item')).not.toBeNull();
+    });
+    const clickEvent = new dom.window.MouseEvent('click', { bubbles: true });
+    dom.window.document.querySelector('.result-item')!.dispatchEvent(clickEvent);
+
+    await vi.waitFor(() => {
+      expect(trello.popup).toHaveBeenCalledWith({
+        title: 'Seleccionar dirección',
+        url: './select-address.html',
+        height: 300,
+        mouseEvent: clickEvent,
+      });
+    });
+
+    dom.window.close();
+  });
+
   it('shows both the linked client and project code in project results', async () => {
     const { dom } = installPopupDom(`
       <input id="search" />

@@ -293,6 +293,91 @@ describe('card-back document view (internal API v2)', () => {
     });
   });
 
+  it('classifies top-level and related document rows with an icon at the left edge', async () => {
+    const waybillKinds = ['material', 'labour', 'mixed', 'extra', 'refund', 'unclassified'];
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1', {
+        waybills: [{
+          id: 'related-waybill',
+          type: 'waybills',
+          documentNumber: 'ALB-REL',
+          kind: 'refund',
+          workflowStatus: 'prepared',
+          issueDate: '2026-07-15',
+          projects: [],
+        }],
+        purchaseOrders: [{
+          id: 'po-1',
+          type: 'purchase-orders',
+          documentNumber: 'PC-1',
+          internalStatus: 'awaiting_receipt',
+          supplier: { id: 'supplier-1', name: 'Rexel' },
+          projects: [],
+        }],
+      })],
+      waybills: waybillKinds.map((kind, index) => ({
+        id: `wb-${index + 1}`,
+        type: 'waybills',
+        documentNumber: `ALB-${index + 1}`,
+        kind,
+        workflowStatus: 'prepared',
+        issueDate: '2026-07-10',
+        projects: [],
+      })),
+      invoices: [{
+        id: 'invoice-1',
+        type: 'invoices',
+        documentNumber: 'F-1',
+        displayStatus: 'paid',
+        issueDate: '2026-07-11',
+        amounts: { total: '100', pending: '0', currency: 'EUR' },
+        projects: [],
+      }],
+      estimates: [{
+        id: 'estimate-1',
+        type: 'estimates',
+        documentNumber: 'PRE-1',
+        displayStatus: 'sent',
+        issueDate: '2026-07-12',
+        total: 100,
+        currency: 'EUR',
+        projects: [],
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const salesOrderRow = dom.window.document.querySelector('.document-row');
+    const salesOrderIcon = salesOrderRow?.firstElementChild;
+    expect(salesOrderIcon?.classList.contains('document-kind-icon')).toBe(true);
+    expect(salesOrderIcon?.getAttribute('src')).toBe('/icons/document-kinds/sales-order.svg');
+    expect(salesOrderIcon?.getAttribute('alt')).toBe('');
+    expect(salesOrderIcon?.getAttribute('aria-hidden')).toBe('true');
+    expect(dom.window.getComputedStyle(salesOrderIcon).width).toBe('30px');
+
+    expect(dom.window.document.querySelector('.related-waybill-row')?.firstElementChild?.getAttribute('src'))
+      .toBe('/icons/document-kinds/waybill-refund.svg');
+    expect(dom.window.document.querySelector('.purchase-order-row')?.firstElementChild?.getAttribute('src'))
+      .toBe('/icons/document-kinds/purchase-order.svg');
+
+    dom.window.document.querySelector('[data-tab="waybills"]')?.click();
+    await waitForRender();
+    expect(Array.from(dom.window.document.querySelectorAll('.document-row .document-kind-icon'))
+      .map((icon) => icon.getAttribute('src')))
+      .toEqual(waybillKinds.map((kind) => `/icons/document-kinds/waybill-${kind}.svg`));
+
+    dom.window.document.querySelector('[data-tab="invoices"]')?.click();
+    await waitForRender();
+    expect(dom.window.document.querySelector('.document-row .document-kind-icon')?.getAttribute('src'))
+      .toBe('/icons/document-kinds/waybill-unclassified.svg');
+
+    dom.window.document.querySelector('[data-tab="estimates"]')?.click();
+    await waitForRender();
+    expect(dom.window.document.querySelector('.document-row .document-kind-icon')?.getAttribute('src'))
+      .toBe('/icons/document-kinds/estimate.svg');
+  });
+
   it('shows estimate displayStatus labels (Aceptado / Denegado)', async () => {
     const { dom } = loadCardBack({
       salesOrders: [],

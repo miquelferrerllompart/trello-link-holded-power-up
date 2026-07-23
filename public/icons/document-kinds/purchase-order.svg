@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42" role="img" aria-labelledby="title">
+  <title id="title">Pedido de compra</title>
+  <rect width="42" height="42" rx="12" fill="#E0E7FF"/>
+  <g transform="translate(10 10) scale(.9166667)" fill="none" stroke="#4338CA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 8H6"/>
+    <circle cx="10" cy="20" r="1"/>
+    <circle cx="18" cy="20" r="1"/>
+  </g>
+</svg>
