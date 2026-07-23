@@ -8,6 +8,7 @@
     body {
       --document-row-hover: #091e420f;
       --purchase-row-hover: #f3f0ff;
+      --waybill-row-hover: #e9f2ff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       margin: 0;
       padding: 0;
@@ -346,7 +347,7 @@
       transition: opacity 120ms ease, transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
     }
     .document-row:focus-within .document-actions,
-    .purchase-order-row:focus-within .document-actions,
+    .relation-child-row:focus-within .document-actions,
     .tag:focus-within .document-actions {
       opacity: 1;
       pointer-events: auto;
@@ -456,15 +457,15 @@
     }
     .document-total { font-weight: 700; }
     .document-pending-amount { color: #7f5f01; }
-    /* Relation rail — purchase orders render as tree children of their sales order. */
+    /* Relation rail — waybills and purchase orders are children of their sales order. */
     .relation-rail {
       display: grid;
       gap: 3px;
       margin: 1px 0 3px 6px;
       padding-left: 12px;
-      border-left: 2px solid #dcd6f7;
+      border-left: 2px solid #c8d4e3;
     }
-    .purchase-order-row {
+    .relation-child-row {
       position: relative;
       display: grid;
       grid-template-columns: minmax(58px, auto) 1fr auto;
@@ -474,16 +475,23 @@
       min-height: 38px;
       padding: 3px 8px 3px 4px;
       border-radius: 6px;
+    }
+    .purchase-order-row {
+      --relation-color: #dcd6f7;
       color: #5e4db2;
     }
-    .purchase-order-row::before {
+    .related-waybill-row {
+      --relation-color: #b8d7ee;
+      color: #0c66a1;
+    }
+    .relation-child-row::before {
       content: '';
       position: absolute;
       left: -12px;
       top: 50%;
       width: 10px;
       height: 2px;
-      background: #dcd6f7;
+      background: var(--relation-color);
     }
     .purchase-order-number {
       color: #5e4db2;
@@ -503,6 +511,22 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+    .related-waybill-number {
+      color: #0c66a1;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 16px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .related-waybill-label {
+      min-width: 0;
+      color: #626f86;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 16px;
     }
     .documents-button:active,
     .documents-scope-button:active,
@@ -617,6 +641,7 @@
       body {
         --document-row-hover: #a6c5e229;
         --purchase-row-hover: rgba(159, 143, 239, 0.16);
+        --waybill-row-hover: rgba(87, 157, 255, 0.14);
         color: #b6c2cf;
       }
       .section-label { color: #a9abaf; }
@@ -684,11 +709,13 @@
       .document-project-chip { background: #a1bdd914; color: #8c9bab; }
       .document-amounts { color: #b6c2cf; }
       .document-pending-amount { color: #f5cd47; }
-      .relation-rail { border-left-color: #454168; }
-      .purchase-order-row { color: #b8acf6; }
-      .purchase-order-row::before { background: #454168; }
+      .relation-rail { border-left-color: #45505f; }
+      .purchase-order-row { --relation-color: #615a91; color: #b8acf6; }
+      .related-waybill-row { --relation-color: #315a7a; color: #85b8ff; }
       .purchase-order-number { color: #b8acf6; }
       .purchase-order-supplier { color: #8c9bab; }
+      .related-waybill-number { color: #85b8ff; }
+      .related-waybill-label { color: #8c9bab; }
       .documents-page-button { background: #a6c5e229; color: #b6c2cf; }
       .documents-page-button:hover:not([disabled]) { background: #a6c5e23d; }
       .documents-page-label strong { color: #b6c2cf; }
@@ -702,15 +729,16 @@
         transition: opacity 120ms ease;
       }
       .document-row:focus-within .document-actions,
-      .purchase-order-row:focus-within .document-actions,
+      .relation-child-row:focus-within .document-actions,
       .tag:focus-within .document-actions { transform: translateY(-50%); }
       .document-link { transition: none; }
     }
     @media (hover: hover) and (pointer: fine) {
       .document-row:hover { background: var(--document-row-hover); }
       .purchase-order-row:hover { background: var(--purchase-row-hover); }
+      .related-waybill-row:hover { background: var(--waybill-row-hover); }
       .document-row:hover .document-actions,
-      .purchase-order-row:hover .document-actions,
+      .relation-child-row:hover .document-actions,
       .tag:hover .document-actions {
         opacity: 1;
         pointer-events: auto;
@@ -1100,7 +1128,7 @@
     function renderPurchaseOrderRow(purchaseOrder) {
       var number = getDocumentNumber(purchaseOrder);
       var supplier = purchaseOrder.supplier && purchaseOrder.supplier.name ? purchaseOrder.supplier.name : '';
-      return '<div class="purchase-order-row">' +
+      return '<div class="relation-child-row purchase-order-row">' +
         '<span class="purchase-order-number">#' + escapeHtml(number) + '</span>' +
         '<span class="purchase-order-supplier">' + escapeHtml(supplier) + '</span>' +
         renderPill(getDocumentPill(purchaseOrder)) +
@@ -1108,11 +1136,23 @@
       '</div>';
     }
 
+    function renderRelatedWaybillRow(waybill) {
+      var number = getDocumentNumber(waybill);
+      return '<div class="relation-child-row related-waybill-row">' +
+        '<span class="related-waybill-number">#' + escapeHtml(number) + '</span>' +
+        '<span class="related-waybill-label">Albarán</span>' +
+        renderPill(getDocumentPill(waybill)) +
+        renderDocumentActions(waybill, number) +
+      '</div>';
+    }
+
     function renderSalesOrderGroup(order, data, scope) {
       var html = renderDocumentRow(order, data, scope);
       var purchaseOrders = order.purchaseOrders || [];
-      if (purchaseOrders.length) {
+      var waybills = order.waybills || [];
+      if (purchaseOrders.length || waybills.length) {
         html += '<div class="relation-rail">' +
+          waybills.map(renderRelatedWaybillRow).join('') +
           purchaseOrders.map(renderPurchaseOrderRow).join('') +
         '</div>';
       }
@@ -1133,8 +1173,11 @@
       var purchaseOrdersNote = (tab.type === 'sales-orders' && result.purchaseOrdersError)
         ? '<div class="documents-note">No se pudieron cargar las compras.</div>'
         : '';
+      var waybillsNote = (tab.type === 'sales-orders' && result.waybillsError)
+        ? '<div class="documents-note">No se pudieron cargar los albaranes relacionados.</div>'
+        : '';
 
-      return '<div class="document-list">' + rows + '</div>' + purchaseOrdersNote;
+      return '<div class="document-list">' + rows + '</div>' + purchaseOrdersNote + waybillsNote;
     }
 
     function renderDocumentsLoading(tab) {

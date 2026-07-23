@@ -145,6 +145,7 @@ describe('Worker /v2 internal-API document routes', () => {
     const calledUrls = fetchImpl.mock.calls.map((call) => call[0]);
     expect(calledUrls).toContain(`${INTERNAL_BASE}/sales-orders?customerId=contact-1&projectId=project-1&page=1&pageSize=10`);
     expect(calledUrls).toContain(`${INTERNAL_BASE}/purchase-orders?customerId=contact-1&projectId=project-1&page=1&pageSize=100`);
+    expect(calledUrls).toContain(`${INTERNAL_BASE}/waybills?customerId=contact-1&projectId=project-1&page=1&pageSize=100`);
     expect(calledUrls.some((url: string) => url.includes('/shipped-items'))).toBe(false);
     expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({ Authorization: 'Bearer efk_test' });
     expect(body).toEqual({
@@ -165,6 +166,7 @@ describe('Worker /v2 internal-API document routes', () => {
         totalUnits: 10,
         projects: [{ id: 'project-1', name: 'Obra', color: '#fff' }],
         purchaseOrders: [],
+        waybills: [],
       }],
     });
   });
@@ -252,10 +254,81 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(body.results[1].purchaseOrders).toEqual([]);
   });
 
+  it('nests waybills under their source sales order and drops orphan/off-page waybills', async () => {
+    const salesOrder = (id: string, docNumber: string) => ({
+      id,
+      docNumber,
+      issueDate: '2026-07-14',
+      dueDate: null,
+      projects: [],
+      totalUnits: 5,
+      deliveryCount: 1,
+      internalStatus: 'in_process',
+    });
+    const waybill = (id: string, docNumber: string, sourceId: string | null) => ({
+      id,
+      docNumber,
+      issueDate: '2026-07-15',
+      workflowStatus: 'delivered',
+      approvedAt: '2026-07-16',
+      projects: [],
+      sourceOrder: sourceId ? { id: sourceId, docNumber: 'PV-26-008005' } : null,
+    });
+
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({
+          items: [
+            waybill('wb-1', 'ALB-26-000123', 'so-1'),
+            waybill('wb-2', 'ALB-26-000124', null),
+            waybill('wb-3', 'ALB-26-000125', 'so-off-page'),
+          ],
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+        });
+      }
+      return internalJson({
+        items: [salesOrder('so-1', 'PV-26-008005'), salesOrder('so-2', 'PV-26-008006')],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as {
+      results: Array<{ id: string; waybills: Array<Record<string, unknown>> }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=1&pageSize=100`,
+    );
+    expect(body.results[0].waybills).toEqual([{
+      type: 'waybills',
+      id: 'wb-1',
+      documentNumber: 'ALB-26-000123',
+      url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
+      issueDate: '2026-07-15',
+      workflowStatus: 'delivered',
+      approvedAt: '2026-07-16',
+      sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
+      projects: [],
+    }]);
+    expect(body.results[1].waybills).toEqual([]);
+  });
+
   it('keeps sales orders and flags purchaseOrdersError when the PO fetch fails', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders')) {
         return internalJson({ error: { code: 'SERVICE_UNAVAILABLE', message: 'later' } }, 503);
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
       }
       return internalJson({
         items: [{
@@ -289,6 +362,47 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(body.purchaseOrdersError).toBe(true);
     expect(body.results[0].id).toBe('so-1');
     expect(body.results[0].purchaseOrders).toEqual([]);
+  });
+
+  it('keeps sales orders and flags waybillsError when the related waybill fetch fails', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({ error: { code: 'SERVICE_UNAVAILABLE', message: 'later' } }, 503);
+      }
+      return internalJson({
+        items: [{
+          id: 'so-1',
+          docNumber: 'PV-26-008005',
+          issueDate: '2026-07-14',
+          dueDate: null,
+          projects: [],
+          totalUnits: 5,
+          deliveryCount: 0,
+          internalStatus: 'in_process',
+        }],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as {
+      purchaseOrdersError?: boolean;
+      waybillsError?: boolean;
+      results: Array<{ id: string; waybills: unknown[] }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.purchaseOrdersError).toBeUndefined();
+    expect(body.waybillsError).toBe(true);
+    expect(body.results[0].id).toBe('so-1');
+    expect(body.results[0].waybills).toEqual([]);
   });
 
   it('maps waybills passing through workflowStatus, approvedAt and sourceOrder', async () => {

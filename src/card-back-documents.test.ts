@@ -34,6 +34,7 @@ function buildDocumentsPage(documents, requestUrl, options) {
   const hasMore = startIndex + PAGE_SIZE < items.length;
   const body = { type, scope, page, pageSize: PAGE_SIZE, hasMore, results: slice };
   if (type === 'sales-orders' && options.purchaseOrdersError) body.purchaseOrdersError = true;
+  if (type === 'sales-orders' && options.waybillsError) body.waybillsError = true;
   return body;
 }
 
@@ -489,6 +490,38 @@ describe('card-back document view (internal API v2)', () => {
       .toEqual(['Pedidos venta', 'Albaranes', 'Facturas', 'Presupuestos']);
   });
 
+  it('nests waybills under their sales order with approval status and both app links', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1', {
+        waybills: [{
+          id: 'wb-1',
+          type: 'waybills',
+          documentNumber: 'ALB-1',
+          workflowStatus: 'delivered',
+          approvedAt: '2026-07-16',
+          issueDate: '2026-07-15',
+          url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
+          sourceOrder: { id: 'so-1', docNumber: 'PV-1' },
+          projects: [],
+        }],
+      })],
+      waybills: [],
+      estimates: [],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const row = dom.window.document.querySelector('.related-waybill-row');
+    expect(row).not.toBeNull();
+    expect(row?.textContent).toContain('#ALB-1');
+    expect(row?.textContent).toContain('Aprobado');
+    expect(row?.querySelector('.document-link--ef')?.getAttribute('href'))
+      .toBe('https://app.electricaferrer.es/albaran/wb-1');
+    expect(row?.querySelector('.document-link--holded')?.getAttribute('href'))
+      .toBe('https://app.holded.com/sales/waybills#open:waybill-wb-1');
+  });
+
   it('keeps sales orders visible and warns quietly when purchase orders fail to load', async () => {
     const { dom } = loadCardBack(
       { salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] },
@@ -500,6 +533,19 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(contentText(dom)).toContain('#PV-1');
     expect(contentText(dom)).toContain('No se pudieron cargar las compras.');
+  });
+
+  it('keeps sales orders visible and warns quietly when related waybills fail to load', async () => {
+    const { dom } = loadCardBack(
+      { salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] },
+      { waybillsError: true },
+    );
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(contentText(dom)).toContain('#PV-1');
+    expect(contentText(dom)).toContain('No se pudieron cargar los albaranes relacionados.');
   });
 
   it('moves focus and lazy-loads document tabs with the arrow keys', async () => {
