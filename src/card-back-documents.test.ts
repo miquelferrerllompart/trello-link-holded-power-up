@@ -216,6 +216,15 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.getComputedStyle(row?.querySelector('.document-app-icon')).width).toBe('28px');
   });
 
+  it('keeps destination actions visible whenever any available pointer is coarse', () => {
+    const { dom } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
+    const css = Array.from(dom.window.document.querySelectorAll('style'))
+      .map((style) => style.textContent)
+      .join('\n');
+
+    expect(css).toContain('@media (hover: none), (any-pointer: coarse)');
+  });
+
   it('shows waybill approval labels (Sin aprobar / Aprobado)', async () => {
     const { dom } = loadCardBack({
       salesOrders: [],
