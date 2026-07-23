@@ -528,7 +528,7 @@ describe('card-back document view (internal API v2)', () => {
       .toEqual(['Pedidos venta', 'Albaranes', 'Facturas', 'Presupuestos']);
   });
 
-  it('shows material and refund kinds as subtitles beneath each waybill number', async () => {
+  it('shows kind subtitles and groups each related waybill status beside its identity', async () => {
     const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', {
         waybills: [
@@ -567,7 +567,11 @@ describe('card-back document view (internal API v2)', () => {
 
     const rows = dom.window.document.querySelectorAll('.related-waybill-row');
     expect(rows).toHaveLength(2);
-    const materialIdentity = rows[0].querySelector('.related-waybill-identity');
+    const materialMain = rows[0].querySelector('.related-waybill-main');
+    expect(materialMain?.children[0].classList.contains('related-waybill-identity')).toBe(true);
+    expect(materialMain?.children[1].classList.contains('document-pill')).toBe(true);
+    expect(materialMain?.children[1].textContent).toBe('Aprobado');
+    const materialIdentity = materialMain?.children[0];
     expect(materialIdentity?.children[0].classList.contains('related-waybill-number')).toBe(true);
     expect(materialIdentity?.children[0].textContent).toContain('#ALB-1');
     expect(materialIdentity?.children[1].classList.contains('waybill-kind--material')).toBe(true);
@@ -577,7 +581,10 @@ describe('card-back document view (internal API v2)', () => {
       .toBe('https://app.electricaferrer.es/albaran/wb-1');
     expect(rows[0].querySelector('.document-link--holded')?.getAttribute('href'))
       .toBe('https://app.holded.com/sales/waybills#open:waybill-wb-1');
-    const refundIdentity = rows[1].querySelector('.related-waybill-identity');
+    const refundMain = rows[1].querySelector('.related-waybill-main');
+    expect(refundMain?.children[1].classList.contains('document-pill')).toBe(true);
+    expect(refundMain?.children[1].textContent).toBe('Sin aprobar');
+    const refundIdentity = refundMain?.children[0];
     expect(refundIdentity?.children[0].textContent).toContain('#ALB-2');
     expect(refundIdentity?.children[1].classList.contains('waybill-kind--refund')).toBe(true);
     expect(refundIdentity?.children[1].textContent).toContain('Devolución');
