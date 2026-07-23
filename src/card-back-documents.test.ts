@@ -225,13 +225,13 @@ describe('card-back document view (internal API v2)', () => {
     expect(css).toContain('@media (hover: none), (any-pointer: coarse)');
   });
 
-  it('keeps purchase-order status clear of always-visible touch actions', () => {
+  it('keeps document dates clear of always-visible touch actions', () => {
     const { dom } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
     const css = Array.from(dom.window.document.querySelectorAll('style'))
       .map((style) => style.textContent)
       .join('\n');
 
-    expect(css).toContain('.purchase-order-row { padding-right: 76px; }');
+    expect(css).toContain('.document-date { padding-right: 76px; }');
   });
 
   it('shows waybill approval labels (Sin aprobar / Aprobado)', async () => {
@@ -287,7 +287,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(identities).toHaveLength(kinds.length);
     kinds.forEach(([kind, label], index) => {
       expect(identities[index].children[0].classList.contains('document-number')).toBe(true);
-      expect(identities[index].children[0].textContent).toBe(`#ALB-${index + 1}`);
+      expect(identities[index].children[0].textContent).toBe(`ALB-${index + 1}`);
       expect(identities[index].children[1].classList.contains(`waybill-kind--${kind}`)).toBe(true);
       expect(identities[index].children[1].textContent).toBe(label);
     });
@@ -297,6 +297,7 @@ describe('card-back document view (internal API v2)', () => {
     const waybillKinds = ['material', 'labour', 'mixed', 'extra', 'refund', 'unclassified'];
     const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', {
+        approvedAt: '2026-07-14T08:45:00',
         waybills: [{
           id: 'related-waybill',
           type: 'waybills',
@@ -354,12 +355,30 @@ describe('card-back document view (internal API v2)', () => {
     expect(salesOrderIcon?.getAttribute('src')).toBe('/icons/document-kinds/sales-order.svg');
     expect(salesOrderIcon?.getAttribute('alt')).toBe('');
     expect(salesOrderIcon?.getAttribute('aria-hidden')).toBe('true');
-    expect(dom.window.getComputedStyle(salesOrderIcon).width).toBe('30px');
+    expect(dom.window.getComputedStyle(salesOrderIcon).width).toBe('26px');
+    expect(dom.window.getComputedStyle(salesOrderIcon).height).toBe('26px');
+    expect(dom.window.getComputedStyle(salesOrderIcon).borderRadius).toBe('5px');
+    expect(dom.window.getComputedStyle(salesOrderRow).minHeight).toBe('36px');
+    expect(dom.window.getComputedStyle(salesOrderRow?.querySelector('.document-number')).color)
+      .toBe('rgb(68, 84, 111)');
+    expect(salesOrderRow?.querySelector('.document-date')?.textContent).toBe('14/07/2026 08:45');
 
-    expect(dom.window.document.querySelector('.related-waybill-row')?.firstElementChild?.getAttribute('src'))
-      .toBe('/icons/document-kinds/waybill-refund.svg');
-    expect(dom.window.document.querySelector('.purchase-order-row')?.firstElementChild?.getAttribute('src'))
+    const relatedWaybillRow = dom.window.document.querySelector('.related-waybill-row');
+    const relatedWaybillIcon = relatedWaybillRow?.firstElementChild;
+    expect(relatedWaybillIcon?.getAttribute('src')).toBe('/icons/document-kinds/waybill-refund.svg');
+    expect(dom.window.getComputedStyle(relatedWaybillIcon).width).toBe('24px');
+    expect(dom.window.getComputedStyle(relatedWaybillIcon).height).toBe('24px');
+    expect(dom.window.getComputedStyle(relatedWaybillIcon).borderRadius).toBe('4px');
+    expect(dom.window.getComputedStyle(relatedWaybillRow).minHeight).toBe('36px');
+    expect(dom.window.getComputedStyle(relatedWaybillRow?.querySelector('.related-waybill-number')).color)
+      .toBe('rgb(68, 84, 111)');
+
+    const purchaseOrderRow = dom.window.document.querySelector('.purchase-order-row');
+    expect(purchaseOrderRow?.firstElementChild?.getAttribute('src'))
       .toBe('/icons/document-kinds/purchase-order.svg');
+    expect(dom.window.getComputedStyle(purchaseOrderRow).minHeight).toBe('34px');
+    expect(dom.window.getComputedStyle(purchaseOrderRow?.querySelector('.purchase-order-number')).color)
+      .toBe('rgb(68, 84, 111)');
 
     dom.window.document.querySelector('[data-tab="waybills"]')?.click();
     await waitForRender();
@@ -370,7 +389,7 @@ describe('card-back document view (internal API v2)', () => {
     dom.window.document.querySelector('[data-tab="invoices"]')?.click();
     await waitForRender();
     expect(dom.window.document.querySelector('.document-row .document-kind-icon')?.getAttribute('src'))
-      .toBe('/icons/document-kinds/waybill-unclassified.svg');
+      .toBe('/icons/document-kinds/invoice.svg');
 
     dom.window.document.querySelector('[data-tab="estimates"]')?.click();
     await waitForRender();
@@ -383,7 +402,7 @@ describe('card-back document view (internal API v2)', () => {
       salesOrders: [],
       waybills: [],
       estimates: [
-        { id: 'est-1', type: 'estimates', documentNumber: 'PRE-1', displayStatus: 'accepted', issueDate: '2026-07-01', total: 1234.56, currency: 'EUR', projects: [] },
+        { id: 'est-1', type: 'estimates', documentNumber: 'PRE-1', displayStatus: 'accepted', sentAt: '2026-07-01T12:05:00', issueDate: '2026-07-01', total: 1234.56, currency: 'EUR', projects: [] },
         { id: 'est-2', type: 'estimates', documentNumber: 'PRE-2', displayStatus: 'rejected', issueDate: '2026-07-02', total: 50, currency: 'EUR', projects: [] },
       ],
     });
@@ -398,6 +417,8 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).toContain('Denegado');
     expect(text).toContain('1.234,56 €');
     expect(text).not.toContain('Completado');
+    expect(dom.window.document.querySelector('.document-row .document-date')?.textContent)
+      .toBe('01/07/2026 12:05');
   });
 
   it('shows currency symbols instead of three-letter codes for estimate totals', async () => {
@@ -431,6 +452,7 @@ describe('card-back document view (internal API v2)', () => {
         documentNumber: 'F-26-000321',
         url: 'https://app.holded.com/sales/revenue#open:invoice-invoice-1',
         issueDate: '2026-07-15',
+        approvedAt: '2026-07-15T09:00:00',
         dueDate: '2026-08-15',
         displayStatus: 'partial',
         lifecycleStatus: 'issued',
@@ -457,10 +479,11 @@ describe('card-back document view (internal API v2)', () => {
     expect(row?.querySelector('.document-link--ef')).toBeNull();
     expect(row?.querySelector('.document-link--holded')?.getAttribute('href'))
       .toBe('https://app.holded.com/sales/revenue#open:invoice-invoice-1');
-    expect(row?.textContent).toContain('#F-26-000321');
+    expect(row?.textContent).toContain('F-26-000321');
     expect(row?.textContent).toContain('Parcial');
     expect(row?.textContent).toContain('1.210,00 €');
     expect(row?.textContent).toContain('Pendiente 1.000,00 €');
+    expect(row?.querySelector('.document-date')?.textContent).toBe('15/07/2026 09:00');
 
     const invoiceCall = urls.find((url) => url.includes('type=invoices'));
     expect(invoiceCall).toContain('contactId=contact-1');
@@ -489,15 +512,15 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(Array.from(dom.window.document.querySelectorAll('.documents-scope-button')).map((b) => b.textContent?.trim()))
       .toEqual(['Proyecto vinculado', 'Todos']);
-    expect(contentText(dom)).toContain('#PV-1');
-    expect(contentText(dom)).not.toContain('#PV-2');
+    expect(contentText(dom)).toContain('PV-1');
+    expect(contentText(dom)).not.toContain('PV-2');
 
     dom.window.document.querySelector('[data-document-scope="all"]')?.click();
     await waitForRender();
 
     const text = contentText(dom);
-    expect(text).toContain('#PV-1');
-    expect(text).toContain('#PV-2');
+    expect(text).toContain('PV-1');
+    expect(text).toContain('PV-2');
     expect(text).toContain('Otra obra'); // muted project chip on the off-project row
     expect(dom.window.document.querySelectorAll('.document-list')).toHaveLength(1);
 
@@ -536,8 +559,8 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 2');
     const numbers = Array.from(dom.window.document.querySelectorAll('.document-number')).map((el) => el.textContent);
-    expect(numbers).toContain('#PV-11');
-    expect(numbers).not.toContain('#PV-1');
+    expect(numbers).toContain('PV-11');
+    expect(numbers).not.toContain('PV-1');
   });
 
   it('hides pagination when a single short page fits', async () => {
@@ -572,14 +595,14 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 2');
-    expect(contentText(dom)).toContain('#PRE-11');
+    expect(contentText(dom)).toContain('PRE-11');
     expect(urls.some((u) => u.includes('type=estimates') && u.includes('cursor=10'))).toBe(true);
     expect(dom.window.document.querySelector('.documents-page-button[aria-label="Página siguiente"]')?.disabled).toBe(true);
 
     dom.window.document.querySelector('.documents-page-button[aria-label="Página anterior"]')?.click();
     await waitForRender();
     expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 1');
-    expect(contentText(dom)).toContain('#PRE-1');
+    expect(contentText(dom)).toContain('PRE-1');
   });
 
   it('shows a sync message and retry on DATA_NOT_READY', async () => {
@@ -601,6 +624,7 @@ describe('card-back document view (internal API v2)', () => {
           documentNumber: 'PC-1',
           internalStatus: 'awaiting_receipt',
           issueDate: '2026-07-13',
+          approvedAt: '2026-07-13T09:17:00',
           supplier: { id: 's1', name: 'Rexel' },
           total: 250,
           currency: 'EUR',
@@ -621,8 +645,16 @@ describe('card-back document view (internal API v2)', () => {
       .toBe('https://app.electricaferrer.es/pedido-compra/po-1');
     expect(subRow.querySelector('.document-link--holded')?.getAttribute('href'))
       .toBe('https://app.holded.com/sales/orders#open:order-po-1');
+    const identity = subRow.querySelector('.purchase-order-identity');
+    expect(identity?.children[0].classList.contains('purchase-order-number')).toBe(true);
+    expect(identity?.children[1].classList.contains('purchase-order-supplier')).toBe(true);
+    expect(identity?.children[1].textContent).toBe('Rexel');
+    expect(identity?.nextElementSibling?.classList.contains('document-pill')).toBe(true);
+    expect(identity?.nextElementSibling?.textContent).toBe('Pendiente recibir');
+    expect(dom.window.getComputedStyle(identity?.nextElementSibling).justifySelf).toBe('start');
+    expect(subRow.querySelector('.document-date')?.textContent).toBe('13/07/2026 09:17');
     const text = contentText(dom);
-    expect(text).toContain('#PC-1');
+    expect(text).toContain('PC-1');
     expect(text).toContain('Rexel');
     expect(text).toContain('Pendiente recibir');
 
@@ -631,7 +663,7 @@ describe('card-back document view (internal API v2)', () => {
       .toEqual(['Pedidos venta', 'Albaranes', 'Facturas', 'Presupuestos']);
   });
 
-  it('shows kind subtitles and groups each related waybill status beside its identity', async () => {
+  it('shows muted kind subtitles, status beside the identity, and dates on related waybills', async () => {
     const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', {
         waybills: [
@@ -641,7 +673,7 @@ describe('card-back document view (internal API v2)', () => {
             documentNumber: 'ALB-1',
             kind: 'material',
             workflowStatus: 'delivered',
-            approvedAt: '2026-07-16',
+            approvedAt: '2026-07-16T14:25:00',
             issueDate: '2026-07-15',
             url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
             sourceOrder: { id: 'so-1', docNumber: 'PV-1' },
@@ -676,10 +708,12 @@ describe('card-back document view (internal API v2)', () => {
     expect(materialMain?.children[1].textContent).toBe('Aprobado');
     const materialIdentity = materialMain?.children[0];
     expect(materialIdentity?.children[0].classList.contains('related-waybill-number')).toBe(true);
-    expect(materialIdentity?.children[0].textContent).toContain('#ALB-1');
+    expect(materialIdentity?.children[0].textContent).toContain('ALB-1');
     expect(materialIdentity?.children[1].classList.contains('waybill-kind--material')).toBe(true);
     expect(materialIdentity?.children[1].textContent).toContain('Material');
+    expect(dom.window.getComputedStyle(materialIdentity?.children[1]).color).toBe('rgb(107, 119, 140)');
     expect(rows[0].textContent).toContain('Aprobado');
+    expect(rows[0].querySelector('.document-date')?.textContent).toBe('16/07/2026 14:25');
     expect(rows[0].querySelector('.document-link--ef')?.getAttribute('href'))
       .toBe('https://app.electricaferrer.es/albaran/wb-1');
     expect(rows[0].querySelector('.document-link--holded')?.getAttribute('href'))
@@ -688,10 +722,12 @@ describe('card-back document view (internal API v2)', () => {
     expect(refundMain?.children[1].classList.contains('document-pill')).toBe(true);
     expect(refundMain?.children[1].textContent).toBe('Sin aprobar');
     const refundIdentity = refundMain?.children[0];
-    expect(refundIdentity?.children[0].textContent).toContain('#ALB-2');
+    expect(refundIdentity?.children[0].textContent).toContain('ALB-2');
     expect(refundIdentity?.children[1].classList.contains('waybill-kind--refund')).toBe(true);
     expect(refundIdentity?.children[1].textContent).toContain('Devolución');
+    expect(dom.window.getComputedStyle(refundIdentity?.children[1]).color).toBe('rgb(107, 119, 140)');
     expect(rows[1].textContent).toContain('Sin aprobar');
+    expect(rows[1].querySelector('.document-date')?.textContent).toBe('16/07/2026');
   });
 
   it('keeps sales orders visible and warns quietly when purchase orders fail to load', async () => {
@@ -703,7 +739,7 @@ describe('card-back document view (internal API v2)', () => {
     expand(dom);
     await waitForRender();
 
-    expect(contentText(dom)).toContain('#PV-1');
+    expect(contentText(dom)).toContain('PV-1');
     expect(contentText(dom)).toContain('No se pudieron cargar las compras.');
   });
 
@@ -716,7 +752,7 @@ describe('card-back document view (internal API v2)', () => {
     expand(dom);
     await waitForRender();
 
-    expect(contentText(dom)).toContain('#PV-1');
+    expect(contentText(dom)).toContain('PV-1');
     expect(contentText(dom)).toContain('No se pudieron cargar los albaranes relacionados.');
   });
 
@@ -739,7 +775,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(waybillTab?.getAttribute('aria-selected')).toBe('true');
     expect(waybillTab?.tabIndex).toBe(0);
     expect(dom.window.document.activeElement).toBe(waybillTab);
-    expect(contentText(dom)).toContain('#ALB-1');
+    expect(contentText(dom)).toContain('ALB-1');
   });
 
   it('announces a stable loading panel while a document page is pending', async () => {
@@ -761,7 +797,7 @@ describe('card-back document view (internal API v2)', () => {
     const loadedPanel = dom.window.document.querySelector('#documents-panel');
     expect(loadedPanel?.getAttribute('aria-busy')).toBe('false');
     expect(loadedPanel?.querySelectorAll('.documents-skeleton-row')).toHaveLength(0);
-    expect(loadedPanel?.textContent).toContain('#PV-1');
+    expect(loadedPanel?.textContent).toContain('PV-1');
   });
 
   it('shows always-visible link placeholders and opens the link popups when nothing is linked', async () => {

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42" role="img" aria-labelledby="title">
+  <title id="title">Producto</title>
+  <rect width="42" height="42" rx="8" fill="#ECFEFF"/>
+  <g transform="translate(10 10) scale(.9166667)" fill="none" stroke="#0E7490" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 13 13 20 4 11V4h7z"/>
+    <circle cx="8.5" cy="8.5" r="1.25"/>
+    <path d="m13 7 4 4"/>
+  </g>
+</svg>

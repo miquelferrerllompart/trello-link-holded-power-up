@@ -318,29 +318,29 @@
     .document-row {
       position: relative;
       display: grid;
-      grid-template-columns: 30px minmax(74px, auto) 1fr auto;
+      grid-template-columns: 26px minmax(74px, auto) 1fr auto;
       align-items: center;
       gap: 6px;
       box-sizing: border-box;
-      min-height: 42px;
-      padding: 6px 8px;
+      min-height: 36px;
+      padding: 4px 6px;
       border-radius: 6px;
       color: #172b4d;
     }
     .document-row--waybill {
-      min-height: 44px;
+      min-height: 38px;
     }
     .document-kind-icon {
       display: block;
-      width: 30px;
-      height: 30px;
-      border-radius: 9px;
+      width: 26px;
+      height: 26px;
+      border-radius: 5px;
       object-fit: contain;
     }
     .document-kind-icon--nested {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
     }
     .document-actions {
       position: absolute;
@@ -411,7 +411,7 @@
       stroke-width: 2.4;
     }
     .document-number {
-      color: #0c66a1;
+      color: #44546f;
       font-size: 13px;
       line-height: 18px;
       font-weight: 600;
@@ -483,24 +483,26 @@
     .relation-child-row {
       position: relative;
       display: grid;
-      grid-template-columns: 28px minmax(58px, auto) 1fr auto;
+      grid-template-columns: 24px minmax(58px, auto) 1fr auto;
       align-items: center;
       gap: 6px;
       box-sizing: border-box;
-      min-height: 38px;
-      padding: 3px 8px 3px 4px;
+      min-height: 34px;
+      padding: 2px 6px 2px 4px;
       border-radius: 6px;
     }
     .purchase-order-row {
       --relation-color: #dcd6f7;
+      grid-template-columns: 24px minmax(74px, auto) minmax(0, 1fr) auto;
       color: #5e4db2;
+    }
+    .purchase-order-row > .document-pill {
+      justify-self: start;
     }
     .related-waybill-row {
       --relation-color: #b8d7ee;
-      grid-template-columns: 28px minmax(0, 1fr);
-      min-height: 42px;
-      padding-top: 4px;
-      padding-bottom: 4px;
+      grid-template-columns: 24px minmax(0, 1fr) auto;
+      min-height: 36px;
       color: #0c66a1;
     }
     .relation-child-row::before {
@@ -512,8 +514,14 @@
       height: 2px;
       background: var(--relation-color);
     }
+    .purchase-order-identity {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      align-items: flex-start;
+    }
     .purchase-order-number {
-      color: #5e4db2;
+      color: #44546f;
       font-size: 12px;
       line-height: 16px;
       font-weight: 600;
@@ -524,9 +532,9 @@
     .purchase-order-supplier {
       min-width: 0;
       color: #6b778c;
-      font-size: 12px;
-      font-weight: 500;
-      line-height: 16px;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 12px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -548,7 +556,7 @@
       flex: none;
     }
     .related-waybill-number {
-      color: #0c66a1;
+      color: #44546f;
       font-size: 12px;
       font-weight: 600;
       line-height: 16px;
@@ -557,29 +565,12 @@
       white-space: nowrap;
     }
     .waybill-kind {
+      color: #6b778c;
       font-size: 10px;
       font-weight: 600;
       letter-spacing: 0.01em;
       line-height: 12px;
       white-space: nowrap;
-    }
-    .waybill-kind--material {
-      color: #0c66e4;
-    }
-    .waybill-kind--labour {
-      color: #6e5dc6;
-    }
-    .waybill-kind--mixed {
-      color: #227d9b;
-    }
-    .waybill-kind--extra {
-      color: #a54800;
-    }
-    .waybill-kind--refund {
-      color: #c9372c;
-    }
-    .waybill-kind--unclassified {
-      color: #626f86;
     }
     .documents-button:active,
     .documents-scope-button:active,
@@ -751,7 +742,7 @@
         box-shadow: -10px 0 12px #22272b, 0 2px 5px #030404;
       }
       .document-app-icon { border-color: #a6c5e23d; box-shadow: 0 1px 2px #030404; }
-      .document-number { color: #579dff; }
+      .document-number { color: #b6c2cf; }
       .document-pill { background: #a1bdd914; color: #b6c2cf; }
       .document-pill.done { background: rgba(75, 206, 151, 0.16); color: #4bce97; }
       .document-pill.partial { background: rgba(245, 205, 71, 0.14); color: #f5cd47; }
@@ -765,15 +756,10 @@
       .relation-rail { border-left-color: #45505f; }
       .purchase-order-row { --relation-color: #615a91; color: #b8acf6; }
       .related-waybill-row { --relation-color: #315a7a; color: #85b8ff; }
-      .purchase-order-number { color: #b8acf6; }
+      .purchase-order-number { color: #b6c2cf; }
       .purchase-order-supplier { color: #8c9bab; }
-      .related-waybill-number { color: #85b8ff; }
-      .waybill-kind--material { color: #85b8ff; }
-      .waybill-kind--labour { color: #b8acf6; }
-      .waybill-kind--mixed { color: #60c6d2; }
-      .waybill-kind--extra { color: #f5cd47; }
-      .waybill-kind--refund { color: #f87168; }
-      .waybill-kind--unclassified { color: #8c9bab; }
+      .related-waybill-number { color: #b6c2cf; }
+      .waybill-kind { color: #8c9bab; }
       .documents-page-button { background: #a6c5e229; color: #b6c2cf; }
       .documents-page-button:hover:not([disabled]) { background: #a6c5e23d; }
       .documents-page-label strong { color: #b6c2cf; }
@@ -810,7 +796,6 @@
         transform: translateY(-50%);
       }
       .document-date { padding-right: 76px; }
-      .purchase-order-row { padding-right: 76px; }
       .tag-close { opacity: 1; }
       .tag-name { padding-right: 112px; }
     }
@@ -830,7 +815,7 @@
         justify-content: center;
       }
       .document-row {
-        grid-template-columns: 30px minmax(0, 1fr) auto;
+        grid-template-columns: 26px minmax(0, 1fr) auto;
       }
       .document-row > .document-kind-icon {
         grid-column: 1;
@@ -1030,16 +1015,28 @@
     function formatDateLabel(value) {
       if (!value) return '';
       var text = String(value);
-      var dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      var dateOnly = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
       if (dateOnly) return dateOnly[3] + '/' + dateOnly[2] + '/' + dateOnly[1];
+
+      var isoDateTime = text.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+      if (isoDateTime) {
+        return isoDateTime[3] + '/' + isoDateTime[2] + '/' + isoDateTime[1] +
+          ' ' + isoDateTime[4] + ':' + isoDateTime[5];
+      }
 
       var date = new Date(text);
       if (Number.isNaN(date.getTime())) return text;
-      return date.toLocaleDateString('es-ES', {
+      var dateLabel = date.toLocaleDateString('es-ES', {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
       });
+      var timeLabel = date.toLocaleTimeString('es-ES', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      return dateLabel + ' ' + timeLabel;
     }
 
     function getDocumentNumber(documentItem) {
@@ -1051,7 +1048,8 @@
     }
 
     function getDocumentDateText(documentItem) {
-      if (documentItem.issueDate) return formatDateLabel(documentItem.issueDate);
+      var statusDate = documentItem.approvedAt || documentItem.sentAt || documentItem.issueDate;
+      if (statusDate) return formatDateLabel(statusDate);
       return 'Sin fecha';
     }
 
@@ -1191,9 +1189,7 @@
         'sales-orders': '/icons/document-kinds/sales-order.svg',
         'purchase-orders': '/icons/document-kinds/purchase-order.svg',
         'estimates': '/icons/document-kinds/estimate.svg',
-        // The supplied set has no canonical invoice identity yet. Keep the
-        // fallback neutral so invoices are never mistaken for sales orders.
-        'invoices': '/icons/document-kinds/waybill-unclassified.svg'
+        'invoices': '/icons/document-kinds/invoice.svg'
       };
       return sources[documentItem.type] || '/icons/document-kinds/waybill-unclassified.svg';
     }
@@ -1208,10 +1204,10 @@
       var isWaybill = documentItem.type === 'waybills';
       var identity = isWaybill
         ? '<span class="document-waybill-identity">' +
-            '<span class="document-number">#' + escapeHtml(number) + '</span>' +
+            '<span class="document-number">' + escapeHtml(number) + '</span>' +
             renderWaybillKind(documentItem.kind) +
           '</span>'
-        : '<span class="document-number">#' + escapeHtml(number) + '</span>';
+        : '<span class="document-number">' + escapeHtml(number) + '</span>';
       return '<div class="document-row' + (isWaybill ? ' document-row--waybill' : '') + '">' +
         renderDocumentKindIcon(documentItem, false) +
         identity +
@@ -1230,9 +1226,12 @@
       var supplier = purchaseOrder.supplier && purchaseOrder.supplier.name ? purchaseOrder.supplier.name : '';
       return '<div class="relation-child-row purchase-order-row">' +
         renderDocumentKindIcon(purchaseOrder, true) +
-        '<span class="purchase-order-number">#' + escapeHtml(number) + '</span>' +
-        '<span class="purchase-order-supplier">' + escapeHtml(supplier) + '</span>' +
+        '<span class="purchase-order-identity">' +
+          '<span class="purchase-order-number">' + escapeHtml(number) + '</span>' +
+          '<span class="purchase-order-supplier">' + escapeHtml(supplier) + '</span>' +
+        '</span>' +
         renderPill(getDocumentPill(purchaseOrder)) +
+        '<span class="document-date">' + escapeHtml(getDocumentDateText(purchaseOrder)) + '</span>' +
         renderDocumentActions(purchaseOrder, number) +
       '</div>';
     }
@@ -1258,11 +1257,12 @@
         renderDocumentKindIcon(waybill, true) +
         '<span class="related-waybill-main">' +
           '<span class="related-waybill-identity">' +
-            '<span class="related-waybill-number">#' + escapeHtml(number) + '</span>' +
+            '<span class="related-waybill-number">' + escapeHtml(number) + '</span>' +
             renderWaybillKind(waybill.kind) +
           '</span>' +
           renderPill(getDocumentPill(waybill)) +
         '</span>' +
+        '<span class="document-date">' + escapeHtml(getDocumentDateText(waybill)) + '</span>' +
         renderDocumentActions(waybill, number) +
       '</div>';
     }

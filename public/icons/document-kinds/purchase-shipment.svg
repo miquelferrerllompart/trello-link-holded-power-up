@@ -1,8 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 42 42" role="img" aria-labelledby="title">
   <title id="title">Albarán de compra</title>
-  <rect width="42" height="42" rx="12" fill="#F0F0F0"/>
-  <g transform="translate(10 10) scale(.9166667)" fill="none" stroke="#64748B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M5 3h14v18H5z"/>
-    <path d="M8 8h8M8 12h8M8 16h5"/>
+  <rect width="42" height="42" rx="8" fill="#CCFBF1"/>
+  <g transform="translate(10 10) scale(.9166667)" fill="none" stroke="#0F766E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 13h4l2 3h4l2-3h4v7H4z"/>
+    <path d="M12 3v9M8.5 8.5 12 12l3.5-3.5"/>
   </g>
 </svg>
