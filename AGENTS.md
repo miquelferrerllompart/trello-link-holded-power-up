@@ -138,7 +138,8 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 - **Purchase orders and waybills** are fetched alongside sales orders (independent bounded loops over
   `/purchase-orders` and `/waybills`) and nested under each order by `sourceOrder.id`; orphan/off-page
   relations are dropped. Only `material` and `refund` waybill kinds render beneath sales orders;
-  other waybill kinds remain available in the main Albaranes tab. Degraded relation fetches add
+  every waybill kind remains available with a Spanish kind subtitle in the main Albaranes tab.
+  Degraded relation fetches add
   `purchaseOrdersError: true` or `waybillsError: true` independently. No extra nested tabs — both
   relation types render as tree children.
 - `worker/holded-v2.ts` only builds `app.holded.com` deep-link URLs for document rows (no API client left).

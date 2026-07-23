@@ -327,6 +327,9 @@
       border-radius: 6px;
       color: #172b4d;
     }
+    .document-row--waybill {
+      min-height: 42px;
+    }
     .document-actions {
       position: absolute;
       z-index: 1;
@@ -516,7 +519,8 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .related-waybill-identity {
+    .related-waybill-identity,
+    .document-waybill-identity {
       display: flex;
       min-width: 0;
       flex-direction: column;
@@ -541,8 +545,20 @@
     .waybill-kind--material {
       color: #0c66e4;
     }
+    .waybill-kind--labour {
+      color: #6e5dc6;
+    }
+    .waybill-kind--mixed {
+      color: #227d9b;
+    }
+    .waybill-kind--extra {
+      color: #a54800;
+    }
     .waybill-kind--refund {
       color: #c9372c;
+    }
+    .waybill-kind--unclassified {
+      color: #626f86;
     }
     .documents-button:active,
     .documents-scope-button:active,
@@ -732,7 +748,11 @@
       .purchase-order-supplier { color: #8c9bab; }
       .related-waybill-number { color: #85b8ff; }
       .waybill-kind--material { color: #85b8ff; }
+      .waybill-kind--labour { color: #b8acf6; }
+      .waybill-kind--mixed { color: #60c6d2; }
+      .waybill-kind--extra { color: #f5cd47; }
       .waybill-kind--refund { color: #f87168; }
+      .waybill-kind--unclassified { color: #8c9bab; }
       .documents-page-button { background: #a6c5e229; color: #b6c2cf; }
       .documents-page-button:hover:not([disabled]) { background: #a6c5e23d; }
       .documents-page-label strong { color: #b6c2cf; }
@@ -1130,8 +1150,15 @@
 
     function renderDocumentRow(documentItem, data, scope) {
       var number = getDocumentNumber(documentItem);
-      return '<div class="document-row">' +
-        '<span class="document-number">#' + escapeHtml(number) + '</span>' +
+      var isWaybill = documentItem.type === 'waybills';
+      var identity = isWaybill
+        ? '<span class="document-waybill-identity">' +
+            '<span class="document-number">#' + escapeHtml(number) + '</span>' +
+            renderWaybillKind(documentItem.kind) +
+          '</span>'
+        : '<span class="document-number">#' + escapeHtml(number) + '</span>';
+      return '<div class="document-row' + (isWaybill ? ' document-row--waybill' : '') + '">' +
+        identity +
         '<span class="document-meta">' +
           renderPill(getDocumentPill(documentItem)) +
           renderProjectChip(documentItem, data, scope) +
@@ -1154,13 +1181,18 @@
     }
 
     function renderWaybillKind(kind) {
-      if (kind === 'material') {
-        return '<span class="waybill-kind waybill-kind--material">Material</span>';
-      }
-      if (kind === 'refund') {
-        return '<span class="waybill-kind waybill-kind--refund">Devolución</span>';
-      }
-      return '';
+      var labels = {
+        material: 'Material',
+        labour: 'Trabajo',
+        mixed: 'Trabajo con material',
+        extra: 'Trabajo extra',
+        refund: 'Devolución',
+        unclassified: 'Sin clasificar'
+      };
+      var label = labels[kind];
+      return label
+        ? '<span class="waybill-kind waybill-kind--' + kind + '">' + label + '</span>'
+        : '';
     }
 
     function renderRelatedWaybillRow(waybill) {

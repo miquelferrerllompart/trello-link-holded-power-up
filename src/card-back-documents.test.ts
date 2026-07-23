@@ -237,6 +237,44 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).not.toContain('Preparado');
   });
 
+  it('shows every waybill kind as a subtitle beneath its number in the Albaranes list', async () => {
+    const kinds = [
+      ['material', 'Material'],
+      ['labour', 'Trabajo'],
+      ['mixed', 'Trabajo con material'],
+      ['extra', 'Trabajo extra'],
+      ['refund', 'Devolución'],
+      ['unclassified', 'Sin clasificar'],
+    ];
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: kinds.map(([kind], index) => ({
+        id: `wb-${index + 1}`,
+        type: 'waybills',
+        documentNumber: `ALB-${index + 1}`,
+        kind,
+        workflowStatus: 'prepared',
+        issueDate: '2026-07-10',
+        projects: [],
+      })),
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+    dom.window.document.querySelector('[data-tab="waybills"]')?.click();
+    await waitForRender();
+
+    const identities = dom.window.document.querySelectorAll('.document-waybill-identity');
+    expect(identities).toHaveLength(kinds.length);
+    kinds.forEach(([kind, label], index) => {
+      expect(identities[index].children[0].classList.contains('document-number')).toBe(true);
+      expect(identities[index].children[0].textContent).toBe(`#ALB-${index + 1}`);
+      expect(identities[index].children[1].classList.contains(`waybill-kind--${kind}`)).toBe(true);
+      expect(identities[index].children[1].textContent).toBe(label);
+    });
+  });
+
   it('shows estimate displayStatus labels (Aceptado / Denegado)', async () => {
     const { dom } = loadCardBack({
       salesOrders: [],
