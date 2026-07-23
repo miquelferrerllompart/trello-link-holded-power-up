@@ -137,8 +137,10 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
   `src/sales-order-display.ts` (mirrored inline in `card-back.html`).
 - **Purchase orders and waybills** are fetched alongside sales orders (independent bounded loops over
   `/purchase-orders` and `/waybills`) and nested under each order by `sourceOrder.id`; orphan/off-page
-  relations are dropped. Degraded relation fetches add `purchaseOrdersError: true` or
-  `waybillsError: true` independently. No extra nested tabs — both render as tree children.
+  relations are dropped. Only `material` and `refund` waybill kinds render beneath sales orders;
+  other waybill kinds remain available in the main Albaranes tab. Degraded relation fetches add
+  `purchaseOrdersError: true` or `waybillsError: true` independently. No extra nested tabs — both
+  relation types render as tree children.
 - `worker/holded-v2.ts` only builds `app.holded.com` deep-link URLs for document rows (no API client left).
 - The internal-API contract is saved under `.context/api-docs/` (`openapi.yaml`, `llms-full.txt`);
   refresh from `https://api.app.electricaferrer.es/internal/v1/openapi.yaml` when it changes.
@@ -147,9 +149,9 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 
 `public/card-back.html` (inline JS). Auto-loads the first tab (Pedidos de venta) when a **customer** is
 linked; other tabs (Albaranes, Facturas, Presupuestos) lazy-load on click. Scope toggle is
-`Proyecto vinculado | Todos`. Related waybills (blue) and purchase orders (purple) nest under their
-sales order on a shared relation rail. States: skeleton load, `DATA_NOT_READY` ("Sincronizando…") +
-retry, quiet relation-degraded notes.
+`Proyecto vinculado | Todos`. Related material/devolución waybills (blue/red kind badges) and purchase
+orders (purple) nest under their sales order on a shared relation rail. States: skeleton load,
+`DATA_NOT_READY` ("Sincronizando…") + retry, quiet relation-degraded notes.
 
 ## Common issues / gotchas
 

@@ -132,6 +132,7 @@ function mapInternalWaybill(item: Record<string, any>) {
     id: item.id,
     documentNumber: item.docNumber ?? null,
     url: buildDocumentUrl('waybills', item.id),
+    kind: item.kind ?? null,
     issueDate: item.issueDate ?? null,
     workflowStatus: item.workflowStatus ?? null,
     approvedAt: item.approvedAt ?? null,
@@ -275,6 +276,7 @@ function nestRelatedDocuments(
 
   const waybillsByOrderId = new Map<string, ReturnType<typeof mapInternalWaybill>[]>();
   for (const waybill of waybills) {
+    if (waybill.kind !== 'material' && waybill.kind !== 'refund') continue;
     const sourceId = waybill.sourceOrder?.id;
     if (!sourceId) continue;
     const bucket = waybillsByOrderId.get(sourceId);

@@ -254,7 +254,7 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(body.results[1].purchaseOrders).toEqual([]);
   });
 
-  it('nests waybills under their source sales order and drops orphan/off-page waybills', async () => {
+  it('nests only material and refund waybills and drops orphan/off-page relations', async () => {
     const salesOrder = (id: string, docNumber: string) => ({
       id,
       docNumber,
@@ -265,9 +265,10 @@ describe('Worker /v2 internal-API document routes', () => {
       deliveryCount: 1,
       internalStatus: 'in_process',
     });
-    const waybill = (id: string, docNumber: string, sourceId: string | null) => ({
+    const waybill = (id: string, docNumber: string, sourceId: string | null, kind: string) => ({
       id,
       docNumber,
+      kind,
       issueDate: '2026-07-15',
       workflowStatus: 'delivered',
       approvedAt: '2026-07-16',
@@ -282,9 +283,12 @@ describe('Worker /v2 internal-API document routes', () => {
       if (input.includes('/waybills')) {
         return internalJson({
           items: [
-            waybill('wb-1', 'ALB-26-000123', 'so-1'),
-            waybill('wb-2', 'ALB-26-000124', null),
-            waybill('wb-3', 'ALB-26-000125', 'so-off-page'),
+            waybill('wb-1', 'ALB-26-000123', 'so-1', 'material'),
+            waybill('wb-2', 'ALB-26-000124', 'so-1', 'refund'),
+            waybill('wb-3', 'ALB-26-000125', 'so-1', 'labour'),
+            waybill('wb-4', 'ALB-26-000126', 'so-1', 'extra'),
+            waybill('wb-5', 'ALB-26-000127', null, 'material'),
+            waybill('wb-6', 'ALB-26-000128', 'so-off-page', 'refund'),
           ],
           pagination: { page: 1, pageSize: 100, hasMore: false },
         });
@@ -308,17 +312,32 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
       `${INTERNAL_BASE}/waybills?customerId=contact-1&page=1&pageSize=100`,
     );
-    expect(body.results[0].waybills).toEqual([{
-      type: 'waybills',
-      id: 'wb-1',
-      documentNumber: 'ALB-26-000123',
-      url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
-      issueDate: '2026-07-15',
-      workflowStatus: 'delivered',
-      approvedAt: '2026-07-16',
-      sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
-      projects: [],
-    }]);
+    expect(body.results[0].waybills).toEqual([
+      {
+        type: 'waybills',
+        id: 'wb-1',
+        documentNumber: 'ALB-26-000123',
+        url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
+        kind: 'material',
+        issueDate: '2026-07-15',
+        workflowStatus: 'delivered',
+        approvedAt: '2026-07-16',
+        sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
+        projects: [],
+      },
+      {
+        type: 'waybills',
+        id: 'wb-2',
+        documentNumber: 'ALB-26-000124',
+        url: 'https://app.holded.com/sales/waybills#open:waybill-wb-2',
+        kind: 'refund',
+        issueDate: '2026-07-15',
+        workflowStatus: 'delivered',
+        approvedAt: '2026-07-16',
+        sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
+        projects: [],
+      },
+    ]);
     expect(body.results[1].waybills).toEqual([]);
   });
 
@@ -415,6 +434,7 @@ describe('Worker /v2 internal-API document routes', () => {
         rawStatus: 'delivered',
         approvedAt: '2026-07-11',
         workflowStatus: 'delivered',
+        kind: 'material',
         customer: { id: 'contact-1', name: 'Acme' },
         projects: [],
         sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
@@ -446,6 +466,7 @@ describe('Worker /v2 internal-API document routes', () => {
         documentNumber: 'ALB-26-000123',
         url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
         issueDate: '2026-07-10',
+        kind: 'material',
         workflowStatus: 'delivered',
         approvedAt: '2026-07-11',
         sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },

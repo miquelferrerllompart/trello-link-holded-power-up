@@ -521,12 +521,24 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .related-waybill-label {
-      min-width: 0;
-      color: #626f86;
-      font-size: 12px;
-      font-weight: 500;
+    .waybill-kind {
+      justify-self: start;
+      padding: 1px 7px 1px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
       line-height: 16px;
+      white-space: nowrap;
+      box-shadow: inset 2px 0 currentColor;
+    }
+    .waybill-kind--material {
+      background: #e9f2ff;
+      color: #0c66e4;
+    }
+    .waybill-kind--refund {
+      background: #fff0ec;
+      color: #ae2a19;
     }
     .documents-button:active,
     .documents-scope-button:active,
@@ -715,7 +727,8 @@
       .purchase-order-number { color: #b8acf6; }
       .purchase-order-supplier { color: #8c9bab; }
       .related-waybill-number { color: #85b8ff; }
-      .related-waybill-label { color: #8c9bab; }
+      .waybill-kind--material { background: rgba(87, 157, 255, 0.16); color: #85b8ff; }
+      .waybill-kind--refund { background: rgba(248, 113, 104, 0.16); color: #f87168; }
       .documents-page-button { background: #a6c5e229; color: #b6c2cf; }
       .documents-page-button:hover:not([disabled]) { background: #a6c5e23d; }
       .documents-page-label strong { color: #b6c2cf; }
@@ -1136,11 +1149,21 @@
       '</div>';
     }
 
+    function renderWaybillKind(kind) {
+      if (kind === 'material') {
+        return '<span class="waybill-kind waybill-kind--material">Material</span>';
+      }
+      if (kind === 'refund') {
+        return '<span class="waybill-kind waybill-kind--refund">Devolución</span>';
+      }
+      return '';
+    }
+
     function renderRelatedWaybillRow(waybill) {
       var number = getDocumentNumber(waybill);
       return '<div class="relation-child-row related-waybill-row">' +
         '<span class="related-waybill-number">#' + escapeHtml(number) + '</span>' +
-        '<span class="related-waybill-label">Albarán</span>' +
+        renderWaybillKind(waybill.kind) +
         renderPill(getDocumentPill(waybill)) +
         renderDocumentActions(waybill, number) +
       '</div>';

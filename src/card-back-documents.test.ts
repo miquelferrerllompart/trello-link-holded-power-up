@@ -490,20 +490,35 @@ describe('card-back document view (internal API v2)', () => {
       .toEqual(['Pedidos venta', 'Albaranes', 'Facturas', 'Presupuestos']);
   });
 
-  it('nests waybills under their sales order with approval status and both app links', async () => {
+  it('shows material and refund waybills with distinct kind badges under their sales order', async () => {
     const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', {
-        waybills: [{
-          id: 'wb-1',
-          type: 'waybills',
-          documentNumber: 'ALB-1',
-          workflowStatus: 'delivered',
-          approvedAt: '2026-07-16',
-          issueDate: '2026-07-15',
-          url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
-          sourceOrder: { id: 'so-1', docNumber: 'PV-1' },
-          projects: [],
-        }],
+        waybills: [
+          {
+            id: 'wb-1',
+            type: 'waybills',
+            documentNumber: 'ALB-1',
+            kind: 'material',
+            workflowStatus: 'delivered',
+            approvedAt: '2026-07-16',
+            issueDate: '2026-07-15',
+            url: 'https://app.holded.com/sales/waybills#open:waybill-wb-1',
+            sourceOrder: { id: 'so-1', docNumber: 'PV-1' },
+            projects: [],
+          },
+          {
+            id: 'wb-2',
+            type: 'waybills',
+            documentNumber: 'ALB-2',
+            kind: 'refund',
+            workflowStatus: 'prepared',
+            approvedAt: null,
+            issueDate: '2026-07-16',
+            url: 'https://app.holded.com/sales/waybills#open:waybill-wb-2',
+            sourceOrder: { id: 'so-1', docNumber: 'PV-1' },
+            projects: [],
+          },
+        ],
       })],
       waybills: [],
       estimates: [],
@@ -512,14 +527,20 @@ describe('card-back document view (internal API v2)', () => {
     expand(dom);
     await waitForRender();
 
-    const row = dom.window.document.querySelector('.related-waybill-row');
-    expect(row).not.toBeNull();
-    expect(row?.textContent).toContain('#ALB-1');
-    expect(row?.textContent).toContain('Aprobado');
-    expect(row?.querySelector('.document-link--ef')?.getAttribute('href'))
+    const rows = dom.window.document.querySelectorAll('.related-waybill-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('#ALB-1');
+    expect(rows[0].textContent).toContain('Material');
+    expect(rows[0].textContent).toContain('Aprobado');
+    expect(rows[0].querySelector('.waybill-kind--material')).not.toBeNull();
+    expect(rows[0].querySelector('.document-link--ef')?.getAttribute('href'))
       .toBe('https://app.electricaferrer.es/albaran/wb-1');
-    expect(row?.querySelector('.document-link--holded')?.getAttribute('href'))
+    expect(rows[0].querySelector('.document-link--holded')?.getAttribute('href'))
       .toBe('https://app.holded.com/sales/waybills#open:waybill-wb-1');
+    expect(rows[1].textContent).toContain('#ALB-2');
+    expect(rows[1].textContent).toContain('Devolución');
+    expect(rows[1].textContent).toContain('Sin aprobar');
+    expect(rows[1].querySelector('.waybill-kind--refund')).not.toBeNull();
   });
 
   it('keeps sales orders visible and warns quietly when purchase orders fail to load', async () => {
