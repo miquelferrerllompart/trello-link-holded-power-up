@@ -225,6 +225,15 @@ describe('card-back document view (internal API v2)', () => {
     expect(css).toContain('@media (hover: none), (any-pointer: coarse)');
   });
 
+  it('keeps purchase-order status clear of always-visible touch actions', () => {
+    const { dom } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
+    const css = Array.from(dom.window.document.querySelectorAll('style'))
+      .map((style) => style.textContent)
+      .join('\n');
+
+    expect(css).toContain('.purchase-order-row { padding-right: 76px; }');
+  });
+
   it('shows waybill approval labels (Sin aprobar / Aprobado)', async () => {
     const { dom } = loadCardBack({
       salesOrders: [],
