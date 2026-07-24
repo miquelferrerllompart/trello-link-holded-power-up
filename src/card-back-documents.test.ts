@@ -135,6 +135,10 @@ function expand(dom) {
   dom.window.document.querySelector('#load-documents')?.click();
 }
 
+function selectDocumentTab(dom, key) {
+  dom.window.document.querySelector(`[data-tab="${key}"]`)?.click();
+}
+
 function contentText(dom) {
   return dom.window.document.querySelector('#content')?.textContent || '';
 }
@@ -151,6 +155,21 @@ const salesOrder = (id, documentNumber, extra = {}) => ({
 });
 
 describe('card-back document view (internal API v2)', () => {
+  it('shows Albaranes first and loads it as the default document tab', async () => {
+    const { dom, urls } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
+    await waitForRender();
+
+    const tabs = Array.from(dom.window.document.querySelectorAll('.documents-tab'));
+    expect(tabs.map((tab) => tab.textContent?.trim()))
+      .toEqual(['Albaranes', 'Pedidos venta', 'Facturas', 'Presupuestos']);
+    expect(tabs[0]?.getAttribute('data-tab')).toBe('waybills');
+    expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
+    expect(urls.some((url) => url.includes('/v2/documents/search') && url.includes('type=waybills')))
+      .toBe(true);
+    expect(urls.some((url) => url.includes('/v2/documents/search') && url.includes('type=sales-orders')))
+      .toBe(false);
+  });
+
   it('renders the full customer address and dual app destinations for the customer and project', async () => {
     const { dom } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
     await waitForRender();
@@ -187,6 +206,7 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     expect(contentText(dom)).toContain('Parcialmente preparado');
@@ -203,6 +223,7 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     const row = dom.window.document.querySelector('.document-row');
@@ -256,7 +277,6 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
-    await waitForRender();
     dom.window.document.querySelector('[data-tab="waybills"]')?.click();
     await waitForRender();
 
@@ -290,7 +310,6 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
-    await waitForRender();
     dom.window.document.querySelector('[data-tab="waybills"]')?.click();
     await waitForRender();
 
@@ -345,7 +364,6 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
-    await waitForRender();
     dom.window.document.querySelector('[data-tab="waybills"]')?.click();
     await waitForRender();
 
@@ -436,6 +454,7 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     expect(dom.window.document.querySelector('.document-row .document-preview-toggle')).not.toBeNull();
@@ -508,6 +527,7 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     const salesOrderRow = dom.window.document.querySelector('.document-row');
@@ -669,6 +689,7 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     expect(Array.from(dom.window.document.querySelectorAll('.documents-scope-button')).map((b) => b.textContent?.trim()))
@@ -706,6 +727,7 @@ describe('card-back document view (internal API v2)', () => {
     const { dom } = loadCardBack({ salesOrders, waybills: [], estimates: [] });
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     expect(dom.window.document.querySelectorAll('.document-row')).toHaveLength(10);
@@ -798,6 +820,7 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     const subRow = dom.window.document.querySelector('.purchase-order-row');
@@ -819,9 +842,9 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).toContain('Rexel');
     expect(text).toContain('Pendiente recibir');
 
-    // Purchase orders remain nested; invoices are the fourth top-level tab.
+    // Purchase orders remain nested; Albaranes is the first top-level tab.
     expect(Array.from(dom.window.document.querySelectorAll('.documents-tab')).map((t) => t.textContent?.trim()))
-      .toEqual(['Pedidos venta', 'Albaranes', 'Facturas', 'Presupuestos']);
+      .toEqual(['Albaranes', 'Pedidos venta', 'Facturas', 'Presupuestos']);
   });
 
   it('shows muted kind subtitles, status beside the identity, and dates on related waybills', async () => {
@@ -859,6 +882,7 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     const rows = dom.window.document.querySelectorAll('.related-waybill-row');
@@ -898,6 +922,7 @@ describe('card-back document view (internal API v2)', () => {
     );
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     expect(contentText(dom)).toContain('PV-1');
@@ -911,6 +936,7 @@ describe('card-back document view (internal API v2)', () => {
     );
     await waitForRender();
     expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
     expect(contentText(dom)).toContain('PV-1');
@@ -919,7 +945,7 @@ describe('card-back document view (internal API v2)', () => {
 
   it('moves focus and lazy-loads document tabs with the arrow keys', async () => {
     const { dom } = loadCardBack({
-      salesOrders: [],
+      salesOrders: [salesOrder('so-1', 'PV-1')],
       estimates: [],
       waybills: [{ id: 'wb-1', type: 'waybills', documentNumber: 'ALB-1', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] }],
     });
@@ -927,21 +953,32 @@ describe('card-back document view (internal API v2)', () => {
     expand(dom);
     await waitForRender();
 
-    const salesTab = dom.window.document.querySelector('[data-tab="salesOrders"]');
-    salesTab?.focus();
-    salesTab?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    const waybillTab = dom.window.document.querySelector('[data-tab="waybills"]');
+    waybillTab?.focus();
+    waybillTab?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     await waitForRender();
 
-    const waybillTab = dom.window.document.querySelector('[data-tab="waybills"]');
-    expect(waybillTab?.getAttribute('aria-selected')).toBe('true');
-    expect(waybillTab?.tabIndex).toBe(0);
-    expect(dom.window.document.activeElement).toBe(waybillTab);
-    expect(contentText(dom)).toContain('ALB-1');
+    const salesTab = dom.window.document.querySelector('[data-tab="salesOrders"]');
+    expect(salesTab?.getAttribute('aria-selected')).toBe('true');
+    expect(salesTab?.tabIndex).toBe(0);
+    expect(dom.window.document.activeElement).toBe(salesTab);
+    expect(contentText(dom)).toContain('PV-1');
   });
 
   it('announces a stable loading panel while a document page is pending', async () => {
     const { dom } = loadCardBack(
-      { salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] },
+      {
+        salesOrders: [],
+        waybills: [{
+          id: 'wb-1',
+          type: 'waybills',
+          documentNumber: 'ALB-1',
+          workflowStatus: 'prepared',
+          issueDate: '2026-07-10',
+          projects: [],
+        }],
+        estimates: [],
+      },
       { documentDelayMs: 200 },
     );
     await waitForRender();
@@ -950,7 +987,7 @@ describe('card-back document view (internal API v2)', () => {
 
     const pendingPanel = dom.window.document.querySelector('#documents-panel');
     expect(pendingPanel?.getAttribute('aria-busy')).toBe('true');
-    expect(pendingPanel?.textContent).toContain('Cargando pedidos de venta');
+    expect(pendingPanel?.textContent).toContain('Cargando albaranes');
     expect(pendingPanel?.querySelectorAll('.documents-skeleton-row')).toHaveLength(3);
 
     await new Promise((resolve) => setTimeout(resolve, 220));
@@ -958,7 +995,7 @@ describe('card-back document view (internal API v2)', () => {
     const loadedPanel = dom.window.document.querySelector('#documents-panel');
     expect(loadedPanel?.getAttribute('aria-busy')).toBe('false');
     expect(loadedPanel?.querySelectorAll('.documents-skeleton-row')).toHaveLength(0);
-    expect(loadedPanel?.textContent).toContain('PV-1');
+    expect(loadedPanel?.textContent).toContain('ALB-1');
   });
 
   it('shows always-visible link placeholders and opens the link popups when nothing is linked', async () => {
@@ -1027,6 +1064,6 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     expect(dom.window.document.querySelector('.documents-note')?.textContent)
-      .toBe('Este cliente no tiene pedidos de venta.');
+      .toBe('Este cliente no tiene albaranes.');
   });
 });

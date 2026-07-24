@@ -148,7 +148,7 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 
 ## Card-back document view
 
-`public/card-back.html` (inline JS). Auto-loads the first tab (Pedidos de venta) when a **customer** is
+`public/card-back.html` (inline JS). Auto-loads the first tab (Albaranes) when a **customer** is
 linked; other tabs (Albaranes, Facturas, Presupuestos) lazy-load on click. Scope toggle is
 `Proyecto vinculado | Todos`. Related material/devolución waybills (blue/red kind subtitles beneath
 the document number, with status grouped beside the identity) and purchase orders (purple) nest under

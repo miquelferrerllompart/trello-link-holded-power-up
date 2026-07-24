@@ -1244,8 +1244,8 @@
     }
 
     var DOCUMENT_TABS = [
-      { key: 'salesOrders', type: 'sales-orders', label: 'Pedidos venta', loadingLabel: 'pedidos de venta', emptyAll: 'Este cliente no tiene pedidos de venta.', emptyProject: 'No hay pedidos de venta en el proyecto vinculado.' },
       { key: 'waybills', type: 'waybills', label: 'Albaranes', loadingLabel: 'albaranes', emptyAll: 'Este cliente no tiene albaranes.', emptyProject: 'No hay albaranes en el proyecto vinculado.' },
+      { key: 'salesOrders', type: 'sales-orders', label: 'Pedidos venta', loadingLabel: 'pedidos de venta', emptyAll: 'Este cliente no tiene pedidos de venta.', emptyProject: 'No hay pedidos de venta en el proyecto vinculado.' },
       { key: 'invoices', type: 'invoices', label: 'Facturas', loadingLabel: 'facturas', emptyAll: 'Este cliente no tiene facturas.', emptyProject: 'No hay facturas en el proyecto vinculado.' },
       { key: 'estimates', type: 'estimates', label: 'Presupuestos', loadingLabel: 'presupuestos', emptyAll: 'Este cliente no tiene presupuestos.', emptyProject: 'No hay presupuestos en el proyecto vinculado.' },
     ];
@@ -1264,7 +1264,7 @@
       if (!documentViews[key]) {
         documentViews[key] = {
           expanded: true,
-          activeKey: 'salesOrders',
+          activeKey: 'waybills',
           scope: 'matched',
           pages: {},   // stateKey -> current page number
           cursors: {}, // stateKey -> { pageNumber: cursorToFetchThatPage } (estimates)
@@ -1934,13 +1934,13 @@
       var buttons = container.querySelectorAll('.documents-tab');
       for (var i = 0; i < buttons.length; i++) {
         buttons[i].addEventListener('click', function() {
-          view.activeKey = this.getAttribute('data-tab') || 'salesOrders';
+          view.activeKey = this.getAttribute('data-tab') || 'waybills';
           view.pendingTabFocus = null;
           renderDocumentsPanel(data);
         });
         buttons[i].addEventListener('keydown', function(event) {
           var currentIndex = DOCUMENT_TABS.findIndex(function(tab) {
-            return tab.key === (event.currentTarget.getAttribute('data-tab') || 'salesOrders');
+            return tab.key === (event.currentTarget.getAttribute('data-tab') || 'waybills');
           });
           var targetIndex = currentIndex;
 
