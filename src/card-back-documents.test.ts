@@ -383,8 +383,21 @@ describe('card-back document view (internal API v2)', () => {
     expect(preview?.getAttribute('data-static-motion')).toBe('true');
     expect(preview?.textContent).toContain('Notas');
     expect(preview?.textContent).toContain('Dejar el material junto al cuadro.');
-    expect(preview?.textContent).toContain('Notas internas');
+    expect(preview?.textContent).toContain('Internas');
     expect(preview?.textContent).toContain('Comprobar la firma antes de cerrar.');
+
+    const notes = preview?.querySelector('.document-preview-notes');
+    const noteSections = notes?.querySelectorAll('.document-preview-note');
+    const internalNote = notes?.querySelector('.document-preview-note--internal');
+    expect(notes).not.toBeNull();
+    expect(noteSections).toHaveLength(2);
+    expect(notes?.querySelectorAll('.document-preview-label')[0]?.textContent).toBe('Notas');
+    expect(notes?.querySelectorAll('.document-preview-label')[1]?.textContent).toBe('Internas');
+    expect(dom.window.getComputedStyle(notes).backgroundColor).toBe('rgb(241, 242, 244)');
+    expect(dom.window.getComputedStyle(internalNote).borderLeftWidth).toBe('0px');
+    expect(dom.window.getComputedStyle(internalNote).backgroundColor).toBe('transparent');
+    expect(dom.window.getComputedStyle(internalNote?.querySelector('.document-preview-text')).color)
+      .toBe('rgb(98, 111, 134)');
 
     const previewStyles = dom.window.getComputedStyle(preview);
     expect(previewStyles.marginLeft).toBe('0px');

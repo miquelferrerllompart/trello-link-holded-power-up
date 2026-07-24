@@ -484,15 +484,25 @@
       outline: 2px solid #388bff;
       outline-offset: 1px;
     }
+    .document-preview-notes {
+      min-width: 0;
+      padding: 8px 9px;
+      border-radius: 6px;
+      background: #f1f2f4;
+    }
     .document-preview-note {
       min-width: 0;
-      padding: 7px 8px;
-      border-radius: 6px;
-      background: #091e420f;
+      padding: 0;
+      border: 0;
+      background: transparent;
     }
-    .document-preview-note--internal {
-      border-left: 2px solid #e2b203;
-      background: #fff7d6;
+    .document-preview-note + .document-preview-note {
+      margin-top: 7px;
+      padding-top: 7px;
+      border-top: 1px solid #091e420f;
+    }
+    .document-preview-note--internal .document-preview-label {
+      color: #7a869a;
     }
     .document-preview-label {
       display: block;
@@ -505,11 +515,16 @@
       text-transform: uppercase;
     }
     .document-preview-text {
-      color: #172b4d;
+      color: #44546f;
       font-size: 12px;
       line-height: 17px;
       overflow-wrap: anywhere;
       white-space: pre-wrap;
+    }
+    .document-preview-note--internal .document-preview-text {
+      color: #626f86;
+      font-size: 11px;
+      line-height: 16px;
     }
     .document-preview-attachment-section + .document-preview-attachment-section {
       margin-top: 10px;
@@ -1005,11 +1020,10 @@
         background: #22272b;
         box-shadow: 0 3px 10px #030404;
       }
-      .document-preview-note { background: #a6c5e214; }
-      .document-preview-note--internal {
-        border-left-color: #f5cd47;
-        background: rgba(245, 205, 71, 0.1);
-      }
+      .document-preview-notes { background: #a6c5e214; }
+      .document-preview-note + .document-preview-note { border-top-color: #a6c5e214; }
+      .document-preview-note--internal .document-preview-label,
+      .document-preview-note--internal .document-preview-text { color: #8c9bab; }
       .document-preview-label,
       .document-preview-attachments-state,
       .document-preview-file-open { color: #8c9bab; }
@@ -1607,7 +1621,7 @@
       }
       if (preview.internalNotes) {
         notes += '<div class="document-preview-note document-preview-note--internal">' +
-          '<span class="document-preview-label">Notas internas</span>' +
+          '<span class="document-preview-label">Internas</span>' +
           '<div class="document-preview-text">' + escapeHtml(preview.internalNotes) + '</div>' +
         '</div>';
       }
@@ -1621,7 +1635,7 @@
       return '<div id="' + escapeHtml(getDocumentPreviewId(documentItem)) + '"' +
         ' class="document-preview" role="region" aria-label="Vista previa de ' +
         escapeHtml(getDocumentNumber(documentItem)) + '" hidden>' +
-          (notes ? '<div class="document-preview-copy">' + notes + '</div>' : '') +
+          (notes ? '<div class="document-preview-copy document-preview-notes">' + notes + '</div>' : '') +
           attachments +
           '<time class="document-preview-date">' +
             escapeHtml(getDocumentDateText(documentItem)) +
