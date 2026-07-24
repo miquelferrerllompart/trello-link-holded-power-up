@@ -82,6 +82,17 @@ function loadCardBack(documents, options = {}) {
           });
         }
 
+        if (requestUrl.includes('/v2/documents/') && requestUrl.includes('/attachments')) {
+          return new Response(JSON.stringify({
+            items: options.attachments || [],
+            hasMore: false,
+            nextCursor: null,
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
         if (requestUrl.includes('/v2/contacts/')) {
           return new Response(JSON.stringify({ customFields: options.customFields || [] }), {
             status: 200,
@@ -291,6 +302,141 @@ describe('card-back document view (internal API v2)', () => {
       expect(identities[index].children[1].classList.contains(`waybill-kind--${kind}`)).toBe(true);
       expect(identities[index].children[1].textContent).toBe(label);
     });
+  });
+
+  it('expands document notes and attachments from the action tray without embedding PDFs', async () => {
+    const { dom, urls } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [{
+        id: 'wb-preview',
+        type: 'waybills',
+        documentNumber: 'ALB-PREVIEW',
+        kind: 'material',
+        workflowStatus: 'delivered',
+        issueDate: '2026-07-10',
+        notes: 'Dejar el material junto al cuadro.\nAvisar al encargado.',
+        internalNotes: 'Comprobar la firma antes de cerrar.',
+        attachmentsUrl: '/v2/documents/waybills/wb-preview/attachments',
+        projects: [],
+      }],
+    }, {
+      attachments: [
+          {
+            id: 'image-1',
+            name: 'entrega.jpg',
+            url: 'https://cdn.example.com/entrega.jpg',
+            mimeType: 'image/jpeg',
+            thumbnailUrl: 'https://cdn.example.com/entrega-thumb.jpg',
+          },
+          {
+            id: 'pdf-1',
+            name: 'albaran-firmado.pdf',
+            url: 'https://cdn.example.com/albaran-firmado.pdf',
+            mimeType: 'application/pdf',
+          },
+          {
+            id: 'image-2',
+            name: 'cuadro-final.png',
+            url: '/v2/documents/waybills/wb-preview/attachments/image-2?name=cuadro-final.png',
+            mimeType: 'image/png',
+          },
+        ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+    dom.window.document.querySelector('[data-tab="waybills"]')?.click();
+    await waitForRender();
+
+    const toggle = dom.window.document.querySelector('.document-preview-toggle');
+    const preview = dom.window.document.querySelector('.document-preview');
+    expect(toggle?.textContent?.trim()).toBe('Ver más');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(preview?.hasAttribute('hidden')).toBe(true);
+    expect(urls.some((url) => url.includes('/waybills/wb-preview/attachments'))).toBe(false);
+
+    toggle?.click();
+    await waitForRender();
+
+    expect(toggle?.textContent?.trim()).toBe('Ver menos');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(preview?.hasAttribute('hidden')).toBe(false);
+    expect(preview?.textContent).toContain('Notas');
+    expect(preview?.textContent).toContain('Dejar el material junto al cuadro.');
+    expect(preview?.textContent).toContain('Notas internas');
+    expect(preview?.textContent).toContain('Comprobar la firma antes de cerrar.');
+
+    const imageLink = preview?.querySelector('.document-preview-image-link');
+    expect(imageLink?.getAttribute('href')).toBe('https://cdn.example.com/entrega.jpg');
+    expect(imageLink?.getAttribute('target')).toBe('_blank');
+    expect(imageLink?.querySelector('img')?.getAttribute('src')).toBe('https://cdn.example.com/entrega-thumb.jpg');
+    expect(imageLink?.querySelector('img')?.getAttribute('loading')).toBe('lazy');
+    expect(preview?.querySelectorAll('.document-preview-image-link')).toHaveLength(2);
+    expect(urls.some((url) => url.includes('/waybills/wb-preview/attachments'))).toBe(true);
+
+    const pdfLink = preview?.querySelector('.document-preview-file--pdf');
+    expect(pdfLink?.getAttribute('href')).toBe('https://cdn.example.com/albaran-firmado.pdf');
+    expect(pdfLink?.getAttribute('target')).toBe('_blank');
+    expect(preview?.querySelector('iframe, embed, object')).toBeNull();
+  });
+
+  it('offers the same preview control for sales orders, purchase orders, invoices and estimates', async () => {
+    const withPreview = {
+      notes: null,
+      internalNotes: null,
+      attachmentsUrl: '/v2/documents/shared/document-id/attachments',
+    };
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-preview', 'PV-PREVIEW', {
+        ...withPreview,
+        purchaseOrders: [{
+          id: 'po-preview',
+          type: 'purchase-orders',
+          documentNumber: 'PC-PREVIEW',
+          internalStatus: 'awaiting_receipt',
+          supplier: { id: 'supplier-1', name: 'Rexel' },
+          projects: [],
+          ...withPreview,
+        }],
+      })],
+      waybills: [],
+      invoices: [{
+        id: 'invoice-preview',
+        type: 'invoices',
+        documentNumber: 'F-PREVIEW',
+        displayStatus: 'paid',
+        issueDate: '2026-07-11',
+        amounts: { total: '100', pending: '0', currency: 'EUR' },
+        projects: [],
+        ...withPreview,
+      }],
+      estimates: [{
+        id: 'estimate-preview',
+        type: 'estimates',
+        documentNumber: 'PRE-PREVIEW',
+        displayStatus: 'sent',
+        issueDate: '2026-07-11',
+        total: 100,
+        currency: 'EUR',
+        projects: [],
+        ...withPreview,
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-row .document-preview-toggle')).not.toBeNull();
+    expect(dom.window.document.querySelector('.purchase-order-row .document-preview-toggle')).not.toBeNull();
+
+    dom.window.document.querySelector('[data-tab="invoices"]')?.click();
+    await waitForRender();
+    expect(dom.window.document.querySelector('.document-row .document-preview-toggle')).not.toBeNull();
+
+    dom.window.document.querySelector('[data-tab="estimates"]')?.click();
+    await waitForRender();
+    expect(dom.window.document.querySelector('.document-row .document-preview-toggle')).not.toBeNull();
   });
 
   it('classifies top-level and related document rows with an icon at the left edge', async () => {

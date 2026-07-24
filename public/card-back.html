@@ -385,6 +385,45 @@
       transition: transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
     }
     .document-link:active { transform: scale(0.94); }
+    .document-preview-toggle {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      height: 28px;
+      padding: 0 8px;
+      border: 1px solid #091e4224;
+      border-radius: 7px;
+      background: #f7f8f9;
+      color: #44546f;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 16px;
+      white-space: nowrap;
+      transition: background 120ms ease, color 120ms ease, transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .document-preview-toggle:hover { background: #dcdfe4; color: #172b4d; }
+    .document-preview-toggle:active { transform: scale(0.97); }
+    .document-preview-toggle:focus-visible {
+      outline: 2px solid #388bff;
+      outline-offset: 1px;
+    }
+    .document-preview-chevron {
+      width: 10px;
+      height: 10px;
+      fill: none;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.75;
+      transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .document-preview-toggle[aria-expanded="true"] .document-preview-chevron {
+      transform: rotate(180deg);
+    }
     .document-app-icon {
       display: block;
       box-sizing: border-box;
@@ -394,6 +433,177 @@
       border-radius: 7px;
       object-fit: cover;
       box-shadow: 0 1px 2px #091e4224;
+    }
+    .document-preview {
+      margin: -1px 6px 6px 32px;
+      padding: 10px;
+      border: 1px solid #091e4224;
+      border-left: 3px solid #579dff;
+      border-radius: 4px 8px 8px 8px;
+      background: #ffffff;
+      box-shadow: 0 3px 10px #091e4214;
+    }
+    .relation-rail > .document-preview {
+      margin: -2px 6px 5px 28px;
+    }
+    .document-preview[hidden] { display: none; }
+    .document-preview-copy {
+      display: grid;
+      gap: 8px;
+    }
+    .document-preview-copy + .document-preview-attachments,
+    .document-preview-copy + .document-preview-attachments-slot { margin-top: 10px; }
+    .document-preview-attachments-state {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 28px;
+      padding: 3px 1px;
+      color: #626f86;
+      font-size: 11px;
+      line-height: 16px;
+    }
+    .document-preview-attachments-retry {
+      appearance: none;
+      flex: none;
+      padding: 3px 7px;
+      border: 0;
+      border-radius: 5px;
+      background: #091e420f;
+      color: #0c66e4;
+      cursor: pointer;
+      font: inherit;
+      font-weight: 700;
+      transition: background 120ms ease, transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .document-preview-attachments-retry:hover { background: #091e4224; }
+    .document-preview-attachments-retry:active { transform: scale(0.97); }
+    .document-preview-attachments-retry:focus-visible {
+      outline: 2px solid #388bff;
+      outline-offset: 1px;
+    }
+    .document-preview-note {
+      min-width: 0;
+      padding: 7px 8px;
+      border-radius: 6px;
+      background: #091e420f;
+    }
+    .document-preview-note--internal {
+      border-left: 2px solid #e2b203;
+      background: #fff7d6;
+    }
+    .document-preview-label {
+      display: block;
+      margin-bottom: 2px;
+      color: #626f86;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 14px;
+      text-transform: uppercase;
+    }
+    .document-preview-text {
+      color: #172b4d;
+      font-size: 12px;
+      line-height: 17px;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+    .document-preview-images {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+      gap: 7px;
+    }
+    .document-preview-image-link {
+      position: relative;
+      display: block;
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid #091e4224;
+      border-radius: 7px;
+      background: #f1f2f4;
+      color: #44546f;
+      text-decoration: none;
+      transition: border-color 120ms ease, transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .document-preview-image-link:hover { border-color: #579dff; }
+    .document-preview-image-link:active { transform: scale(0.98); }
+    .document-preview-image-link:focus-visible {
+      outline: 2px solid #388bff;
+      outline-offset: 1px;
+    }
+    .document-preview-image {
+      display: block;
+      width: 100%;
+      aspect-ratio: 4 / 3;
+      background: #dcdfe4;
+      object-fit: cover;
+    }
+    .document-preview-image-name {
+      display: block;
+      overflow: hidden;
+      padding: 5px 7px;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 14px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .document-preview-files {
+      display: grid;
+      gap: 5px;
+      margin-top: 7px;
+    }
+    .document-preview-file {
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 7px;
+      min-height: 34px;
+      padding: 3px 7px 3px 4px;
+      border: 1px solid #091e4224;
+      border-radius: 7px;
+      background: #ffffff;
+      color: #44546f;
+      text-decoration: none;
+      transition: background 120ms ease, border-color 120ms ease, transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .document-preview-file:hover { border-color: #579dff; background: #f7f8f9; }
+    .document-preview-file:active { transform: scale(0.99); }
+    .document-preview-file:focus-visible {
+      outline: 2px solid #388bff;
+      outline-offset: 1px;
+    }
+    .document-preview-file-badge {
+      display: inline-grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 5px;
+      background: #dcdfe4;
+      color: #44546f;
+      font-size: 8px;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+    }
+    .document-preview-file--pdf .document-preview-file-badge {
+      background: #ffeceb;
+      color: #ae2e24;
+    }
+    .document-preview-file-name {
+      min-width: 0;
+      overflow: hidden;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 15px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .document-preview-file-open {
+      color: #626f86;
+      font-size: 11px;
+      font-weight: 700;
     }
     .document-link-arrow {
       position: absolute;
@@ -741,7 +951,48 @@
         background: #22272b;
         box-shadow: -10px 0 12px #22272b, 0 2px 5px #030404;
       }
+      .document-preview-toggle {
+        border-color: #a6c5e229;
+        background: #2c333a;
+        color: #b6c2cf;
+      }
+      .document-preview-toggle:hover { background: #38414a; color: #ffffff; }
       .document-app-icon { border-color: #a6c5e23d; box-shadow: 0 1px 2px #030404; }
+      .document-preview {
+        border-color: #a6c5e229;
+        border-left-color: #579dff;
+        background: #22272b;
+        box-shadow: 0 3px 10px #030404;
+      }
+      .document-preview-note { background: #a6c5e214; }
+      .document-preview-note--internal {
+        border-left-color: #f5cd47;
+        background: rgba(245, 205, 71, 0.1);
+      }
+      .document-preview-label,
+      .document-preview-attachments-state,
+      .document-preview-file-open { color: #8c9bab; }
+      .document-preview-attachments-retry { background: #2c333a; color: #85b8ff; }
+      .document-preview-attachments-retry:hover { background: #38414a; }
+      .document-preview-text { color: #b6c2cf; }
+      .document-preview-image-link {
+        border-color: #a6c5e229;
+        background: #2c333a;
+        color: #b6c2cf;
+      }
+      .document-preview-image-link:hover { border-color: #579dff; }
+      .document-preview-image { background: #38414a; }
+      .document-preview-file {
+        border-color: #a6c5e229;
+        background: #2c333a;
+        color: #b6c2cf;
+      }
+      .document-preview-file:hover { border-color: #579dff; background: #38414a; }
+      .document-preview-file-badge { background: #454f59; color: #b6c2cf; }
+      .document-preview-file--pdf .document-preview-file-badge {
+        background: rgba(248, 113, 104, 0.16);
+        color: #f87168;
+      }
       .document-number { color: #b6c2cf; }
       .document-pill { background: #a1bdd914; color: #b6c2cf; }
       .document-pill.done { background: rgba(75, 206, 151, 0.16); color: #4bce97; }
@@ -775,7 +1026,12 @@
       .document-row:focus-within .document-actions,
       .relation-child-row:focus-within .document-actions,
       .tag:focus-within .document-actions { transform: translateY(-50%); }
-      .document-link { transition: none; }
+      .document-link,
+      .document-preview-toggle,
+      .document-preview-chevron,
+      .document-preview-image-link,
+      .document-preview-attachments-retry,
+      .document-preview-file { transition: none; }
     }
     @media (hover: hover) and (pointer: fine) {
       .document-row:hover { background: var(--document-row-hover); }
@@ -796,6 +1052,8 @@
         transform: translateY(-50%);
       }
       .document-date { padding-right: 76px; }
+      .document-row--has-preview .document-date,
+      .relation-child-row--has-preview .document-date { padding-right: 150px; }
       .tag-close { opacity: 1; }
       .tag-name { padding-right: 112px; }
     }
@@ -1163,12 +1421,219 @@
         '</a>';
     }
 
+    function getSafeAttachmentUrl(value) {
+      var url = String(value || '').trim();
+      if (!url) return '';
+      if (url.charAt(0) === '/' && url.charAt(1) !== '/') return url;
+      try {
+        var parsed = new URL(url);
+        return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : '';
+      } catch (_) {
+        return '';
+      }
+    }
+
+    function getPreviewAttachments(documentItem) {
+      if (!Array.isArray(documentItem.attachments)) return [];
+      return documentItem.attachments.map(function(attachment, index) {
+        attachment = attachment && typeof attachment === 'object' ? attachment : {};
+        var url = getSafeAttachmentUrl(attachment.url);
+        if (!url) return null;
+        if (url.charAt(0) === '/') url = HOLDED_PROXY_URL + url;
+        var thumbnailUrl = getSafeAttachmentUrl(attachment.thumbnailUrl);
+        if (thumbnailUrl.charAt(0) === '/') thumbnailUrl = HOLDED_PROXY_URL + thumbnailUrl;
+        var mimeType = String(attachment.mimeType || '').trim().toLowerCase();
+        var name = String(attachment.name || '').trim() || ('Adjunto ' + (index + 1));
+        var fileName = name.toLowerCase();
+        var urlPath = url.split(/[?#]/)[0].toLowerCase();
+        return {
+          name: name,
+          url: url,
+          thumbnailUrl: thumbnailUrl,
+          mimeType: mimeType,
+          isImage: mimeType.indexOf('image/') === 0 ||
+            /\.(?:avif|gif|jpe?g|png|webp)$/i.test(fileName) ||
+            /\.(?:avif|gif|jpe?g|png|webp)$/i.test(urlPath),
+          isPdf: mimeType === 'application/pdf' || /\.pdf$/i.test(fileName) || /\.pdf$/i.test(urlPath),
+        };
+      }).filter(Boolean);
+    }
+
+    function getSafeAttachmentsPath(value) {
+      var path = String(value || '').trim();
+      if (path.indexOf('/v2/documents/') !== 0 || path.indexOf('/attachments') < 0) return '';
+      return getSafeAttachmentUrl(path);
+    }
+
+    function getDocumentPreviewContent(documentItem) {
+      return {
+        notes: String(documentItem.notes || '').trim(),
+        internalNotes: String(documentItem.internalNotes || '').trim(),
+        attachments: getPreviewAttachments(documentItem),
+        attachmentsUrl: getSafeAttachmentsPath(documentItem.attachmentsUrl),
+      };
+    }
+
+    function hasDocumentPreview(documentItem) {
+      var preview = getDocumentPreviewContent(documentItem);
+      return Boolean(
+        preview.notes ||
+        preview.internalNotes ||
+        preview.attachments.length ||
+        preview.attachmentsUrl
+      );
+    }
+
+    function getDocumentPreviewId(documentItem) {
+      return 'document-preview-' + encodeURIComponent(String(documentItem.type || 'document')) +
+        '-' + encodeURIComponent(String(documentItem.id || 'unknown'));
+    }
+
+    function renderDocumentPreviewToggle(documentItem) {
+      if (!hasDocumentPreview(documentItem)) return '';
+      var preview = getDocumentPreviewContent(documentItem);
+      var previewId = getDocumentPreviewId(documentItem);
+      return '<button type="button" class="document-preview-toggle" aria-expanded="false"' +
+        ' aria-controls="' + escapeHtml(previewId) + '"' +
+        (preview.attachmentsUrl
+          ? ' data-attachments-url="' + escapeHtml(preview.attachmentsUrl) + '"'
+          : '') + '>' +
+          '<span class="document-preview-toggle-label">Ver más</span>' +
+          '<svg class="document-preview-chevron" viewBox="0 0 12 12" aria-hidden="true">' +
+            '<path d="m2.5 4.5 3.5 3 3.5-3"></path>' +
+          '</svg>' +
+        '</button>';
+    }
+
+    function renderPreviewAttachments(attachments) {
+      var images = attachments.filter(function(attachment) { return attachment.isImage; });
+      var files = attachments.filter(function(attachment) { return !attachment.isImage; });
+      var imagesHtml = images.length
+        ? '<div class="document-preview-images">' + images.map(function(image) {
+            return '<a class="document-preview-image-link" href="' + escapeHtml(image.url) + '"' +
+              ' target="_blank" rel="noopener noreferrer" aria-label="Abrir ' + escapeHtml(image.name) + ' en una pestaña nueva">' +
+                '<img class="document-preview-image" src="' + escapeHtml(image.thumbnailUrl || image.url) + '"' +
+                  ' alt="' + escapeHtml(image.name) + '" loading="lazy" />' +
+                '<span class="document-preview-image-name">' + escapeHtml(image.name) + '</span>' +
+              '</a>';
+          }).join('') + '</div>'
+        : '';
+      var filesHtml = files.length
+        ? '<div class="document-preview-files">' + files.map(function(file) {
+            var kind = file.isPdf ? 'PDF' : 'ARCHIVO';
+            return '<a class="document-preview-file' + (file.isPdf ? ' document-preview-file--pdf' : '') + '"' +
+              ' href="' + escapeHtml(file.url) + '" target="_blank" rel="noopener noreferrer">' +
+                '<span class="document-preview-file-badge" aria-hidden="true">' + kind + '</span>' +
+                '<span class="document-preview-file-name">' + escapeHtml(file.name) + '</span>' +
+                '<span class="document-preview-file-open">Abrir ↗</span>' +
+              '</a>';
+          }).join('') + '</div>'
+        : '';
+      return imagesHtml || filesHtml
+        ? '<div class="document-preview-attachments">' +
+            '<span class="document-preview-label">Adjuntos</span>' +
+            imagesHtml + filesHtml +
+          '</div>'
+        : '';
+    }
+
+    function renderDocumentPreview(documentItem) {
+      var preview = getDocumentPreviewContent(documentItem);
+      if (!hasDocumentPreview(documentItem)) return '';
+
+      var notes = '';
+      if (preview.notes) {
+        notes += '<div class="document-preview-note">' +
+          '<span class="document-preview-label">Notas</span>' +
+          '<div class="document-preview-text">' + escapeHtml(preview.notes) + '</div>' +
+        '</div>';
+      }
+      if (preview.internalNotes) {
+        notes += '<div class="document-preview-note document-preview-note--internal">' +
+          '<span class="document-preview-label">Notas internas</span>' +
+          '<div class="document-preview-text">' + escapeHtml(preview.internalNotes) + '</div>' +
+        '</div>';
+      }
+
+      var attachments = preview.attachments.length
+        ? renderPreviewAttachments(preview.attachments)
+        : (preview.attachmentsUrl
+          ? '<div class="document-preview-attachments-slot" aria-live="polite"></div>'
+          : '');
+
+      return '<div id="' + escapeHtml(getDocumentPreviewId(documentItem)) + '"' +
+        ' class="document-preview" role="region" aria-label="Vista previa de ' +
+        escapeHtml(getDocumentNumber(documentItem)) + '" hidden>' +
+          (notes ? '<div class="document-preview-copy">' + notes + '</div>' : '') +
+          attachments +
+      '</div>';
+    }
+
+    function fetchDocumentAttachmentPages(path, cursor, items, pageCount) {
+      if (pageCount >= 20) return Promise.resolve(items);
+      var requestUrl = new URL(HOLDED_PROXY_URL + path);
+      if (cursor) requestUrl.searchParams.set('cursor', cursor);
+
+      return fetch(requestUrl.toString())
+        .then(function(response) {
+          return response.json()
+            .catch(function() { return {}; })
+            .then(function(body) {
+              if (!response.ok) throw new Error('attachment-list');
+              var nextItems = items.concat(Array.isArray(body.items) ? body.items : []);
+              if (body.hasMore && body.nextCursor) {
+                return fetchDocumentAttachmentPages(path, body.nextCursor, nextItems, pageCount + 1);
+              }
+              return nextItems;
+            });
+        });
+    }
+
+    function loadDocumentAttachments(preview, path) {
+      var slot = preview.querySelector('.document-preview-attachments-slot');
+      if (!slot || slot.getAttribute('data-state') === 'loading' ||
+        slot.getAttribute('data-state') === 'loaded') return;
+
+      slot.setAttribute('data-state', 'loading');
+      slot.innerHTML = '<div class="document-preview-attachments-state" role="status">' +
+        'Cargando adjuntos…' +
+      '</div>';
+      t.sizeTo(contentDiv).catch(function() {});
+
+      fetchDocumentAttachmentPages(path, null, [], 0)
+        .then(function(attachments) {
+          slot.setAttribute('data-state', 'loaded');
+          var normalized = getPreviewAttachments({ attachments: attachments });
+          slot.innerHTML = normalized.length
+            ? renderPreviewAttachments(normalized)
+            : '<div class="document-preview-attachments-state">Sin archivos adjuntos.</div>';
+          t.sizeTo(contentDiv).catch(function() {});
+        })
+        .catch(function(err) {
+          console.warn('Holded: error loading attachments', err);
+          slot.setAttribute('data-state', 'error');
+          slot.innerHTML = '<div class="document-preview-attachments-state" role="alert">' +
+            '<span>No se pudieron cargar los adjuntos.</span>' +
+            '<button type="button" class="document-preview-attachments-retry">Reintentar</button>' +
+          '</div>';
+          var retry = slot.querySelector('.document-preview-attachments-retry');
+          if (retry) {
+            retry.addEventListener('click', function() {
+              slot.setAttribute('data-state', 'idle');
+              loadDocumentAttachments(preview, path);
+            });
+          }
+          t.sizeTo(contentDiv).catch(function() {});
+        });
+    }
+
     function renderDocumentActions(documentItem, documentNumber) {
+      var previewButton = renderDocumentPreviewToggle(documentItem);
       var efLink = renderDestinationLink('ef', buildEfDocumentUrl(documentItem), documentNumber);
       var holdedLink = renderDestinationLink('holded', documentItem.url || '', documentNumber);
-      var links = efLink + holdedLink;
-      if (!links) return '';
-      return '<span class="document-actions' + (efLink && holdedLink ? '' : ' document-actions--single') + '">' + links + '</span>';
+      var controls = previewButton + efLink + holdedLink;
+      if (!controls) return '';
+      return '<span class="document-actions">' + controls + '</span>';
     }
 
     function renderEntityActions(type, id, holdedUrl, label) {
@@ -1202,13 +1667,15 @@
     function renderDocumentRow(documentItem, data, scope) {
       var number = getDocumentNumber(documentItem);
       var isWaybill = documentItem.type === 'waybills';
+      var hasPreview = hasDocumentPreview(documentItem);
       var identity = isWaybill
         ? '<span class="document-waybill-identity">' +
             '<span class="document-number">' + escapeHtml(number) + '</span>' +
             renderWaybillKind(documentItem.kind) +
           '</span>'
         : '<span class="document-number">' + escapeHtml(number) + '</span>';
-      return '<div class="document-row' + (isWaybill ? ' document-row--waybill' : '') + '">' +
+      return '<div class="document-row' + (isWaybill ? ' document-row--waybill' : '') +
+        (hasPreview ? ' document-row--has-preview' : '') + '">' +
         renderDocumentKindIcon(documentItem, false) +
         identity +
         '<span class="document-meta">' +
@@ -1218,13 +1685,15 @@
         '</span>' +
         '<span class="document-date">' + escapeHtml(getDocumentDateText(documentItem)) + '</span>' +
         renderDocumentActions(documentItem, number) +
-      '</div>';
+      '</div>' +
+      renderDocumentPreview(documentItem);
     }
 
     function renderPurchaseOrderRow(purchaseOrder) {
       var number = getDocumentNumber(purchaseOrder);
       var supplier = purchaseOrder.supplier && purchaseOrder.supplier.name ? purchaseOrder.supplier.name : '';
-      return '<div class="relation-child-row purchase-order-row">' +
+      return '<div class="relation-child-row purchase-order-row' +
+        (hasDocumentPreview(purchaseOrder) ? ' relation-child-row--has-preview' : '') + '">' +
         renderDocumentKindIcon(purchaseOrder, true) +
         '<span class="purchase-order-identity">' +
           '<span class="purchase-order-number">' + escapeHtml(number) + '</span>' +
@@ -1233,7 +1702,8 @@
         renderPill(getDocumentPill(purchaseOrder)) +
         '<span class="document-date">' + escapeHtml(getDocumentDateText(purchaseOrder)) + '</span>' +
         renderDocumentActions(purchaseOrder, number) +
-      '</div>';
+      '</div>' +
+      renderDocumentPreview(purchaseOrder);
     }
 
     function renderWaybillKind(kind) {
@@ -1253,7 +1723,8 @@
 
     function renderRelatedWaybillRow(waybill) {
       var number = getDocumentNumber(waybill);
-      return '<div class="relation-child-row related-waybill-row">' +
+      return '<div class="relation-child-row related-waybill-row' +
+        (hasDocumentPreview(waybill) ? ' relation-child-row--has-preview' : '') + '">' +
         renderDocumentKindIcon(waybill, true) +
         '<span class="related-waybill-main">' +
           '<span class="related-waybill-identity">' +
@@ -1264,7 +1735,8 @@
         '</span>' +
         '<span class="document-date">' + escapeHtml(getDocumentDateText(waybill)) + '</span>' +
         renderDocumentActions(waybill, number) +
-      '</div>';
+      '</div>' +
+      renderDocumentPreview(waybill);
     }
 
     function renderSalesOrderGroup(order, data, scope) {
@@ -1484,6 +1956,26 @@
           var targetPage = Number(this.getAttribute('data-page')) || 1;
           view.pages[stateKey] = targetPage;
           renderDocumentsPanel(data);
+        });
+      }
+
+      var previewToggles = container.querySelectorAll('.document-preview-toggle');
+      for (var previewIndex = 0; previewIndex < previewToggles.length; previewIndex++) {
+        previewToggles[previewIndex].addEventListener('click', function() {
+          var previewId = this.getAttribute('aria-controls');
+          var preview = previewId ? document.getElementById(previewId) : null;
+          if (!preview) return;
+
+          var willExpand = this.getAttribute('aria-expanded') !== 'true';
+          this.setAttribute('aria-expanded', willExpand ? 'true' : 'false');
+          var label = this.querySelector('.document-preview-toggle-label');
+          if (label) label.textContent = willExpand ? 'Ver menos' : 'Ver más';
+          preview.toggleAttribute('hidden', !willExpand);
+          var attachmentsPath = getSafeAttachmentsPath(this.getAttribute('data-attachments-url'));
+          if (willExpand && attachmentsPath) {
+            loadDocumentAttachments(preview, attachmentsPath);
+          }
+          t.sizeTo(contentDiv).catch(function() {});
         });
       }
 

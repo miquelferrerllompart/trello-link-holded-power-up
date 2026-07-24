@@ -108,6 +108,82 @@ describe('Worker /v2 internal-API document routes', () => {
     vi.unstubAllGlobals();
   });
 
+  it('proxies paginated attachment metadata with safe local download URLs', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(internalJson({
+      items: [{
+        id: '0123456789abcdef01234567',
+        name: 'cuadro final.jpg',
+        contentType: 'image/jpeg',
+        size: 2048,
+        createdAt: '2026-07-24T12:00:00Z',
+        downloadUrl: '/internal/v1/waybills/abcdef0123456789abcdef01/attachments/0123456789abcdef01234567',
+      }],
+      hasMore: true,
+      nextCursor: 'next-page',
+    }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/waybills/abcdef0123456789abcdef01/attachments?cursor=current-page'),
+      envV2,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `${INTERNAL_BASE}/waybills/abcdef0123456789abcdef01/attachments?cursor=current-page`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({ Authorization: 'Bearer efk_test' }),
+      }),
+    );
+    expect(await response.json()).toEqual({
+      items: [{
+        id: '0123456789abcdef01234567',
+        name: 'cuadro final.jpg',
+        mimeType: 'image/jpeg',
+        size: 2048,
+        createdAt: '2026-07-24T12:00:00Z',
+        url: '/v2/documents/waybills/abcdef0123456789abcdef01/attachments/0123456789abcdef01234567?name=cuadro+final.jpg',
+      }],
+      hasMore: true,
+      nextCursor: 'next-page',
+    });
+  });
+
+  it('streams an attachment without exposing the internal integration key', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('image-body', {
+      headers: {
+        'Content-Type': 'image/jpeg',
+        'Content-Length': '10',
+        'Content-Disposition': 'attachment; filename="upstream.jpg"',
+      },
+    }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/waybills/abcdef0123456789abcdef01/attachments/0123456789abcdef01234567?name=cuadro.jpg'),
+      envV2,
+    );
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `${INTERNAL_BASE}/waybills/abcdef0123456789abcdef01/attachments/0123456789abcdef01234567`,
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Accept: 'application/octet-stream',
+          Authorization: 'Bearer efk_test',
+        },
+      }),
+    );
+    expect(response.headers.get('Content-Type')).toBe('image/jpeg');
+    expect(response.headers.get('Content-Disposition')).toBe('inline; filename="cuadro.jpg"');
+    expect(response.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(response.headers.get('Authorization')).toBeNull();
+    expect(await response.text()).toBe('image-body');
+  });
+
   it('maps sales-orders with no shipped-items and an empty relation when no POs match', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders')) {
@@ -128,6 +204,9 @@ describe('Worker /v2 internal-API document routes', () => {
           totalUnits: 10,
           deliveryCount: 1,
           internalStatus: 'partially_prepared',
+          notes: 'Entregar por fases.',
+          internalNotes: 'Coordinar con almacén.',
+          attachmentsUrl: '/internal/v1/sales-orders/so-1/attachments',
         }],
         pagination: { page: 1, pageSize: 10, hasMore: true },
         readiness: 'ready',
@@ -165,6 +244,9 @@ describe('Worker /v2 internal-API document routes', () => {
         dueDate: null,
         deliveryCount: 1,
         totalUnits: 10,
+        notes: 'Entregar por fases.',
+        internalNotes: 'Coordinar con almacén.',
+        attachmentsUrl: '/v2/documents/sales-orders/so-1/attachments',
         projects: [{ id: 'project-1', name: 'Obra', color: '#fff' }],
         purchaseOrders: [],
         waybills: [],
@@ -204,6 +286,9 @@ describe('Worker /v2 internal-API document routes', () => {
       currency: 'EUR',
       receiptCount: 0,
       internalStatus: 'awaiting_receipt',
+      notes: 'Material reservado.',
+      internalNotes: 'Confirmar plazo con proveedor.',
+      attachments: [],
       sourceOrder: sourceId ? { id: sourceId, docNumber: 'PV-26-008005' } : null,
     });
 
@@ -248,6 +333,9 @@ describe('Worker /v2 internal-API document routes', () => {
         supplier: { id: 'supplier-1', name: 'Rexel' },
         total: 250,
         currency: 'EUR',
+        notes: 'Material reservado.',
+        internalNotes: 'Confirmar plazo con proveedor.',
+        attachments: [],
         projects: [],
       },
       expect.objectContaining({ id: 'po-2', documentNumber: 'PC-26-001102' }),
@@ -437,6 +525,25 @@ describe('Worker /v2 internal-API document routes', () => {
         approvedAt: '2026-07-11',
         workflowStatus: 'delivered',
         kind: 'material',
+        notes: 'Dejar el material junto al cuadro eléctrico.',
+        internalNotes: 'La foto de entrega es obligatoria.',
+        attachments: [
+          {
+            id: 'attachment-1',
+            name: 'entrega.jpg',
+            url: 'https://cdn.example.com/entrega.jpg',
+            mimeType: 'image/jpeg',
+            thumbnailUrl: 'https://cdn.example.com/entrega-thumb.jpg',
+            internalToken: 'must-not-leak',
+          },
+          {
+            id: 'attachment-2',
+            name: 'albaran-firmado.pdf',
+            url: 'https://cdn.example.com/albaran-firmado.pdf',
+            mimeType: 'application/pdf',
+            thumbnailUrl: null,
+          },
+        ],
         customer: { id: 'contact-1', name: 'Acme' },
         projects: [],
         sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
@@ -471,6 +578,24 @@ describe('Worker /v2 internal-API document routes', () => {
         kind: 'material',
         workflowStatus: 'delivered',
         approvedAt: '2026-07-11',
+        notes: 'Dejar el material junto al cuadro eléctrico.',
+        internalNotes: 'La foto de entrega es obligatoria.',
+        attachments: [
+          {
+            id: 'attachment-1',
+            name: 'entrega.jpg',
+            url: 'https://cdn.example.com/entrega.jpg',
+            mimeType: 'image/jpeg',
+            thumbnailUrl: 'https://cdn.example.com/entrega-thumb.jpg',
+          },
+          {
+            id: 'attachment-2',
+            name: 'albaran-firmado.pdf',
+            url: 'https://cdn.example.com/albaran-firmado.pdf',
+            mimeType: 'application/pdf',
+            thumbnailUrl: null,
+          },
+        ],
         sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
         projects: [],
       }],
@@ -494,6 +619,9 @@ describe('Worker /v2 internal-API document routes', () => {
         rawStatus: 'sent',
         displayStatus: 'sent',
         sentAt: '2026-07-01T11:30:00Z',
+        notes: 'Incluye transporte.',
+        internalNotes: 'Revisar margen antes de aceptar.',
+        attachments: [],
         freshness: 'live',
         syncPending: false,
       }],
@@ -528,6 +656,9 @@ describe('Worker /v2 internal-API document routes', () => {
         displayStatus: 'sent',
         total: 121,
         currency: 'EUR',
+        notes: 'Incluye transporte.',
+        internalNotes: 'Revisar margen antes de aceptar.',
+        attachments: [],
         projects: [],
       }],
     });
@@ -566,6 +697,9 @@ describe('Worker /v2 internal-API document routes', () => {
         paymentMethodId: null,
         siiStatus: null,
         verifactuStatus: null,
+        description: 'Trabajo finalizado.',
+        internalNotes: 'Pendiente comprobar el cobro.',
+        attachments: [],
         sourceDocuments: [
           { type: 'waybill', id: 'wb-1', docNumber: 'ALB-26-000123' },
           { type: 'salesorder', id: 'so-1', docNumber: 'PV-26-008005' },
@@ -617,6 +751,9 @@ describe('Worker /v2 internal-API document routes', () => {
           { id: 'project-1', name: 'Obra Norte', color: '#4bce97' },
           { id: 'project-2', name: 'Ampliación', color: null },
         ],
+        notes: 'Trabajo finalizado.',
+        internalNotes: 'Pendiente comprobar el cobro.',
+        attachments: [],
         sourceDocuments: [
           { type: 'waybill', id: 'wb-1', docNumber: 'ALB-26-000123' },
           { type: 'salesorder', id: 'so-1', docNumber: 'PV-26-008005' },

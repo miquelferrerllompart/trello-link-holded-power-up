@@ -1,5 +1,10 @@
 import { buildDocumentUrl } from './holded-v2';
-import { InternalApiError, internalApiGet, internalApiPost } from './internal-api';
+import {
+  InternalApiError,
+  internalApiGet,
+  internalApiPost,
+  internalApiResponse,
+} from './internal-api';
 
 interface Env {
   EF_INTERNAL_API_KEY?: string;
@@ -99,6 +104,14 @@ async function handleProjectsSearch(url: URL, env: Env): Promise<Response> {
 const V2_PAGE_SIZE = 10;
 type V2DocumentType = 'sales-orders' | 'waybills' | 'estimates' | 'invoices';
 const V2_DOCUMENT_TYPES: V2DocumentType[] = ['sales-orders', 'waybills', 'estimates', 'invoices'];
+type V2AttachmentDocumentType = V2DocumentType | 'purchase-orders';
+const V2_ATTACHMENT_DOCUMENT_TYPES: V2AttachmentDocumentType[] = [
+  'sales-orders',
+  'purchase-orders',
+  'waybills',
+  'estimates',
+  'invoices',
+];
 
 interface InternalProjectRef {
   id: string;
@@ -109,6 +122,39 @@ interface InternalProjectRef {
 interface InternalSourceOrderRef {
   id: string;
   docNumber: string;
+}
+
+function attachmentProxyPath(type: V2AttachmentDocumentType, documentId: string): string {
+  return `/v2/documents/${type}/${encodeURIComponent(documentId)}/attachments`;
+}
+
+function mapDocumentPreview(
+  item: Record<string, any>,
+  type: V2AttachmentDocumentType,
+  documentId: string,
+) {
+  return {
+    ...(('notes' in item || 'description' in item)
+      ? { notes: item.notes ?? item.description ?? null }
+      : {}),
+    ...('internalNotes' in item ? { internalNotes: item.internalNotes ?? null } : {}),
+    ...(typeof item.attachmentsUrl === 'string' && item.attachmentsUrl
+      ? { attachmentsUrl: attachmentProxyPath(type, documentId) }
+      : {}),
+    // Keep accepting the former inline shape while cached Pages responses age
+    // out; v1.3 consumers use attachmentsUrl and lazy-load the metadata.
+    ...(Array.isArray(item.attachments) ? {
+      attachments: item.attachments
+        .filter((attachment: unknown) => attachment && typeof attachment === 'object')
+        .map((attachment: Record<string, any>) => ({
+          id: attachment.id ?? null,
+          name: attachment.name ?? null,
+          url: attachment.url ?? null,
+          mimeType: attachment.mimeType ?? null,
+          thumbnailUrl: attachment.thumbnailUrl ?? null,
+        })),
+    } : {}),
+  };
 }
 
 function mapInternalSalesOrder(item: Record<string, any>) {
@@ -123,6 +169,7 @@ function mapInternalSalesOrder(item: Record<string, any>) {
     dueDate: item.dueDate ?? null,
     deliveryCount: item.deliveryCount ?? 0,
     totalUnits: item.totalUnits ?? 0,
+    ...mapDocumentPreview(item, 'sales-orders', item.id),
     projects: (item.projects ?? []) as InternalProjectRef[],
   };
 }
@@ -137,6 +184,7 @@ function mapInternalWaybill(item: Record<string, any>) {
     issueDate: item.issueDate ?? null,
     workflowStatus: item.workflowStatus ?? null,
     approvedAt: item.approvedAt ?? null,
+    ...mapDocumentPreview(item, 'waybills', item.id),
     sourceOrder: (item.sourceOrder ?? null) as InternalSourceOrderRef | null,
     projects: (item.projects ?? []) as InternalProjectRef[],
   };
@@ -154,6 +202,7 @@ function mapInternalPurchaseOrder(item: Record<string, any>) {
     supplier: (item.supplier ?? null) as { id: string; name: string } | null,
     total: item.total ?? null,
     currency: item.currency ?? null,
+    ...mapDocumentPreview(item, 'purchase-orders', item.id),
     projects: (item.projects ?? []) as InternalProjectRef[],
   };
 }
@@ -170,6 +219,7 @@ function mapInternalEstimate(item: Record<string, any>) {
     displayStatus: item.displayStatus ?? null,
     total: item.total ?? null,
     currency: item.currency ?? null,
+    ...mapDocumentPreview(item, 'estimates', item.id),
     projects: (item.projects ?? []) as InternalProjectRef[],
   };
 }
@@ -190,7 +240,146 @@ function mapInternalInvoice(item: Record<string, any>) {
     amounts: item.amounts ?? null,
     projects: (item.projects ?? []) as InternalProjectRef[],
     sourceDocuments: item.sourceDocuments ?? [],
+    ...mapDocumentPreview(item, 'invoices', item.id),
   };
+}
+
+interface InternalAttachmentPage {
+  items?: Array<Record<string, any>>;
+  hasMore?: boolean;
+  nextCursor?: string | null;
+}
+
+function decodePathSegment(value: string): string | null {
+  try {
+    const decoded = decodeURIComponent(value).trim();
+    return decoded && decoded.length <= 200 ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+function attachmentRoute(url: URL): {
+  type: V2AttachmentDocumentType;
+  documentId: string;
+  attachmentId: string | null;
+} | null {
+  const match = url.pathname.match(
+    /^\/v2\/documents\/([^/]+)\/([^/]+)\/attachments(?:\/([^/]+))?$/,
+  );
+  if (!match || !V2_ATTACHMENT_DOCUMENT_TYPES.includes(match[1] as V2AttachmentDocumentType)) {
+    return null;
+  }
+  const documentId = decodePathSegment(match[2]);
+  const attachmentId = match[3] ? decodePathSegment(match[3]) : null;
+  if (!documentId || (match[3] && !attachmentId)) return null;
+  return {
+    type: match[1] as V2AttachmentDocumentType,
+    documentId,
+    attachmentId,
+  };
+}
+
+function attachmentErrorResponse(err: unknown): Response {
+  if (err instanceof InternalApiError) {
+    const status = err.status >= 400 ? err.status : 502;
+    const message = err.code === 'NOT_FOUND'
+      ? 'No se encontró el adjunto.'
+      : 'No se pudieron cargar los adjuntos.';
+    return jsonResponse({ error: { code: err.code, message } }, status);
+  }
+  return jsonResponse({ error: { code: 'UNKNOWN', message: 'Error inesperado.' } }, 502);
+}
+
+async function handleV2AttachmentList(
+  url: URL,
+  env: Env,
+  route: NonNullable<ReturnType<typeof attachmentRoute>>,
+): Promise<Response> {
+  const apiKey = env.EF_INTERNAL_API_KEY;
+  if (!apiKey) {
+    return jsonResponse({ error: { code: 'CONFIG', message: 'Internal API key not configured in worker' } }, 500);
+  }
+
+  try {
+    const page = await internalApiGet<InternalAttachmentPage>(
+      `/${route.type}/${encodeURIComponent(route.documentId)}/attachments`,
+      apiKey,
+      { query: { cursor: url.searchParams.get('cursor') } },
+    );
+    const basePath = attachmentProxyPath(route.type, route.documentId);
+    const items = (page.items ?? [])
+      .filter((item) => item && typeof item.id === 'string')
+      .map((item) => {
+        const name = typeof item.name === 'string' && item.name.trim()
+          ? item.name.trim()
+          : 'Adjunto';
+        const params = new URLSearchParams({ name });
+        return {
+          id: item.id,
+          name,
+          mimeType: typeof item.contentType === 'string'
+            ? item.contentType
+            : 'application/octet-stream',
+          ...(typeof item.size === 'number' ? { size: item.size } : {}),
+          ...(typeof item.createdAt === 'string' ? { createdAt: item.createdAt } : {}),
+          url: `${basePath}/${encodeURIComponent(item.id)}?${params.toString()}`,
+        };
+      });
+    return jsonResponse({
+      items,
+      hasMore: Boolean(page.hasMore),
+      nextCursor: page.nextCursor ?? null,
+    });
+  } catch (err) {
+    return attachmentErrorResponse(err);
+  }
+}
+
+function safeAttachmentFilename(value: string | null): string {
+  const name = String(value || 'adjunto')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u0000-\u001f\u007f"\\/]/g, '_')
+    .replace(/[^\x20-\x7e]/g, '_')
+    .trim();
+  return (name || 'adjunto').slice(0, 180);
+}
+
+async function handleV2AttachmentBinary(
+  url: URL,
+  env: Env,
+  route: NonNullable<ReturnType<typeof attachmentRoute>>,
+): Promise<Response> {
+  const apiKey = env.EF_INTERNAL_API_KEY;
+  if (!apiKey || !route.attachmentId) {
+    return jsonResponse({ error: { code: 'CONFIG', message: 'Internal API key not configured in worker' } }, 500);
+  }
+
+  try {
+    const response = await internalApiResponse(
+      `/${route.type}/${encodeURIComponent(route.documentId)}/attachments/${encodeURIComponent(route.attachmentId)}`,
+      apiKey,
+      { accept: 'application/octet-stream' },
+    );
+    const contentType = response.headers.get('Content-Type') || 'application/octet-stream';
+    const mediaType = contentType.split(';', 1)[0].trim().toLowerCase();
+    const disposition = mediaType === 'application/pdf' || mediaType.startsWith('image/')
+      ? 'inline'
+      : 'attachment';
+    const headers: Record<string, string> = {
+      ...CORS_HEADERS,
+      'Content-Type': contentType,
+      'Content-Disposition': `${disposition}; filename="${safeAttachmentFilename(url.searchParams.get('name'))}"`,
+      'Cache-Control': 'private, no-store',
+      'X-Content-Type-Options': 'nosniff',
+    };
+    const contentLength = response.headers.get('Content-Length');
+    if (contentLength) headers['Content-Length'] = contentLength;
+    return new Response(response.body, { status: 200, headers });
+  } catch (err) {
+    return attachmentErrorResponse(err);
+  }
 }
 
 interface InternalPage {
@@ -488,6 +677,14 @@ export default {
 
     const url = new URL(request.url);
 
+    if (request.method === 'GET') {
+      const route = attachmentRoute(url);
+      if (route) {
+        return route.attachmentId
+          ? handleV2AttachmentBinary(url, env, route)
+          : handleV2AttachmentList(url, env, route);
+      }
+    }
     if (request.method === 'GET' && url.pathname === '/v2/documents/search') {
       return handleV2DocumentsSearch(url, env);
     }
