@@ -10,6 +10,7 @@ export interface InternalRequestOptions {
   query?: Record<string, string | null | undefined>;
   timeoutMs?: number;
   signal?: AbortSignal;
+  accept?: string;
   method?: string;
   body?: unknown;
   idempotencyKey?: string;
@@ -140,6 +141,54 @@ export function internalApiGet<T>(
   options: InternalRequestOptions = {},
 ): Promise<T> {
   return internalApiRequest<T>(path, apiKey, { ...options, method: 'GET' });
+}
+
+/** Fetches a successful internal-API response without consuming its body. */
+export async function internalApiResponse(
+  path: string,
+  apiKey: string,
+  options: InternalRequestOptions = {},
+): Promise<Response> {
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const timeoutMs = options.timeoutMs ?? INTERNAL_API_TIMEOUT_MS;
+  const signal = options.signal ?? AbortSignal.timeout(timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetchImpl(buildUrl(path, options.query), {
+      method: options.method ?? 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        Accept: options.accept ?? 'application/octet-stream',
+      },
+      signal,
+    });
+  } catch (err) {
+    const name = (err as Error)?.name;
+    const message = name === 'TimeoutError' || name === 'AbortError'
+      ? 'La solicitud tardó demasiado.'
+      : 'No se pudo contactar con el servidor.';
+    throw new InternalApiError('UPSTREAM', 0, true, message);
+  }
+
+  if (!response.ok) {
+    let envelope: ErrorEnvelope = {};
+    try {
+      envelope = await response.clone().json<ErrorEnvelope>();
+    } catch {
+      // Binary endpoints may return a body that is not JSON.
+    }
+    const { code, retryable } = classifyStatus(response.status, envelope.error?.code);
+    throw new InternalApiError(
+      code,
+      response.status,
+      retryable,
+      `Internal API error (${response.status})`,
+      envelope.error?.message ?? '',
+    );
+  }
+
+  return response;
 }
 
 export function internalApiPost<T>(
