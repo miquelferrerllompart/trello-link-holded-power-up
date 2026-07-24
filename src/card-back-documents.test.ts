@@ -367,6 +367,12 @@ describe('card-back document view (internal API v2)', () => {
     expect(preview?.textContent).toContain('Notas internas');
     expect(preview?.textContent).toContain('Comprobar la firma antes de cerrar.');
 
+    const previewStyles = dom.window.getComputedStyle(preview);
+    expect(previewStyles.marginLeft).toBe('0px');
+    expect(previewStyles.marginRight).toBe('0px');
+    expect(previewStyles.borderLeftWidth).toBe('1px');
+    expect(previewStyles.borderLeftColor).not.toBe('rgb(87, 157, 255)');
+
     const imageLink = preview?.querySelector('.document-preview-image-link');
     expect(imageLink?.getAttribute('href')).toBe('https://cdn.example.com/entrega.jpg');
     expect(imageLink?.getAttribute('target')).toBe('_blank');
@@ -379,6 +385,11 @@ describe('card-back document view (internal API v2)', () => {
     expect(pdfLink?.getAttribute('href')).toBe('https://cdn.example.com/albaran-firmado.pdf');
     expect(pdfLink?.getAttribute('target')).toBe('_blank');
     expect(preview?.querySelector('iframe, embed, object')).toBeNull();
+
+    const rowDate = dom.window.document.querySelector('.document-row .document-date');
+    const previewDate = preview?.querySelector('.document-preview-date');
+    expect(previewDate?.textContent).toBe(rowDate?.textContent);
+    expect(preview?.lastElementChild).toBe(previewDate);
   });
 
   it('offers the same preview control for sales orders, purchase orders, invoices and estimates', async () => {
@@ -429,6 +440,10 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(dom.window.document.querySelector('.document-row .document-preview-toggle')).not.toBeNull();
     expect(dom.window.document.querySelector('.purchase-order-row .document-preview-toggle')).not.toBeNull();
+    const nestedPreview = dom.window.document.querySelector('.relation-rail > .document-preview');
+    const nestedPreviewStyles = dom.window.getComputedStyle(nestedPreview);
+    expect(nestedPreviewStyles.marginLeft).toBe('-20px');
+    expect(nestedPreviewStyles.width).toBe('calc(100% + 20px)');
 
     dom.window.document.querySelector('[data-tab="invoices"]')?.click();
     await waitForRender();
