@@ -1,5 +1,6 @@
 import { buildDocumentUrl } from './holded-v2';
 import {
+  INTERNAL_API_BASE,
   InternalApiError,
   internalApiGet,
   internalApiPost,
@@ -259,6 +260,19 @@ function decodePathSegment(value: string): string | null {
   }
 }
 
+function decodeAttachmentId(value: string): string | null {
+  try {
+    const decoded = decodeURIComponent(value);
+    return decoded &&
+      decoded.length <= 240 &&
+      !/[\u0000-\u001f\u007f\\/]/.test(decoded)
+      ? decoded
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function attachmentRoute(url: URL): {
   type: V2AttachmentDocumentType;
   documentId: string;
@@ -271,13 +285,45 @@ function attachmentRoute(url: URL): {
     return null;
   }
   const documentId = decodePathSegment(match[2]);
-  const attachmentId = match[3] ? decodePathSegment(match[3]) : null;
+  const attachmentId = match[3] ? decodeAttachmentId(match[3]) : null;
   if (!documentId || (match[3] && !attachmentId)) return null;
   return {
     type: match[1] as V2AttachmentDocumentType,
     documentId,
     attachmentId,
   };
+}
+
+function authenticatedAttachmentPath(
+  downloadUrl: string,
+  route: NonNullable<ReturnType<typeof attachmentRoute>>,
+): string | null {
+  if (!route.attachmentId) return null;
+  try {
+    const source = new URL(downloadUrl);
+    const base = new URL(INTERNAL_API_BASE);
+    if (source.origin !== base.origin || source.username || source.password || source.hash) return null;
+
+    const basePath = base.pathname.replace(/\/$/, '');
+    if (!source.pathname.startsWith(`${basePath}/`)) return null;
+    const pathSegments = source.pathname
+      .slice(basePath.length + 1)
+      .split('/');
+    if (pathSegments.length !== 4 || pathSegments[2] !== 'attachments') return null;
+
+    const sourceType = decodeURIComponent(pathSegments[0]);
+    const sourceDocumentId = decodeURIComponent(pathSegments[1]);
+    const sourceAttachmentId = decodeAttachmentId(pathSegments[3]);
+    if (
+      sourceType !== route.type ||
+      sourceDocumentId !== route.documentId ||
+      sourceAttachmentId !== route.attachmentId
+    ) return null;
+
+    return `${source.pathname.slice(basePath.length)}${source.search}`;
+  } catch {
+    return null;
+  }
 }
 
 function attachmentErrorResponse(err: unknown): Response {
@@ -315,6 +361,13 @@ async function handleV2AttachmentList(
           ? item.name.trim()
           : 'Adjunto';
         const params = new URLSearchParams({ name });
+        const sourceRoute = { ...route, attachmentId: item.id };
+        if (
+          typeof item.downloadUrl === 'string' &&
+          authenticatedAttachmentPath(item.downloadUrl, sourceRoute)
+        ) {
+          params.set('source', item.downloadUrl);
+        }
         return {
           id: item.id,
           name,
@@ -357,8 +410,16 @@ async function handleV2AttachmentBinary(
   }
 
   try {
+    const source = url.searchParams.get('source');
+    const sourcePath = source ? authenticatedAttachmentPath(source, route) : null;
+    if (source && !sourcePath) {
+      return jsonResponse({
+        error: { code: 'INVALID_REQUEST', message: 'La URL del adjunto no es válida.' },
+      }, 400);
+    }
     const response = await internalApiResponse(
-      `/${route.type}/${encodeURIComponent(route.documentId)}/attachments/${encodeURIComponent(route.attachmentId)}`,
+      sourcePath ||
+        `/${route.type}/${encodeURIComponent(route.documentId)}/attachments/${encodeURIComponent(route.attachmentId)}`,
       apiKey,
       { accept: 'application/octet-stream' },
     );

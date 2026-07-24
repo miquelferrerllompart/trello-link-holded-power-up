@@ -109,14 +109,16 @@ describe('Worker /v2 internal-API document routes', () => {
   });
 
   it('proxies paginated attachment metadata with safe local download URLs', async () => {
+    const attachmentId = '2026-07-24 16.45.02 cuadro final instalación.jpg';
+    const downloadUrl = `${INTERNAL_BASE}/waybills/abcdef0123456789abcdef01/attachments/${encodeURIComponent(attachmentId)}`;
     const fetchImpl = vi.fn().mockResolvedValue(internalJson({
       items: [{
-        id: '0123456789abcdef01234567',
-        name: 'cuadro final.jpg',
+        id: attachmentId,
+        name: attachmentId,
         contentType: 'image/jpeg',
         size: 2048,
         createdAt: '2026-07-24T12:00:00Z',
-        downloadUrl: '/internal/v1/waybills/abcdef0123456789abcdef01/attachments/0123456789abcdef01234567',
+        downloadUrl,
       }],
       hasMore: true,
       nextCursor: 'next-page',
@@ -136,21 +138,34 @@ describe('Worker /v2 internal-API document routes', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer efk_test' }),
       }),
     );
-    expect(await response.json()).toEqual({
+    const body = await response.json();
+    expect(body).toEqual({
       items: [{
-        id: '0123456789abcdef01234567',
-        name: 'cuadro final.jpg',
+        id: attachmentId,
+        name: attachmentId,
         mimeType: 'image/jpeg',
         size: 2048,
         createdAt: '2026-07-24T12:00:00Z',
-        url: '/v2/documents/waybills/abcdef0123456789abcdef01/attachments/0123456789abcdef01234567?name=cuadro+final.jpg',
+        url: expect.any(String),
       }],
       hasMore: true,
       nextCursor: 'next-page',
     });
+    const proxyUrl = new URL(body.items[0].url, 'https://proxy.test');
+    expect(decodeURIComponent(proxyUrl.pathname.split('/').at(-1))).toBe(attachmentId);
+    expect(proxyUrl.searchParams.get('name')).toBe(attachmentId);
+    expect(proxyUrl.searchParams.get('source')).toBe(downloadUrl);
+    expect(body.items[0].url).not.toContain('efk_test');
   });
 
   it('streams an attachment without exposing the internal integration key', async () => {
+    const attachmentId = '2026-07-24 16.45.02 cuadro final instalación.jpg';
+    const downloadUrl = `${INTERNAL_BASE}/waybills/abcdef0123456789abcdef01/attachments/${encodeURIComponent(attachmentId)}?version=2`;
+    const proxyUrl = new URL(
+      `https://proxy.test/v2/documents/waybills/abcdef0123456789abcdef01/attachments/${encodeURIComponent(attachmentId)}`,
+    );
+    proxyUrl.searchParams.set('name', 'cuadro.jpg');
+    proxyUrl.searchParams.set('source', downloadUrl);
     const fetchImpl = vi.fn().mockResolvedValue(new Response('image-body', {
       headers: {
         'Content-Type': 'image/jpeg',
@@ -161,13 +176,13 @@ describe('Worker /v2 internal-API document routes', () => {
     vi.stubGlobal('fetch', fetchImpl);
 
     const response = await worker.fetch(
-      new Request('https://proxy.test/v2/documents/waybills/abcdef0123456789abcdef01/attachments/0123456789abcdef01234567?name=cuadro.jpg'),
+      new Request(proxyUrl),
       envV2,
     );
 
     expect(response.status).toBe(200);
     expect(fetchImpl).toHaveBeenCalledWith(
-      `${INTERNAL_BASE}/waybills/abcdef0123456789abcdef01/attachments/0123456789abcdef01234567`,
+      downloadUrl,
       expect.objectContaining({
         method: 'GET',
         headers: {
@@ -182,6 +197,26 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(response.headers.get('Authorization')).toBeNull();
     expect(await response.text()).toBe('image-body');
+  });
+
+  it('rejects a tampered attachment source without sending the integration key', async () => {
+    const fetchImpl = vi.fn();
+    vi.stubGlobal('fetch', fetchImpl);
+    const proxyUrl = new URL(
+      'https://proxy.test/v2/documents/waybills/abcdef0123456789abcdef01/attachments/foto.png',
+    );
+    proxyUrl.searchParams.set(
+      'source',
+      'https://api.app.electricaferrer.es/internal/v1/contacts/contact-1',
+    );
+
+    const response = await worker.fetch(new Request(proxyUrl), envV2);
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: { code: 'INVALID_REQUEST', message: 'La URL del adjunto no es válida.' },
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
   });
 
   it('maps sales-orders with no shipped-items and an empty relation when no POs match', async () => {

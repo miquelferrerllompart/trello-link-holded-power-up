@@ -123,6 +123,8 @@ route is internal-only â€” no Holded pass-through, no KV cache. Unknown routes â
 | `GET /contacts/search?q=` | `GET /contacts?query=` | Contact search (summaries) for the search popup |
 | `GET /projects/search?q=` | `GET /projects?query=` | Project search â†’ `{ id, name, contactName, key }` |
 | `GET /v2/documents/search?contactId=&projectId=&type=&scope=&page=&cursor=` | `/sales-orders` \| `/waybills` \| `/invoices` \| `/estimates` (+ `/purchase-orders`) | One page of docs for the active card-back tab |
+| `GET /v2/documents/:type/:id/attachments` | `GET /:type/:id/attachments` | Lazy attachment metadata with browser-safe proxy URLs |
+| `GET /v2/documents/:type/:id/attachments/:attachmentId` | Absolute authenticated `downloadUrl` from the metadata response | Validated binary/image proxy; opaque IDs are preserved exactly |
 | `GET /v2/contacts/:id` | `GET /contacts/:id` | Contact detail (camelCase `customFields`) for the "Importante" box + address picker |
 | `POST /v2/contacts?idempotencyKey=` | `POST /contacts` | Create contact (camelCase payload incl. `defaults`) |
 | `POST /v2/contacts/:id/shipping-addresses?idempotencyKey=` | `POST /contacts/:id/shipping-addresses` | Append a shipping address |
@@ -144,7 +146,10 @@ route is internal-only â€” no Holded pass-through, no KV cache. Unknown routes â
   relation types render as tree children.
 - `worker/holded-v2.ts` only builds `app.holded.com` deep-link URLs for document rows (no API client left).
 - The internal-API contract is saved under `.context/api-docs/` (`openapi.yaml`, `llms-full.txt`);
-  refresh from `https://api.app.electricaferrer.es/internal/v1/openapi.yaml` when it changes.
+  refresh from `https://api.app.electricaferrer.es/internal/v1/openapi.yaml` and
+  `https://api.app.electricaferrer.es/llms-full.txt` when it changes. Attachment IDs are opaque
+  (and may be filenames); attachment `downloadUrl` values are absolute authenticated URLs that the
+  Worker must fetch with its bearer key and proxy to the browser.
 
 ## Card-back document view
 

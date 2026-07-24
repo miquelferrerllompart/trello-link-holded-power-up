@@ -355,9 +355,9 @@ describe('card-back document view (internal API v2)', () => {
             mimeType: 'application/pdf',
           },
           {
-            id: 'image-2',
-            name: 'cuadro-final.png',
-            url: '/v2/documents/waybills/wb-preview/attachments/image-2?name=cuadro-final.png',
+            id: '2026-07-24 16.45.02 cuadro final.png',
+            name: '2026-07-24 16.45.02 cuadro final.png',
+            url: '/v2/documents/waybills/wb-preview/attachments/2026-07-24%2016.45.02%20cuadro%20final.png?name=cuadro+final.png&source=https%3A%2F%2Fapi.app.electricaferrer.es%2Finternal%2Fv1%2Fwaybills%2Fwb-preview%2Fattachments%2F2026-07-24%252016.45.02%2520cuadro%2520final.png',
             mimeType: 'image/png',
           },
         ],
@@ -380,6 +380,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(toggle?.textContent?.trim()).toBe('Ver menos');
     expect(toggle?.getAttribute('aria-expanded')).toBe('true');
     expect(preview?.hasAttribute('hidden')).toBe(false);
+    expect(preview?.getAttribute('data-static-motion')).toBe('true');
     expect(preview?.textContent).toContain('Notas');
     expect(preview?.textContent).toContain('Dejar el material junto al cuadro.');
     expect(preview?.textContent).toContain('Notas internas');
@@ -397,6 +398,13 @@ describe('card-back document view (internal API v2)', () => {
     expect(imageLink?.querySelector('img')?.getAttribute('src')).toBe('https://cdn.example.com/entrega-thumb.jpg');
     expect(imageLink?.querySelector('img')?.getAttribute('loading')).toBe('lazy');
     expect(preview?.querySelectorAll('.document-preview-image-link')).toHaveLength(2);
+    expect(preview?.querySelector('.document-preview-images-heading')?.textContent).toBe('Imágenes · 2');
+    expect(preview?.querySelector('.document-preview-files-heading')?.textContent).toBe('Archivos · 1');
+    const proxiedImage = preview?.querySelectorAll('.document-preview-image-link')[1];
+    expect(proxiedImage?.getAttribute('href')).toContain(
+      'https://holded-proxy.electricaferrer.workers.dev/v2/documents/waybills/wb-preview/attachments/2026-07-24%2016.45.02%20cuadro%20final.png',
+    );
+    expect(dom.window.getComputedStyle(imageLink?.querySelector('img')).objectFit).toBe('contain');
     expect(urls.some((url) => url.includes('/waybills/wb-preview/attachments'))).toBe(true);
 
     const pdfLink = preview?.querySelector('.document-preview-file--pdf');
@@ -408,6 +416,14 @@ describe('card-back document view (internal API v2)', () => {
     const previewDate = preview?.querySelector('.document-preview-date');
     expect(previewDate?.textContent).toBe(rowDate?.textContent);
     expect(preview?.lastElementChild).toBe(previewDate);
+
+    toggle?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
+    expect(preview?.getAttribute('data-static-motion')).toBe('false');
+    const css = Array.from(dom.window.document.querySelectorAll('style'))
+      .map((style) => style.textContent)
+      .join('\n');
+    expect(css).toContain('animation: document-preview-content-in 180ms cubic-bezier(0.23, 1, 0.32, 1) both');
+    expect(css).toContain('> .document-preview-attachments { animation: none; }');
   });
 
   it('offers the same preview control for sales orders, purchase orders, invoices and estimates', async () => {
