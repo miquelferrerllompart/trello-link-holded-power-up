@@ -466,6 +466,45 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(body.results[1].waybills).toEqual([]);
   });
 
+  it('combines linked warehouse movements and standalone returns in the Pedidos view', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({
+          items: [
+            { id: 'material', docNumber: 'ALB-MATERIAL', kind: 'material', issueDate: '2026-07-15', workflowStatus: 'delivered', sourceOrder: { id: 'so-1', docNumber: 'PV-1' }, projects: [] },
+            { id: 'refund', docNumber: 'ALB-DEVOLUCION', kind: 'refund', issueDate: '2026-07-16', workflowStatus: 'prepared', sourceOrder: null, projects: [] },
+            { id: 'unclassified', docNumber: 'ALB-SIN-CLASIFICAR', kind: 'unclassified', issueDate: '2026-07-13', workflowStatus: 'prepared', sourceOrder: null, projects: [] },
+            { id: 'labour', docNumber: 'ALB-TRABAJO', kind: 'labour', issueDate: '2026-07-17', workflowStatus: 'prepared', sourceOrder: null, projects: [] },
+          ],
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+        });
+      }
+      return internalJson({
+        items: [{ id: 'so-1', docNumber: 'PV-1', issueDate: '2026-07-14', internalStatus: 'in_process', projects: [] }],
+        pagination: { page: 1, pageSize: 100, hasMore: false },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=1&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as {
+      results: Array<{ id: string; waybills?: Array<{ id: string }> }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/sales-orders?customerId=contact-1&page=1&pageSize=100`,
+    );
+    expect(body.results.map((item) => item.id)).toEqual(['refund', 'so-1', 'unclassified']);
+    expect(body.results[1].waybills?.map((item) => item.id)).toEqual(['material']);
+  });
+
   it('keeps sales orders and flags purchaseOrdersError when the PO fetch fails', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders')) {
@@ -635,6 +674,71 @@ describe('Worker /v2 internal-API document routes', () => {
         projects: [],
       }],
     });
+  });
+
+  it('returns only work waybills for the Partes de trabajo category before paginating', async () => {
+    const waybill = (id: string, kind: string) => ({
+      id,
+      docNumber: `ALB-${id}`,
+      kind,
+      issueDate: '2026-07-10',
+      workflowStatus: 'prepared',
+      projects: [],
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(internalJson({
+      items: [
+        waybill('material', 'material'),
+        waybill('labour', 'labour'),
+        waybill('mixed', 'mixed'),
+        waybill('extra', 'extra'),
+        waybill('refund', 'refund'),
+        waybill('unclassified', 'unclassified'),
+      ],
+      pagination: { page: 1, pageSize: 100, hasMore: false },
+    }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=waybills&category=work&page=1&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { results: Array<{ id: string }> };
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=1&pageSize=100`,
+    );
+    expect(body.results.map((item) => item.id)).toEqual(['labour', 'mixed', 'extra', 'unclassified']);
+  });
+
+  it('includes material, returns, and unclassified waybills in the Almacén category', async () => {
+    const waybill = (id: string, kind: string) => ({
+      id,
+      docNumber: `ALB-${id}`,
+      kind,
+      issueDate: '2026-07-10',
+      workflowStatus: 'prepared',
+      projects: [],
+    });
+    const fetchImpl = vi.fn().mockResolvedValue(internalJson({
+      items: [
+        waybill('labour', 'labour'),
+        waybill('material', 'material'),
+        waybill('refund', 'refund'),
+        waybill('unclassified', 'unclassified'),
+      ],
+      pagination: { page: 1, pageSize: 100, hasMore: false },
+    }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=waybills&category=warehouse&page=1&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { results: Array<{ id: string }> };
+
+    expect(response.status).toBe(200);
+    expect(body.results.map((item) => item.id)).toEqual(['material', 'refund', 'unclassified']);
   });
 
   it('maps estimates through the cursor model with total, currency and displayStatus', async () => {

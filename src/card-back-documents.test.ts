@@ -11,6 +11,10 @@ const TYPE_TO_KEY = {
   estimates: 'estimates',
   invoices: 'invoices',
 };
+const WAYBILL_CATEGORY_KINDS = {
+  work: ['labour', 'mixed', 'extra', 'unclassified'],
+  warehouse: ['material', 'refund', 'unclassified'],
+};
 
 // Mirrors the worker's /v2/documents/search response shape.
 function buildDocumentsPage(documents, requestUrl, options) {
@@ -19,7 +23,13 @@ function buildDocumentsPage(documents, requestUrl, options) {
   const scope = url.searchParams.get('scope') || 'matched';
   const key = TYPE_TO_KEY[type] || 'salesOrders';
   const source = scope === 'all' ? (documents.all || documents) : documents;
-  const items = source[key] || [];
+  const category = url.searchParams.get('category');
+  const sourceItems = type === 'sales-orders' && url.searchParams.get('view') === 'orders'
+    ? [...(source.salesOrders || []), ...(source.orderWaybills || [])]
+    : source[key] || [];
+  const items = type === 'waybills' && WAYBILL_CATEGORY_KINDS[category]
+    ? sourceItems.filter((item) => WAYBILL_CATEGORY_KINDS[category].includes(item.kind || 'unclassified'))
+    : sourceItems;
 
   if (type === 'estimates') {
     const start = Number(url.searchParams.get('cursor')) || 0;
@@ -155,19 +165,50 @@ const salesOrder = (id, documentNumber, extra = {}) => ({
 });
 
 describe('card-back document view (internal API v2)', () => {
-  it('shows Albaranes first and loads it as the default document tab', async () => {
+  it('shows Partes de trabajo and Pedidos without a separate Almacén tab', async () => {
     const { dom, urls } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
     await waitForRender();
 
     const tabs = Array.from(dom.window.document.querySelectorAll('.documents-tab'));
     expect(tabs.map((tab) => tab.textContent?.trim()))
-      .toEqual(['Albaranes', 'Pedidos venta', 'Facturas', 'Presupuestos']);
+      .toEqual(['Partes de trabajo', 'Pedidos', 'Facturas', 'Presupuestos']);
     expect(tabs[0]?.getAttribute('data-tab')).toBe('waybills');
     expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
-    expect(urls.some((url) => url.includes('/v2/documents/search') && url.includes('type=waybills')))
+    expect(urls.some((url) => url.includes('/v2/documents/search') && url.includes('type=waybills') && url.includes('category=work')))
       .toBe(true);
     expect(urls.some((url) => url.includes('/v2/documents/search') && url.includes('type=sales-orders')))
       .toBe(false);
+  });
+
+  it('keeps only work reports in Partes de trabajo and combines standalone movements in Pedidos', async () => {
+    const { dom, urls } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1')],
+      orderWaybills: [
+        { id: 'refund-order', type: 'waybills', documentNumber: 'ALB-DEVOLUCION-PEDIDO', kind: 'refund', workflowStatus: 'prepared', issueDate: '2026-07-11', projects: [] },
+      ],
+      estimates: [],
+      waybills: [
+        { id: 'material', type: 'waybills', documentNumber: 'ALB-MATERIAL', kind: 'material', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] },
+        { id: 'labour', type: 'waybills', documentNumber: 'ALB-TRABAJO', kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] },
+        { id: 'mixed', type: 'waybills', documentNumber: 'ALB-MIXTO', kind: 'mixed', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] },
+        { id: 'extra', type: 'waybills', documentNumber: 'ALB-EXTRA', kind: 'extra', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] },
+        { id: 'refund', type: 'waybills', documentNumber: 'ALB-DEVOLUCION', kind: 'refund', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] },
+        { id: 'unclassified', type: 'waybills', documentNumber: 'ALB-SIN-CLASIFICAR', kind: 'unclassified', workflowStatus: 'prepared', issueDate: '2026-07-10', projects: [] },
+      ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(Array.from(dom.window.document.querySelectorAll('.document-number')).map((item) => item.textContent))
+      .toEqual(['ALB-TRABAJO', 'ALB-MIXTO', 'ALB-EXTRA', 'ALB-SIN-CLASIFICAR']);
+
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(Array.from(dom.window.document.querySelectorAll('.document-number')).map((item) => item.textContent))
+      .toEqual(['PV-1', 'ALB-DEVOLUCION-PEDIDO']);
+    expect(urls.some((url) => url.includes('type=sales-orders') && url.includes('view=orders'))).toBe(true);
   });
 
   it('renders the full customer address and dual app destinations for the customer and project', async () => {
@@ -257,13 +298,13 @@ describe('card-back document view (internal API v2)', () => {
     expect(css).toContain('@media (hover: none), (any-pointer: coarse)');
   });
 
-  it('keeps document dates clear of always-visible touch actions', () => {
+  it('keeps document times clear of always-visible touch actions', () => {
     const { dom } = loadCardBack({ salesOrders: [], waybills: [], estimates: [] });
     const css = Array.from(dom.window.document.querySelectorAll('style'))
       .map((style) => style.textContent)
       .join('\n');
 
-    expect(css).toContain('.document-date { padding-right: 76px; }');
+    expect(css).toContain('.document-time { padding-right: 76px; }');
   });
 
   it('shows waybill approval labels (Sin aprobar / Aprobado)', async () => {
@@ -286,13 +327,213 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).not.toContain('Preparado');
   });
 
-  it('shows every waybill kind as a subtitle beneath its number in the Albaranes list', async () => {
+  it('groups consecutive documents by day and leaves only the hour on each row', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [
+        {
+          id: 'wb-1',
+          type: 'waybills',
+          documentNumber: 'ALB-1',
+          workflowStatus: 'delivered',
+          approvedAt: '2026-07-15T09:12:00',
+          issueDate: '2026-07-15',
+          projects: [],
+        },
+        {
+          id: 'wb-2',
+          type: 'waybills',
+          documentNumber: 'ALB-2',
+          workflowStatus: 'delivered',
+          approvedAt: '2026-07-15T16:40:00',
+          issueDate: '2026-07-15',
+          projects: [],
+        },
+        {
+          id: 'wb-3',
+          type: 'waybills',
+          documentNumber: 'ALB-3',
+          workflowStatus: 'prepared',
+          issueDate: '2026-07-14',
+          projects: [],
+        },
+      ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const groups = dom.window.document.querySelectorAll('.document-day-group');
+    expect(groups).toHaveLength(2);
+    expect(Array.from(groups).map((group) => group.querySelector('.document-day-label')?.textContent))
+      .toEqual([
+        'Miércoles, 15 de julio de 2026',
+        'Martes, 14 de julio de 2026',
+      ]);
+    expect(Array.from(groups).map((group) => group.querySelectorAll('.document-row').length))
+      .toEqual([2, 1]);
+    expect(Array.from(dom.window.document.querySelectorAll('.document-row .document-time'))
+      .map((time) => time.textContent))
+      .toEqual(['09:12', '16:40', '']);
+    expect(groups[1].querySelector('.document-time')?.classList.contains('document-time--empty'))
+      .toBe(true);
+    expect(groups[1].querySelector('.document-time')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('opens the previews of the most recent work-report day by default and leaves older days unchanged', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [
+        { id: 'newer', type: 'waybills', documentNumber: 'ALB-NUEVO', kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-07-15', notes: 'Nota del último día', projects: [] },
+        { id: 'older', type: 'waybills', documentNumber: 'ALB-ANTERIOR', kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-07-14', notes: 'Nota anterior', projects: [] },
+      ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const groups = dom.window.document.querySelectorAll('.document-day-group');
+    const latestToggle = groups[0].querySelector('.document-preview-toggle');
+    const olderToggle = groups[1].querySelector('.document-preview-toggle');
+    const latestPreview = groups[0].querySelector('.document-preview');
+    const olderPreview = groups[1].querySelector('.document-preview');
+
+    expect(groups[0].querySelector('.document-day-toggle')).toBeNull();
+    expect(latestToggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(latestToggle?.textContent).toContain('Ver menos');
+    expect(latestPreview?.hasAttribute('hidden')).toBe(false);
+    expect(olderToggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(olderToggle?.textContent).toContain('Ver más');
+    expect(olderPreview?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('does not open previews by default on later work-report pages', async () => {
+    const waybills = Array.from({ length: 11 }, (_, index) => ({
+      id: `wb-${index + 1}`,
+      type: 'waybills',
+      documentNumber: `ALB-${index + 1}`,
+      kind: 'labour',
+      workflowStatus: 'prepared',
+      issueDate: '2026-07-15',
+      notes: `Nota ${index + 1}`,
+      projects: [],
+    }));
+    const { dom } = loadCardBack({ salesOrders: [], estimates: [], waybills });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    dom.window.document.querySelector('.documents-page-button[aria-label="Página siguiente"]')?.click();
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 2');
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    expect(dom.window.document.querySelector('.document-preview')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('does not repeat a day divider for Pedido children dated the same day as their parent', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1', {
+        issueDate: '2026-07-15',
+        waybills: [{
+          id: 'wb-1',
+          type: 'waybills',
+          documentNumber: 'ALB-1',
+          kind: 'material',
+          workflowStatus: 'prepared',
+          issueDate: '2026-07-15',
+          projects: [],
+        }],
+      })],
+      estimates: [],
+      waybills: [],
+    });
+    await waitForRender();
+    expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    const relationGroup = dom.window.document.querySelector('.relation-day-group');
+    expect(relationGroup?.classList.contains('relation-day-group--same-parent-day')).toBe(true);
+    expect(relationGroup?.querySelector('.relation-day-heading')).toBeNull();
+    expect(relationGroup?.querySelector('.related-waybill-number')?.textContent).toBe('ALB-1');
+  });
+
+  it('uses a quiet, accessible date divider that remains legible in dark mode', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [{
+        id: 'wb-1',
+        type: 'waybills',
+        documentNumber: 'ALB-1',
+        workflowStatus: 'prepared',
+        issueDate: '2026-07-15',
+        projects: [],
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const group = dom.window.document.querySelector('.document-day-group');
+    const heading = group?.querySelector('.document-day-heading');
+    const styles = dom.window.getComputedStyle(heading);
+    const css = Array.from(dom.window.document.querySelectorAll('style'))
+      .map((style) => style.textContent)
+      .join('\n');
+
+    expect(heading?.tagName).toBe('H4');
+    expect(group?.getAttribute('aria-labelledby')).toBe(heading?.id);
+    expect(styles.display).toBe('flex');
+    expect(styles.fontSize).toBe('11px');
+    expect(styles.fontWeight).toBe('700');
+    expect(styles.color).toBe('rgb(68, 84, 111)');
+    expect(css).toContain('.document-day-heading::after');
+    expect(css).toContain('.document-day-heading { color: #8c9bab; }');
+  });
+
+  it('calls the previous calendar day Ayer while keeping its full date', async () => {
+    const now = new Date();
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    const issueDate = [
+      yesterday.getFullYear(),
+      String(yesterday.getMonth() + 1).padStart(2, '0'),
+      String(yesterday.getDate()).padStart(2, '0'),
+    ].join('-');
+    const expectedDate = yesterday.toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [{
+        id: 'wb-yesterday',
+        type: 'waybills',
+        documentNumber: 'ALB-AYER',
+        workflowStatus: 'prepared',
+        issueDate,
+        projects: [],
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-day-label')?.textContent)
+      .toBe(`Ayer, ${expectedDate}`);
+  });
+
+  it('shows every work-report kind as a subtitle beneath its number', async () => {
     const kinds = [
-      ['material', 'Material'],
       ['labour', 'Trabajo'],
       ['mixed', 'Trabajo con material'],
       ['extra', 'Trabajo extra'],
-      ['refund', 'Devolución'],
       ['unclassified', 'Sin clasificar'],
     ];
     const { dom } = loadCardBack({
@@ -327,18 +568,29 @@ describe('card-back document view (internal API v2)', () => {
     const { dom, urls } = loadCardBack({
       salesOrders: [],
       estimates: [],
-      waybills: [{
-        id: 'wb-preview',
-        type: 'waybills',
-        documentNumber: 'ALB-PREVIEW',
-        kind: 'material',
-        workflowStatus: 'delivered',
-        issueDate: '2026-07-10',
-        notes: 'Dejar el material junto al cuadro.\nAvisar al encargado.',
-        internalNotes: 'Comprobar la firma antes de cerrar.',
-        attachmentsUrl: '/v2/documents/waybills/wb-preview/attachments',
-        projects: [],
-      }],
+      waybills: [
+        {
+          id: 'wb-latest',
+          type: 'waybills',
+          documentNumber: 'ALB-SIN-VISTA',
+          kind: 'labour',
+          workflowStatus: 'delivered',
+          issueDate: '2026-07-11',
+          projects: [],
+        },
+        {
+          id: 'wb-preview',
+          type: 'waybills',
+          documentNumber: 'ALB-PREVIEW',
+          kind: 'labour',
+          workflowStatus: 'delivered',
+          issueDate: '2026-07-10',
+          notes: 'Dejar el material junto al cuadro.\nAvisar al encargado.',
+          internalNotes: 'Comprobar la firma antes de cerrar.',
+          attachmentsUrl: '/v2/documents/waybills/wb-preview/attachments',
+          projects: [],
+        },
+      ],
     }, {
       attachments: [
           {
@@ -364,7 +616,6 @@ describe('card-back document view (internal API v2)', () => {
     });
     await waitForRender();
     expand(dom);
-    dom.window.document.querySelector('[data-tab="waybills"]')?.click();
     await waitForRender();
 
     const toggle = dom.window.document.querySelector('.document-preview-toggle');
@@ -425,9 +676,11 @@ describe('card-back document view (internal API v2)', () => {
     expect(pdfLink?.getAttribute('target')).toBe('_blank');
     expect(preview?.querySelector('iframe, embed, object')).toBeNull();
 
-    const rowDate = dom.window.document.querySelector('.document-row .document-date');
+    const rowTime = dom.window.document.querySelector('.document-row .document-time');
     const previewDate = preview?.querySelector('.document-preview-date');
-    expect(previewDate?.textContent).toBe(rowDate?.textContent);
+    expect(rowTime?.textContent).toBe('');
+    expect(rowTime?.getAttribute('aria-hidden')).toBe('true');
+    expect(previewDate?.textContent).toBe('10/07/2026');
     expect(preview?.lastElementChild).toBe(previewDate);
 
     toggle?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
@@ -488,7 +741,7 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(dom.window.document.querySelector('.document-row .document-preview-toggle')).not.toBeNull();
     expect(dom.window.document.querySelector('.purchase-order-row .document-preview-toggle')).not.toBeNull();
-    const nestedPreview = dom.window.document.querySelector('.relation-rail > .document-preview');
+    const nestedPreview = dom.window.document.querySelector('.relation-day-group > .document-preview');
     const nestedPreviewStyles = dom.window.getComputedStyle(nestedPreview);
     expect(nestedPreviewStyles.marginLeft).toBe('-20px');
     expect(nestedPreviewStyles.width).toBe('calc(100% + 20px)');
@@ -571,7 +824,9 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.getComputedStyle(salesOrderRow).minHeight).toBe('36px');
     expect(dom.window.getComputedStyle(salesOrderRow?.querySelector('.document-number')).color)
       .toBe('rgb(68, 84, 111)');
-    expect(salesOrderRow?.querySelector('.document-date')?.textContent).toBe('14/07/2026 08:45');
+    expect(dom.window.document.querySelector('.document-day-label')?.textContent)
+      .toBe('Martes, 14 de julio de 2026');
+    expect(salesOrderRow?.querySelector('.document-time')?.textContent).toBe('08:45');
 
     const relatedWaybillRow = dom.window.document.querySelector('.related-waybill-row');
     const relatedWaybillIcon = relatedWaybillRow?.firstElementChild;
@@ -594,7 +849,8 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
     expect(Array.from(dom.window.document.querySelectorAll('.document-row .document-kind-icon'))
       .map((icon) => icon.getAttribute('src')))
-      .toEqual(waybillKinds.map((kind) => `/icons/document-kinds/waybill-${kind}.svg`));
+      .toEqual(['labour', 'mixed', 'extra', 'unclassified']
+        .map((kind) => `/icons/document-kinds/waybill-${kind}.svg`));
 
     dom.window.document.querySelector('[data-tab="invoices"]')?.click();
     await waitForRender();
@@ -627,8 +883,10 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).toContain('Denegado');
     expect(text).toContain('1.234,56 €');
     expect(text).not.toContain('Completado');
-    expect(dom.window.document.querySelector('.document-row .document-date')?.textContent)
-      .toBe('01/07/2026 12:05');
+    expect(dom.window.document.querySelector('.document-day-label')?.textContent)
+      .toBe('Miércoles, 1 de julio de 2026');
+    expect(dom.window.document.querySelector('.document-row .document-time')?.textContent)
+      .toBe('12:05');
   });
 
   it('shows currency symbols instead of three-letter codes for estimate totals', async () => {
@@ -693,7 +951,9 @@ describe('card-back document view (internal API v2)', () => {
     expect(row?.textContent).toContain('Parcial');
     expect(row?.textContent).toContain('1.210,00 €');
     expect(row?.textContent).toContain('Pendiente 1.000,00 €');
-    expect(row?.querySelector('.document-date')?.textContent).toBe('15/07/2026 09:00');
+    expect(dom.window.document.querySelector('.document-day-label')?.textContent)
+      .toBe('Miércoles, 15 de julio de 2026');
+    expect(row?.querySelector('.document-time')?.textContent).toBe('09:00');
 
     const invoiceCall = urls.find((url) => url.includes('type=invoices'));
     expect(invoiceCall).toContain('contactId=contact-1');
@@ -865,15 +1125,17 @@ describe('card-back document view (internal API v2)', () => {
     expect(identity?.nextElementSibling?.classList.contains('document-pill')).toBe(true);
     expect(identity?.nextElementSibling?.textContent).toBe('Pendiente recibir');
     expect(dom.window.getComputedStyle(identity?.nextElementSibling).justifySelf).toBe('start');
-    expect(subRow.querySelector('.document-date')?.textContent).toBe('13/07/2026 09:17');
+    expect(subRow.querySelector('.document-time')?.textContent).toBe('09:17');
+    expect(dom.window.document.querySelector('.relation-day-label')?.textContent)
+      .toBe('Lunes, 13 de julio de 2026');
     const text = contentText(dom);
     expect(text).toContain('PC-1');
     expect(text).toContain('Rexel');
     expect(text).toContain('Pendiente recibir');
 
-    // Purchase orders remain nested; Albaranes is the first top-level tab.
+    // Purchase orders remain nested; Partes de trabajo is the first top-level tab.
     expect(Array.from(dom.window.document.querySelectorAll('.documents-tab')).map((t) => t.textContent?.trim()))
-      .toEqual(['Albaranes', 'Pedidos venta', 'Facturas', 'Presupuestos']);
+      .toEqual(['Partes de trabajo', 'Pedidos', 'Facturas', 'Presupuestos']);
   });
 
   it('shows muted kind subtitles, status beside the identity, and dates on related waybills', async () => {
@@ -927,7 +1189,9 @@ describe('card-back document view (internal API v2)', () => {
     expect(materialIdentity?.children[1].textContent).toContain('Material');
     expect(dom.window.getComputedStyle(materialIdentity?.children[1]).color).toBe('rgb(107, 119, 140)');
     expect(rows[0].textContent).toContain('Aprobado');
-    expect(rows[0].querySelector('.document-date')?.textContent).toBe('16/07/2026 14:25');
+    expect(dom.window.document.querySelector('.relation-day-label')?.textContent)
+      .toBe('Jueves, 16 de julio de 2026');
+    expect(rows[0].querySelector('.document-time')?.textContent).toBe('14:25');
     expect(rows[0].querySelector('.document-link--ef')?.getAttribute('href'))
       .toBe('https://app.electricaferrer.es/albaran/wb-1');
     expect(rows[0].querySelector('.document-link--holded')?.getAttribute('href'))
@@ -941,7 +1205,8 @@ describe('card-back document view (internal API v2)', () => {
     expect(refundIdentity?.children[1].textContent).toContain('Devolución');
     expect(dom.window.getComputedStyle(refundIdentity?.children[1]).color).toBe('rgb(107, 119, 140)');
     expect(rows[1].textContent).toContain('Sin aprobar');
-    expect(rows[1].querySelector('.document-date')?.textContent).toBe('16/07/2026');
+    expect(rows[1].querySelector('.document-time')?.textContent).toBe('');
+    expect(rows[1].querySelector('.document-time')?.getAttribute('aria-hidden')).toBe('true');
   });
 
   it('keeps sales orders visible and warns quietly when purchase orders fail to load', async () => {
@@ -986,7 +1251,6 @@ describe('card-back document view (internal API v2)', () => {
     waybillTab?.focus();
     waybillTab?.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
     await waitForRender();
-
     const salesTab = dom.window.document.querySelector('[data-tab="salesOrders"]');
     expect(salesTab?.getAttribute('aria-selected')).toBe('true');
     expect(salesTab?.tabIndex).toBe(0);
@@ -1016,7 +1280,7 @@ describe('card-back document view (internal API v2)', () => {
 
     const pendingPanel = dom.window.document.querySelector('#documents-panel');
     expect(pendingPanel?.getAttribute('aria-busy')).toBe('true');
-    expect(pendingPanel?.textContent).toContain('Cargando albaranes');
+    expect(pendingPanel?.textContent).toContain('Cargando partes de trabajo');
     expect(pendingPanel?.querySelectorAll('.documents-skeleton-row')).toHaveLength(3);
 
     await new Promise((resolve) => setTimeout(resolve, 220));
@@ -1093,6 +1357,6 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     expect(dom.window.document.querySelector('.documents-note')?.textContent)
-      .toBe('Este cliente no tiene albaranes.');
+      .toBe('Este cliente no tiene partes de trabajo.');
   });
 });

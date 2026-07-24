@@ -105,6 +105,12 @@ async function handleProjectsSearch(url: URL, env: Env): Promise<Response> {
 const V2_PAGE_SIZE = 10;
 type V2DocumentType = 'sales-orders' | 'waybills' | 'estimates' | 'invoices';
 const V2_DOCUMENT_TYPES: V2DocumentType[] = ['sales-orders', 'waybills', 'estimates', 'invoices'];
+type WaybillCategory = 'work' | 'warehouse';
+const WAYBILL_CATEGORIES: WaybillCategory[] = ['work', 'warehouse'];
+const WAYBILL_CATEGORY_KINDS: Record<WaybillCategory, string[]> = {
+  work: ['labour', 'mixed', 'extra', 'unclassified'],
+  warehouse: ['material', 'refund', 'unclassified'],
+};
 type V2AttachmentDocumentType = V2DocumentType | 'purchase-orders';
 const V2_ATTACHMENT_DOCUMENT_TYPES: V2AttachmentDocumentType[] = [
   'sales-orders',
@@ -466,8 +472,15 @@ function internalErrorResponse(err: unknown): Response {
 
 const PURCHASE_ORDER_PAGE_SIZE = 100;
 const PURCHASE_ORDER_MAX_PAGES = 10;
+const SALES_ORDER_PAGE_SIZE = 100;
+const SALES_ORDER_MAX_PAGES = 10;
 const RELATED_WAYBILL_PAGE_SIZE = 100;
 const RELATED_WAYBILL_MAX_PAGES = 10;
+const ORDER_WAYBILL_KINDS = ['material', 'refund', 'unclassified'];
+
+function isWaybillCategory(value: string | null): value is WaybillCategory {
+  return Boolean(value && WAYBILL_CATEGORIES.includes(value as WaybillCategory));
+}
 
 // Related documents are fetched by customer/project with bounded page loops,
 // then grouped through sourceOrder under the sales orders visible on the
@@ -485,6 +498,27 @@ async function fetchCustomerPurchaseOrders(
         projectId,
         page: String(page),
         pageSize: String(PURCHASE_ORDER_PAGE_SIZE),
+      },
+    });
+    items.push(...(result.items ?? []));
+    if (!result.pagination?.hasMore) break;
+  }
+  return items;
+}
+
+async function fetchCustomerSalesOrders(
+  apiKey: string,
+  contactId: string,
+  projectId: string | null,
+): Promise<Array<Record<string, any>>> {
+  const items: Array<Record<string, any>> = [];
+  for (let page = 1; page <= SALES_ORDER_MAX_PAGES; page += 1) {
+    const result = await internalApiGet<InternalPage>('/sales-orders', apiKey, {
+      query: {
+        customerId: contactId,
+        projectId,
+        page: String(page),
+        pageSize: String(SALES_ORDER_PAGE_SIZE),
       },
     });
     items.push(...(result.items ?? []));
@@ -530,7 +564,7 @@ function nestRelatedDocuments(
 
   const waybillsByOrderId = new Map<string, ReturnType<typeof mapInternalWaybill>[]>();
   for (const waybill of waybills) {
-    if (waybill.kind !== 'material' && waybill.kind !== 'refund') continue;
+    if (!ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified')) continue;
     const sourceId = waybill.sourceOrder?.id;
     if (!sourceId) continue;
     const bucket = waybillsByOrderId.get(sourceId);
@@ -545,6 +579,30 @@ function nestRelatedDocuments(
   }));
 }
 
+function documentSortDate(item: Record<string, any>): string {
+  return String(item.approvedAt ?? item.sentAt ?? item.issueDate ?? '');
+}
+
+function combineOrdersWithStandaloneWaybills(
+  salesOrderItems: Array<Record<string, any>>,
+  purchaseOrders: Array<Record<string, any>>,
+  waybills: Array<Record<string, any>>,
+) {
+  const salesOrders = salesOrderItems.map(mapInternalSalesOrder);
+  const visibleOrderIds = new Set(salesOrders.map((order) => order.id));
+  const standaloneWaybills = waybills
+    .filter((waybill) => {
+      const sourceOrderId = waybill.sourceOrder?.id;
+      return ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified') &&
+        (!sourceOrderId || !visibleOrderIds.has(sourceOrderId));
+    })
+    .map(mapInternalWaybill);
+
+  return nestRelatedDocuments(salesOrders, purchaseOrders, waybills)
+    .concat(standaloneWaybills)
+    .sort((left, right) => documentSortDate(right).localeCompare(documentSortDate(left)));
+}
+
 async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
   const apiKey = env.EF_INTERNAL_API_KEY;
   if (!apiKey) {
@@ -555,6 +613,8 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
   const type = url.searchParams.get('type') as V2DocumentType | null;
   const scope = url.searchParams.get('scope') || 'matched';
   const projectId = url.searchParams.get('projectId');
+  const category = url.searchParams.get('category');
+  const view = url.searchParams.get('view');
 
   if (!contactId) return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'contactId is required' } }, 400);
   if (!type || !V2_DOCUMENT_TYPES.includes(type)) {
@@ -562,6 +622,12 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
   }
   if (scope !== 'matched' && scope !== 'all') {
     return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'scope must be matched or all' } }, 400);
+  }
+  if (category && (type !== 'waybills' || !isWaybillCategory(category))) {
+    return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'category must be work or warehouse for waybills' } }, 400);
+  }
+  if (view && (type !== 'sales-orders' || view !== 'orders')) {
+    return jsonResponse({ error: { code: 'INVALID_REQUEST', message: 'view must be orders for sales-orders' } }, 400);
   }
 
   // In the "all" scope the linked project is intentionally dropped so the list
@@ -584,6 +650,48 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
     }
 
     const requestedPage = parsePositiveInteger(url.searchParams.get('page'), 1, 10_000);
+
+    if (type === 'sales-orders' && view === 'orders') {
+      const [salesOrdersResult, purchaseOrdersResult, waybillsResult] = await Promise.allSettled([
+        fetchCustomerSalesOrders(apiKey, contactId, effectiveProjectId),
+        fetchCustomerPurchaseOrders(apiKey, contactId, effectiveProjectId),
+        fetchCustomerWaybills(apiKey, contactId, effectiveProjectId),
+      ]);
+      if (salesOrdersResult.status === 'rejected') throw salesOrdersResult.reason;
+
+      const results = combineOrdersWithStandaloneWaybills(
+        salesOrdersResult.value,
+        purchaseOrdersResult.status === 'fulfilled' ? purchaseOrdersResult.value : [],
+        waybillsResult.status === 'fulfilled' ? waybillsResult.value : [],
+      );
+      const start = (requestedPage - 1) * V2_PAGE_SIZE;
+      return jsonResponse({
+        type,
+        scope,
+        page: requestedPage,
+        pageSize: V2_PAGE_SIZE,
+        hasMore: start + V2_PAGE_SIZE < results.length,
+        results: results.slice(start, start + V2_PAGE_SIZE),
+        ...(purchaseOrdersResult.status === 'rejected' ? { purchaseOrdersError: true } : {}),
+        ...(waybillsResult.status === 'rejected' ? { waybillsError: true } : {}),
+      });
+    }
+
+    if (type === 'waybills' && isWaybillCategory(category)) {
+      const matchingWaybills = (await fetchCustomerWaybills(apiKey, contactId, effectiveProjectId))
+        .filter((waybill) => WAYBILL_CATEGORY_KINDS[category].includes(waybill.kind ?? 'unclassified'));
+      const start = (requestedPage - 1) * V2_PAGE_SIZE;
+      const pageResults = matchingWaybills.slice(start, start + V2_PAGE_SIZE);
+      return jsonResponse({
+        type,
+        scope,
+        page: requestedPage,
+        pageSize: V2_PAGE_SIZE,
+        hasMore: start + V2_PAGE_SIZE < matchingWaybills.length,
+        results: pageResults.map(mapInternalWaybill),
+      });
+    }
+
     const path = type === 'sales-orders' ? '/sales-orders' : type === 'invoices' ? '/invoices' : '/waybills';
     const page = await internalApiGet<InternalPage>(path, apiKey, {
       query: {

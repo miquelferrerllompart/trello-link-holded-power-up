@@ -240,6 +240,7 @@
       min-width: 0;
       padding: 5px 4px;
       text-align: center;
+      overflow-wrap: anywhere;
     }
     .documents-tab[aria-selected="true"] {
       background: #ffffff;
@@ -313,7 +314,36 @@
     }
     .document-list {
       display: grid;
+      gap: 10px;
+    }
+    .document-day-group {
+      display: grid;
       gap: 4px;
+      min-width: 0;
+    }
+    .document-day-heading {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      margin: 3px 6px 1px;
+      color: #44546f;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      line-height: 16px;
+      white-space: nowrap;
+    }
+    .document-day-group:first-child .document-day-heading {
+      margin-top: 0;
+    }
+    .document-day-heading::after {
+      content: '';
+      flex: 1 1 auto;
+      min-width: 16px;
+      height: 1px;
+      border-radius: 999px;
+      background: #091e4224;
     }
     .document-row {
       position: relative;
@@ -443,7 +473,8 @@
       background: #ffffff;
       box-shadow: 0 3px 10px #091e4214;
     }
-    .relation-rail > .document-preview {
+    .relation-rail > .document-preview,
+    .relation-day-group > .document-preview {
       width: calc(100% + 20px);
       margin: -2px 0 5px -20px;
     }
@@ -742,10 +773,36 @@
     /* Relation rail — waybills and purchase orders are children of their sales order. */
     .relation-rail {
       display: grid;
-      gap: 3px;
+      gap: 7px;
       margin: 1px 0 3px 6px;
       padding-left: 12px;
       border-left: 2px solid #c8d4e3;
+    }
+    .relation-day-group {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .relation-day-heading {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      margin: 1px 6px 0 4px;
+      color: #6b778c;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      line-height: 14px;
+      white-space: nowrap;
+    }
+    .relation-day-heading::after {
+      content: '';
+      flex: 1 1 auto;
+      min-width: 12px;
+      height: 1px;
+      border-radius: 999px;
+      background: #091e420f;
     }
     .relation-child-row {
       position: relative;
@@ -849,11 +906,15 @@
     .documents-page-button {
       transition: background 0.15s, color 0.15s, transform 0.1s ease-out;
     }
-    .document-date {
+    .document-time {
+      justify-self: end;
+      min-width: 35px;
       color: #44546f;
       font-size: 12px;
+      font-weight: 600;
       line-height: 16px;
       font-variant-numeric: tabular-nums;
+      text-align: right;
       white-space: nowrap;
     }
     .documents-note {
@@ -981,11 +1042,13 @@
       .documents { border-top-color: #a6c5e229; }
       .documents-count,
       .documents-hint,
-      .document-date,
+      .document-time,
       .documents-note,
       .documents-loading-label,
       .documents-range,
       .documents-page-label { color: #8c9bab; }
+      .document-day-heading { color: #8c9bab; }
+      .document-day-heading::after { background: #a6c5e229; }
       .documents-button { background: #a6c5e229; color: #b6c2cf; }
       .documents-button:hover { background: #a6c5e23d; }
       .documents-tabs { background: #a6c5e229; }
@@ -1064,6 +1127,8 @@
       .document-amounts { color: #b6c2cf; }
       .document-pending-amount { color: #f5cd47; }
       .relation-rail { border-left-color: #45505f; }
+      .relation-day-heading { color: #8c9bab; }
+      .relation-day-heading::after { background: #a6c5e214; }
       .purchase-order-row { --relation-color: #615a91; color: #b8acf6; }
       .related-waybill-row { --relation-color: #315a7a; color: #85b8ff; }
       .purchase-order-number { color: #b6c2cf; }
@@ -1117,9 +1182,9 @@
         pointer-events: auto;
         transform: translateY(-50%);
       }
-      .document-date { padding-right: 76px; }
-      .document-row--has-preview .document-date,
-      .relation-child-row--has-preview .document-date { padding-right: 150px; }
+      .document-time { padding-right: 76px; }
+      .document-row--has-preview .document-time,
+      .relation-child-row--has-preview .document-time { padding-right: 150px; }
       .tag-close { opacity: 1; }
       .tag-name { padding-right: 112px; }
     }
@@ -1154,7 +1219,7 @@
         grid-column: 2 / 4;
         grid-row: 2;
       }
-      .document-date {
+      .document-time {
         grid-column: 3;
         grid-row: 1;
       }
@@ -1294,8 +1359,8 @@
     }
 
     var DOCUMENT_TABS = [
-      { key: 'waybills', type: 'waybills', label: 'Albaranes', loadingLabel: 'albaranes', emptyAll: 'Este cliente no tiene albaranes.', emptyProject: 'No hay albaranes en el proyecto vinculado.' },
-      { key: 'salesOrders', type: 'sales-orders', label: 'Pedidos venta', loadingLabel: 'pedidos de venta', emptyAll: 'Este cliente no tiene pedidos de venta.', emptyProject: 'No hay pedidos de venta en el proyecto vinculado.' },
+      { key: 'waybills', type: 'waybills', category: 'work', label: 'Partes de trabajo', loadingLabel: 'partes de trabajo', emptyAll: 'Este cliente no tiene partes de trabajo.', emptyProject: 'No hay partes de trabajo en el proyecto vinculado.' },
+      { key: 'salesOrders', type: 'sales-orders', view: 'orders', label: 'Pedidos', loadingLabel: 'pedidos', emptyAll: 'Este cliente no tiene pedidos.', emptyProject: 'No hay pedidos en el proyecto vinculado.' },
       { key: 'invoices', type: 'invoices', label: 'Facturas', loadingLabel: 'facturas', emptyAll: 'Este cliente no tiene facturas.', emptyProject: 'No hay facturas en el proyecto vinculado.' },
       { key: 'estimates', type: 'estimates', label: 'Presupuestos', loadingLabel: 'presupuestos', emptyAll: 'Este cliente no tiene presupuestos.', emptyProject: 'No hay presupuestos en el proyecto vinculado.' },
     ];
@@ -1333,7 +1398,91 @@
     }
 
     function getDocumentsPageKey(data, tab, scope, page) {
-      return getDocumentsViewKey(data) + '|' + tab.type + '|' + scope + '|' + page;
+      return getDocumentsViewKey(data) + '|' + tab.key + '|' + scope + '|' + page;
+    }
+
+    function capitalizeFirst(value) {
+      return value ? value.charAt(0).toLocaleUpperCase('es-ES') + value.slice(1) : '';
+    }
+
+    function isSameCalendarDay(left, right) {
+      return left.getFullYear() === right.getFullYear() &&
+        left.getMonth() === right.getMonth() &&
+        left.getDate() === right.getDate();
+    }
+
+    function formatDocumentDayLabel(date) {
+      var now = new Date();
+      var yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      if (isSameCalendarDay(date, yesterday)) {
+        return 'Ayer, ' + date.toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+      }
+      return capitalizeFirst(date.toLocaleDateString('es-ES', {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric'
+      }));
+    }
+
+    function getDateMoment(value) {
+      if (!value) {
+        return {
+          dayKey: 'undated',
+          dayLabel: 'Sin fecha',
+          dateTime: '',
+          timeLabel: ''
+        };
+      }
+
+      var text = String(value);
+      var isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (isoDate) {
+        var year = Number(isoDate[1]);
+        var monthIndex = Number(isoDate[2]) - 1;
+        var day = Number(isoDate[3]);
+        var localDate = new Date(year, monthIndex, day);
+        var isValidDate = localDate.getFullYear() === year &&
+          localDate.getMonth() === monthIndex &&
+          localDate.getDate() === day;
+        if (isValidDate) {
+          var isoTime = text.match(/^[^T ]+[T ](\d{2}):(\d{2})/);
+          return {
+            dayKey: isoDate[1] + '-' + isoDate[2] + '-' + isoDate[3],
+            dayLabel: formatDocumentDayLabel(localDate),
+            dateTime: text,
+            timeLabel: isoTime ? isoTime[1] + ':' + isoTime[2] : ''
+          };
+        }
+      }
+
+      var date = new Date(text);
+      if (Number.isNaN(date.getTime())) {
+        return {
+          dayKey: 'raw:' + text,
+          dayLabel: text,
+          dateTime: '',
+          timeLabel: ''
+        };
+      }
+
+      var fallbackYear = String(date.getFullYear());
+      var fallbackMonth = String(date.getMonth() + 1).padStart(2, '0');
+      var fallbackDay = String(date.getDate()).padStart(2, '0');
+      return {
+        dayKey: fallbackYear + '-' + fallbackMonth + '-' + fallbackDay,
+        dayLabel: formatDocumentDayLabel(date),
+        dateTime: text,
+        timeLabel: date.toLocaleTimeString('es-ES', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        })
+      };
     }
 
     function formatDateLabel(value) {
@@ -1375,6 +1524,20 @@
       var statusDate = documentItem.approvedAt || documentItem.sentAt || documentItem.issueDate;
       if (statusDate) return formatDateLabel(statusDate);
       return 'Sin fecha';
+    }
+
+    function getDocumentMoment(documentItem) {
+      return getDateMoment(documentItem.approvedAt || documentItem.sentAt || documentItem.issueDate);
+    }
+
+    function renderDocumentTime(documentItem) {
+      var moment = getDocumentMoment(documentItem);
+      if (!moment.timeLabel) {
+        return '<span class="document-time document-time--empty" aria-hidden="true"></span>';
+      }
+      return '<time class="document-time" datetime="' + escapeHtml(moment.dateTime) + '">' +
+        escapeHtml(moment.timeLabel) +
+      '</time>';
     }
 
     function renderPill(pill) {
@@ -1555,16 +1718,16 @@
         '-' + encodeURIComponent(String(documentItem.id || 'unknown'));
     }
 
-    function renderDocumentPreviewToggle(documentItem) {
+    function renderDocumentPreviewToggle(documentItem, isExpanded) {
       if (!hasDocumentPreview(documentItem)) return '';
       var preview = getDocumentPreviewContent(documentItem);
       var previewId = getDocumentPreviewId(documentItem);
-      return '<button type="button" class="document-preview-toggle" aria-expanded="false"' +
+      return '<button type="button" class="document-preview-toggle" aria-expanded="' + (isExpanded ? 'true' : 'false') + '"' +
         ' aria-controls="' + escapeHtml(previewId) + '"' +
         (preview.attachmentsUrl
           ? ' data-attachments-url="' + escapeHtml(preview.attachmentsUrl) + '"'
           : '') + '>' +
-          '<span class="document-preview-toggle-label">Ver más</span>' +
+          '<span class="document-preview-toggle-label">' + (isExpanded ? 'Ver menos' : 'Ver más') + '</span>' +
           '<svg class="document-preview-chevron" viewBox="0 0 12 12" aria-hidden="true">' +
             '<path d="m2.5 4.5 3.5 3 3.5-3"></path>' +
           '</svg>' +
@@ -1608,7 +1771,7 @@
         : '';
     }
 
-    function renderDocumentPreview(documentItem) {
+    function renderDocumentPreview(documentItem, isExpanded) {
       var preview = getDocumentPreviewContent(documentItem);
       if (!hasDocumentPreview(documentItem)) return '';
 
@@ -1634,7 +1797,7 @@
 
       return '<div id="' + escapeHtml(getDocumentPreviewId(documentItem)) + '"' +
         ' class="document-preview" role="region" aria-label="Vista previa de ' +
-        escapeHtml(getDocumentNumber(documentItem)) + '" hidden>' +
+        escapeHtml(getDocumentNumber(documentItem)) + '"' + (isExpanded ? '' : ' hidden') + '>' +
           (notes ? '<div class="document-preview-copy document-preview-notes">' + notes + '</div>' : '') +
           attachments +
           '<time class="document-preview-date">' +
@@ -1701,8 +1864,8 @@
         });
     }
 
-    function renderDocumentActions(documentItem, documentNumber) {
-      var previewButton = renderDocumentPreviewToggle(documentItem);
+    function renderDocumentActions(documentItem, documentNumber, isPreviewExpanded) {
+      var previewButton = renderDocumentPreviewToggle(documentItem, isPreviewExpanded);
       var efLink = renderDestinationLink('ef', buildEfDocumentUrl(documentItem), documentNumber);
       var holdedLink = renderDestinationLink('holded', documentItem.url || '', documentNumber);
       var controls = previewButton + efLink + holdedLink;
@@ -1738,7 +1901,7 @@
         ' src="' + getDocumentKindIconSource(documentItem) + '" alt="" aria-hidden="true" />';
     }
 
-    function renderDocumentRow(documentItem, data, scope) {
+    function renderDocumentRow(documentItem, data, scope, isPreviewExpanded) {
       var number = getDocumentNumber(documentItem);
       var isWaybill = documentItem.type === 'waybills';
       var hasPreview = hasDocumentPreview(documentItem);
@@ -1757,10 +1920,10 @@
           renderProjectChip(documentItem, data, scope) +
           renderDocumentAmounts(documentItem) +
         '</span>' +
-        '<span class="document-date">' + escapeHtml(getDocumentDateText(documentItem)) + '</span>' +
-        renderDocumentActions(documentItem, number) +
+        renderDocumentTime(documentItem) +
+        renderDocumentActions(documentItem, number, isPreviewExpanded) +
       '</div>' +
-      renderDocumentPreview(documentItem);
+      renderDocumentPreview(documentItem, isPreviewExpanded);
     }
 
     function renderPurchaseOrderRow(purchaseOrder) {
@@ -1774,7 +1937,7 @@
           '<span class="purchase-order-supplier">' + escapeHtml(supplier) + '</span>' +
         '</span>' +
         renderPill(getDocumentPill(purchaseOrder)) +
-        '<span class="document-date">' + escapeHtml(getDocumentDateText(purchaseOrder)) + '</span>' +
+        renderDocumentTime(purchaseOrder) +
         renderDocumentActions(purchaseOrder, number) +
       '</div>' +
       renderDocumentPreview(purchaseOrder);
@@ -1807,20 +1970,74 @@
           '</span>' +
           renderPill(getDocumentPill(waybill)) +
         '</span>' +
-        '<span class="document-date">' + escapeHtml(getDocumentDateText(waybill)) + '</span>' +
+        renderDocumentTime(waybill) +
         renderDocumentActions(waybill, number) +
       '</div>' +
       renderDocumentPreview(waybill);
     }
 
+    function groupDocumentsByDay(items) {
+      return items.reduce(function(groups, item) {
+        var moment = getDocumentMoment(item);
+        var previousGroup = groups[groups.length - 1];
+        if (!previousGroup || previousGroup.moment.dayKey !== moment.dayKey) {
+          previousGroup = { moment: moment, items: [] };
+          groups.push(previousGroup);
+        }
+        previousGroup.items.push(item);
+        return groups;
+      }, []);
+    }
+
+    function sortRelatedDocuments(items) {
+      return items.map(function(item, index) {
+        return { item: item, index: index, moment: getDocumentMoment(item) };
+      }).sort(function(left, right) {
+        if (left.moment.dayKey === 'undated') return right.moment.dayKey === 'undated' ? left.index - right.index : 1;
+        if (right.moment.dayKey === 'undated') return -1;
+        var dayOrder = right.moment.dayKey.localeCompare(left.moment.dayKey);
+        if (dayOrder !== 0) return dayOrder;
+        var timeOrder = right.moment.timeLabel.localeCompare(left.moment.timeLabel);
+        return timeOrder !== 0 ? timeOrder : left.index - right.index;
+      }).map(function(entry) {
+        return entry.item;
+      });
+    }
+
+    function renderRelationDayGroups(order, items) {
+      var orderId = String(order.id || 'order').replace(/[^a-zA-Z0-9_-]/g, '-');
+      var parentDayKey = getDocumentMoment(order).dayKey;
+      return groupDocumentsByDay(sortRelatedDocuments(items)).map(function(group, groupIndex) {
+        var isSameParentDay = group.moment.dayKey === parentDayKey;
+        var headingId = 'relation-day-' + orderId + '-' + groupIndex;
+        var headingContent = group.moment.dateTime
+          ? '<time class="relation-day-label" datetime="' +
+              escapeHtml(group.moment.dayKey) + '">' +
+              escapeHtml(group.moment.dayLabel) +
+            '</time>'
+          : '<span class="relation-day-label">' + escapeHtml(group.moment.dayLabel) + '</span>';
+        return '<section class="relation-day-group' + (isSameParentDay ? ' relation-day-group--same-parent-day' : '') + '"' +
+          (isSameParentDay ? '' : ' aria-labelledby="' + headingId + '"') + '>' +
+          (isSameParentDay ? '' : '<h5 class="relation-day-heading" id="' + headingId + '">' + headingContent + '</h5>') +
+          group.items.map(function(item) {
+            return item.type === 'purchase-orders'
+              ? renderPurchaseOrderRow(item)
+              : renderRelatedWaybillRow(item);
+          }).join('') +
+        '</section>';
+      }).join('');
+    }
+
     function renderSalesOrderGroup(order, data, scope) {
+      // Pedidos also contains warehouse documents without a source order. They
+      // intentionally use the regular document row rather than an empty rail.
+      if (order.type === 'waybills') return renderDocumentRow(order, data, scope);
       var html = renderDocumentRow(order, data, scope);
       var purchaseOrders = order.purchaseOrders || [];
       var waybills = order.waybills || [];
       if (purchaseOrders.length || waybills.length) {
         html += '<div class="relation-rail">' +
-          waybills.map(renderRelatedWaybillRow).join('') +
-          purchaseOrders.map(renderPurchaseOrderRow).join('') +
+          renderRelationDayGroups(order, waybills.concat(purchaseOrders)) +
         '</div>';
       }
       return html;
@@ -1833,9 +2050,25 @@
         return '<div class="documents-note">' + emptyMessage + '</div>';
       }
 
-      var rows = tab.type === 'sales-orders'
-        ? items.map(function(order) { return renderSalesOrderGroup(order, data, scope); }).join('')
-        : items.map(function(item) { return renderDocumentRow(item, data, scope); }).join('');
+      var dayGroups = groupDocumentsByDay(items);
+
+      var rows = dayGroups.map(function(group, groupIndex) {
+        var headingId = 'document-day-' + tab.key + '-' + groupIndex;
+        var shouldExpandPreviews = tab.key === 'waybills' && (result.page || 1) === 1 && groupIndex === 0;
+        var headingContent = group.moment.dateTime
+          ? '<time class="document-day-label" datetime="' +
+              escapeHtml(group.moment.dayKey) + '">' +
+              escapeHtml(group.moment.dayLabel) +
+            '</time>'
+          : '<span class="document-day-label">' + escapeHtml(group.moment.dayLabel) + '</span>';
+        var groupRows = tab.type === 'sales-orders'
+          ? group.items.map(function(order) { return renderSalesOrderGroup(order, data, scope); }).join('')
+          : group.items.map(function(item) { return renderDocumentRow(item, data, scope, shouldExpandPreviews); }).join('');
+        return '<section class="document-day-group" aria-labelledby="' + headingId + '">' +
+          '<h4 class="document-day-heading" id="' + headingId + '">' + headingContent + '</h4>' +
+          groupRows +
+        '</section>';
+      }).join('');
 
       var purchaseOrdersNote = (tab.type === 'sales-orders' && result.purchaseOrdersError)
         ? '<div class="documents-note">No se pudieron cargar las compras.</div>'
@@ -1895,6 +2128,8 @@
       var view = getDocumentsView(data);
       var stateKey = getDocumentsStateKey(scope, tab);
       var params = new URLSearchParams({ contactId: data.contactId, type: tab.type, scope: scope });
+      if (tab.category) params.set('category', tab.category);
+      if (tab.view) params.set('view', tab.view);
       if (scope === 'matched' && data.projectId) params.set('projectId', data.projectId);
 
       if (tab.type === 'estimates') {
@@ -2052,6 +2287,17 @@
           }
           t.sizeTo(contentDiv).catch(function() {});
         });
+      }
+
+      var initiallyExpandedPreviews = container.querySelectorAll('.document-preview-toggle[aria-expanded="true"]');
+      for (var expandedPreviewIndex = 0; expandedPreviewIndex < initiallyExpandedPreviews.length; expandedPreviewIndex++) {
+        var expandedToggle = initiallyExpandedPreviews[expandedPreviewIndex];
+        var expandedPreviewId = expandedToggle.getAttribute('aria-controls');
+        var expandedPreview = expandedPreviewId ? document.getElementById(expandedPreviewId) : null;
+        var expandedAttachmentsPath = getSafeAttachmentsPath(expandedToggle.getAttribute('data-attachments-url'));
+        if (expandedPreview && expandedAttachmentsPath) {
+          loadDocumentAttachments(expandedPreview, expandedAttachmentsPath);
+        }
       }
 
       var retryButton = container.querySelector('.documents-retry');
