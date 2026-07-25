@@ -93,6 +93,9 @@ function loadCardBack(documents, options = {}) {
         }
 
         if (requestUrl.includes('/v2/documents/') && requestUrl.includes('/attachments')) {
+          if (options.attachmentDelayMs) {
+            await new Promise((r) => setTimeout(r, options.attachmentDelayMs));
+          }
           return new Response(JSON.stringify({
             items: options.attachments || [],
             hasMore: false,
@@ -375,10 +378,31 @@ describe('card-back document view (internal API v2)', () => {
       .toEqual([2, 1]);
     expect(Array.from(dom.window.document.querySelectorAll('.document-row .document-time'))
       .map((time) => time.textContent))
-      .toEqual(['09:12', '16:40', '']);
+      .toEqual(['16:40', '09:12', '']);
     expect(groups[1].querySelector('.document-time')?.classList.contains('document-time--empty'))
       .toBe(true);
     expect(groups[1].querySelector('.document-time')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('sorts by the displayed day before grouping documents', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [
+        { id: 'first-14', type: 'waybills', documentNumber: 'ALB-PRIMERO-14', workflowStatus: 'prepared', issueDate: '2026-07-15', approvedAt: '2026-07-14T09:00:00', projects: [] },
+        { id: 'only-15', type: 'waybills', documentNumber: 'ALB-15', workflowStatus: 'prepared', issueDate: '2026-07-14', approvedAt: '2026-07-15T08:00:00', projects: [] },
+        { id: 'second-14', type: 'waybills', documentNumber: 'ALB-SEGUNDO-14', workflowStatus: 'prepared', issueDate: '2026-07-13', approvedAt: '2026-07-14T16:00:00', projects: [] },
+      ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const groups = dom.window.document.querySelectorAll('.document-day-group');
+    expect(Array.from(groups).map((group) => group.querySelector('.document-day-label')?.textContent))
+      .toEqual(['Miércoles, 15 de julio de 2026', 'Martes, 14 de julio de 2026']);
+    expect(Array.from(groups[1].querySelectorAll('.document-number')).map((item) => item.textContent))
+      .toEqual(['ALB-SEGUNDO-14', 'ALB-PRIMERO-14']);
   });
 
   it('opens the previews of the most recent work-report day by default and leaves older days unchanged', async () => {
@@ -409,6 +433,66 @@ describe('card-back document view (internal API v2)', () => {
     expect(olderPreview?.hasAttribute('hidden')).toBe(true);
   });
 
+  it('keeps a manually collapsed latest work-report preview closed after the panel rerenders', async () => {
+    const { dom, urls } = loadCardBack({
+      salesOrders: [],
+      invoices: [],
+      estimates: [],
+      waybills: [
+        { id: 'latest', type: 'waybills', documentNumber: 'ALB-ULTIMO', kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-07-15', notes: 'Nota del último día', attachmentsUrl: '/v2/documents/waybills/latest/attachments', projects: [] },
+      ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    dom.window.document.querySelector('.document-preview-toggle')?.click();
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    const attachmentRequests = urls.filter((url) => url.includes('/waybills/latest/attachments')).length;
+    expect(attachmentRequests).toBe(1);
+
+    selectDocumentTab(dom, 'invoices');
+    await waitForRender();
+    selectDocumentTab(dom, 'waybills');
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    expect(dom.window.document.querySelector('.document-preview')?.hasAttribute('hidden')).toBe(true);
+    expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(attachmentRequests);
+  });
+
+  it('reuses attachments for an expanded work-report preview after the panel rerenders', async () => {
+    const { dom, urls } = loadCardBack({
+      salesOrders: [],
+      invoices: [],
+      estimates: [],
+      waybills: [
+        { id: 'latest', type: 'waybills', documentNumber: 'ALB-ULTIMO', kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-07-15', notes: 'Nota del último día', attachmentsUrl: '/v2/documents/waybills/latest/attachments', projects: [] },
+      ],
+    }, {
+      attachments: [{ id: 'photo', name: 'parte.jpg', url: 'https://cdn.example.com/parte.jpg', mimeType: 'image/jpeg' }],
+      attachmentDelayMs: 200,
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(1);
+
+    selectDocumentTab(dom, 'invoices');
+    selectDocumentTab(dom, 'waybills');
+    await waitForRender();
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    const preview = dom.window.document.querySelector('.document-preview');
+    expect(preview?.getAttribute('data-static-motion')).toBe('true');
+    expect(preview?.querySelector('.document-preview-image-link')).not.toBeNull();
+    expect(preview?.textContent).not.toContain('Cargando adjuntos…');
+    expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(1);
+  });
+
   it('does not open previews by default on later work-report pages', async () => {
     const waybills = Array.from({ length: 11 }, (_, index) => ({
       id: `wb-${index + 1}`,
@@ -434,7 +518,48 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.document.querySelector('.document-preview')?.hasAttribute('hidden')).toBe(true);
   });
 
-  it('does not repeat a day divider for Pedido children dated the same day as their parent', async () => {
+  it('only omits a Pedido child day divider when it is immediately below its parent', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1', {
+        issueDate: '2026-07-14',
+        waybills: [
+          {
+            id: 'wb-newer',
+            type: 'waybills',
+            documentNumber: 'ALB-16',
+            kind: 'material',
+            workflowStatus: 'prepared',
+            issueDate: '2026-07-16',
+            projects: [],
+          },
+          {
+            id: 'wb-same-day',
+            type: 'waybills',
+            documentNumber: 'ALB-14',
+            kind: 'material',
+            workflowStatus: 'prepared',
+            issueDate: '2026-07-14',
+            projects: [],
+          },
+        ],
+      })],
+      estimates: [],
+      waybills: [],
+    });
+    await waitForRender();
+    expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    const relationGroups = dom.window.document.querySelectorAll('.relation-day-group');
+    expect(relationGroups).toHaveLength(2);
+    expect(Array.from(relationGroups).map((group) => group.querySelector('.relation-day-heading')?.textContent))
+      .toEqual(['Jueves, 16 de julio de 2026', 'Martes, 14 de julio de 2026']);
+    expect(relationGroups[1]?.classList.contains('relation-day-group--same-parent-day')).toBe(false);
+    expect(relationGroups[1]?.querySelector('.related-waybill-number')?.textContent).toBe('ALB-14');
+  });
+
+  it('does not repeat a day divider for a Pedido child immediately below its parent', async () => {
     const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', {
         issueDate: '2026-07-15',
@@ -459,7 +584,6 @@ describe('card-back document view (internal API v2)', () => {
     const relationGroup = dom.window.document.querySelector('.relation-day-group');
     expect(relationGroup?.classList.contains('relation-day-group--same-parent-day')).toBe(true);
     expect(relationGroup?.querySelector('.relation-day-heading')).toBeNull();
-    expect(relationGroup?.querySelector('.related-waybill-number')?.textContent).toBe('ALB-1');
   });
 
   it('uses a quiet, accessible date divider that remains legible in dark mode', async () => {
@@ -491,7 +615,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(styles.display).toBe('flex');
     expect(styles.fontSize).toBe('11px');
     expect(styles.fontWeight).toBe('700');
-    expect(styles.color).toBe('rgb(68, 84, 111)');
+    expect(styles.color).toBe('rgb(94, 108, 132)');
     expect(css).toContain('.document-day-heading::after');
     expect(css).toContain('.document-day-heading { color: #8c9bab; }');
   });
@@ -527,6 +651,38 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(dom.window.document.querySelector('.document-day-label')?.textContent)
       .toBe(`Ayer, ${expectedDate}`);
+  });
+
+  it('calls the current calendar day Hoy while keeping its full date', async () => {
+    const today = new Date();
+    const issueDate = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+    const expectedDate = today.toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [{
+        id: 'wb-today',
+        type: 'waybills',
+        documentNumber: 'ALB-HOY',
+        workflowStatus: 'prepared',
+        issueDate,
+        projects: [],
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-day-label')?.textContent)
+      .toBe(`Hoy, ${expectedDate}`);
   });
 
   it('shows every work-report kind as a subtitle beneath its number', async () => {
@@ -639,15 +795,20 @@ describe('card-back document view (internal API v2)', () => {
 
     const notes = preview?.querySelector('.document-preview-notes');
     const noteSections = notes?.querySelectorAll('.document-preview-note');
-    const internalNote = notes?.querySelector('.document-preview-note--internal');
+    const internalNote = noteSections?.[0];
+    const waybillNote = noteSections?.[1];
     expect(notes).not.toBeNull();
     expect(noteSections).toHaveLength(2);
-    expect(notes?.querySelectorAll('.document-preview-label')[0]?.textContent).toBe('Notas');
-    expect(notes?.querySelectorAll('.document-preview-label')[1]?.textContent).toBe('Internas');
+    expect(notes?.querySelectorAll('.document-preview-label')[0]?.textContent).toBe('Internas');
+    expect(notes?.querySelectorAll('.document-preview-label')[1]?.textContent).toBe('Notas');
+    expect(internalNote?.classList.contains('document-preview-note--secondary')).toBe(false);
+    expect(waybillNote?.classList.contains('document-preview-note--secondary')).toBe(true);
     expect(dom.window.getComputedStyle(notes).backgroundColor).toBe('rgb(241, 242, 244)');
     expect(dom.window.getComputedStyle(internalNote).borderLeftWidth).toBe('0px');
     expect(dom.window.getComputedStyle(internalNote).backgroundColor).toBe('transparent');
     expect(dom.window.getComputedStyle(internalNote?.querySelector('.document-preview-text')).color)
+      .toBe('rgb(68, 84, 111)');
+    expect(dom.window.getComputedStyle(waybillNote?.querySelector('.document-preview-text')).color)
       .toBe('rgb(98, 111, 134)');
 
     const previewStyles = dom.window.getComputedStyle(preview);
@@ -863,6 +1024,12 @@ describe('card-back document view (internal API v2)', () => {
       .toBe('/icons/document-kinds/estimate.svg');
   });
 
+  it('uses a solid light-blue background for the sales-order icon', () => {
+    const salesOrderIcon = readFileSync(resolve(__dirname, '../public/icons/document-kinds/sales-order.svg'), 'utf8');
+
+    expect(salesOrderIcon).toContain('<rect width="42" height="42" rx="8" fill="#E0E7FF"/>');
+  });
+
   it('shows estimate displayStatus labels (Aceptado / Denegado)', async () => {
     const { dom } = loadCardBack({
       salesOrders: [],
@@ -883,10 +1050,10 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).toContain('Denegado');
     expect(text).toContain('1.234,56 €');
     expect(text).not.toContain('Completado');
-    expect(dom.window.document.querySelector('.document-day-label')?.textContent)
-      .toBe('Miércoles, 1 de julio de 2026');
-    expect(dom.window.document.querySelector('.document-row .document-time')?.textContent)
-      .toBe('12:05');
+    expect(Array.from(dom.window.document.querySelectorAll('.document-day-label')).map((label) => label.textContent))
+      .toEqual(['Jueves, 2 de julio de 2026', 'Miércoles, 1 de julio de 2026']);
+    expect(Array.from(dom.window.document.querySelectorAll('.document-row .document-time')).map((time) => time.textContent))
+      .toEqual(['', '12:05']);
   });
 
   it('shows currency symbols instead of three-letter codes for estimate totals', async () => {
@@ -906,7 +1073,7 @@ describe('card-back document view (internal API v2)', () => {
 
     const totals = Array.from(dom.window.document.querySelectorAll('.document-total'))
       .map((element) => element.textContent);
-    expect(totals).toEqual(['1.234,56 €', '50,00 $']);
+    expect(totals).toEqual(['50,00 $', '1.234,56 €']);
   });
 
   it('shows invoices for the card-linked customer and project with status and exact amounts', async () => {
@@ -1223,7 +1390,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(contentText(dom)).toContain('No se pudieron cargar las compras.');
   });
 
-  it('keeps sales orders visible and warns quietly when related waybills fail to load', async () => {
+  it('keeps sales orders visible and warns when waybills fail to load in Pedidos', async () => {
     const { dom } = loadCardBack(
       { salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] },
       { waybillsError: true },
@@ -1234,7 +1401,7 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     expect(contentText(dom)).toContain('PV-1');
-    expect(contentText(dom)).toContain('No se pudieron cargar los albaranes relacionados.');
+    expect(contentText(dom)).toContain('No se pudieron cargar los albaranes.');
   });
 
   it('moves focus and lazy-loads document tabs with the arrow keys', async () => {

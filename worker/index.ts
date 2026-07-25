@@ -473,9 +473,10 @@ function internalErrorResponse(err: unknown): Response {
 const PURCHASE_ORDER_PAGE_SIZE = 100;
 const PURCHASE_ORDER_MAX_PAGES = 10;
 const SALES_ORDER_PAGE_SIZE = 100;
-const SALES_ORDER_MAX_PAGES = 10;
 const RELATED_WAYBILL_PAGE_SIZE = 100;
 const RELATED_WAYBILL_MAX_PAGES = 10;
+const WAYBILL_CATEGORY_MAX_PAGES = 40;
+const ORDERS_VIEW_MAX_PAGES = 15;
 const ORDER_WAYBILL_KINDS = ['material', 'refund', 'unclassified'];
 
 function isWaybillCategory(value: string | null): value is WaybillCategory {
@@ -506,27 +507,6 @@ async function fetchCustomerPurchaseOrders(
   return items;
 }
 
-async function fetchCustomerSalesOrders(
-  apiKey: string,
-  contactId: string,
-  projectId: string | null,
-): Promise<Array<Record<string, any>>> {
-  const items: Array<Record<string, any>> = [];
-  for (let page = 1; page <= SALES_ORDER_MAX_PAGES; page += 1) {
-    const result = await internalApiGet<InternalPage>('/sales-orders', apiKey, {
-      query: {
-        customerId: contactId,
-        projectId,
-        page: String(page),
-        pageSize: String(SALES_ORDER_PAGE_SIZE),
-      },
-    });
-    items.push(...(result.items ?? []));
-    if (!result.pagination?.hasMore) break;
-  }
-  return items;
-}
-
 async function fetchCustomerWaybills(
   apiKey: string,
   contactId: string,
@@ -546,6 +526,42 @@ async function fetchCustomerWaybills(
     if (!result.pagination?.hasMore) break;
   }
   return items;
+}
+
+async function fetchWaybillCategoryPage(
+  apiKey: string,
+  contactId: string,
+  projectId: string | null,
+  category: WaybillCategory,
+  requestedPage: number,
+): Promise<{ items: Array<Record<string, any>>; hasMore: boolean }> {
+  const matches: Array<Record<string, any>> = [];
+  const start = (requestedPage - 1) * V2_PAGE_SIZE;
+  const end = start + V2_PAGE_SIZE;
+
+  for (let page = 1; page <= WAYBILL_CATEGORY_MAX_PAGES; page += 1) {
+    const result = await internalApiGet<InternalPage>('/waybills', apiKey, {
+      query: {
+        customerId: contactId,
+        projectId,
+        page: String(page),
+        pageSize: String(RELATED_WAYBILL_PAGE_SIZE),
+      },
+    });
+    for (const waybill of result.items ?? []) {
+      if (WAYBILL_CATEGORY_KINDS[category].includes(waybill.kind ?? 'unclassified')) {
+        matches.push(waybill);
+      }
+    }
+    if (matches.length > end) {
+      return { items: matches.slice(start, end), hasMore: true };
+    }
+    if (!result.pagination?.hasMore) {
+      return { items: matches.slice(start, end), hasMore: false };
+    }
+  }
+
+  return { items: matches.slice(start, end), hasMore: false };
 }
 
 function nestRelatedDocuments(
@@ -589,18 +605,81 @@ function combineOrdersWithStandaloneWaybills(
   waybills: Array<Record<string, any>>,
 ) {
   const salesOrders = salesOrderItems.map(mapInternalSalesOrder);
-  const visibleOrderIds = new Set(salesOrders.map((order) => order.id));
   const standaloneWaybills = waybills
     .filter((waybill) => {
-      const sourceOrderId = waybill.sourceOrder?.id;
-      return ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified') &&
-        (!sourceOrderId || !visibleOrderIds.has(sourceOrderId));
+      return ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified') && !waybill.sourceOrder?.id;
     })
     .map(mapInternalWaybill);
 
   return nestRelatedDocuments(salesOrders, purchaseOrders, waybills)
     .concat(standaloneWaybills)
     .sort((left, right) => documentSortDate(right).localeCompare(documentSortDate(left)));
+}
+
+interface OrdersViewSources {
+  salesOrders: Array<Record<string, any>>;
+  waybills: Array<Record<string, any>>;
+  waybillsError: boolean;
+}
+
+async function fetchOrdersViewSources(
+  apiKey: string,
+  contactId: string,
+  projectId: string | null,
+): Promise<OrdersViewSources> {
+  const salesOrders: Array<Record<string, any>> = [];
+  const waybills: Array<Record<string, any>> = [];
+  let salesOrdersHasMore = true;
+  let waybillsHasMore = true;
+  let waybillsError = false;
+  let page = 1;
+
+  while ((salesOrdersHasMore || waybillsHasMore) && page <= ORDERS_VIEW_MAX_PAGES) {
+    const [salesOrdersResult, waybillsResult] = await Promise.allSettled([
+      salesOrdersHasMore
+        ? internalApiGet<InternalPage>('/sales-orders', apiKey, {
+            query: {
+              customerId: contactId,
+              projectId,
+              page: String(page),
+              pageSize: String(SALES_ORDER_PAGE_SIZE),
+            },
+          })
+        : Promise.resolve(null),
+      waybillsHasMore
+        ? internalApiGet<InternalPage>('/waybills', apiKey, {
+            query: {
+              customerId: contactId,
+              projectId,
+              page: String(page),
+              pageSize: String(RELATED_WAYBILL_PAGE_SIZE),
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (salesOrdersResult.status === 'rejected') throw salesOrdersResult.reason;
+    if (salesOrdersResult.value) {
+      salesOrders.push(...(salesOrdersResult.value.items ?? []));
+      salesOrdersHasMore = Boolean(salesOrdersResult.value.pagination?.hasMore);
+    }
+
+    if (waybillsResult.status === 'rejected') {
+      waybillsError = true;
+      waybillsHasMore = false;
+    } else if (waybillsResult.value) {
+      for (const waybill of waybillsResult.value.items ?? []) {
+        if (!ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified')) continue;
+
+        waybills.push(waybill);
+      }
+      waybillsHasMore = Boolean(waybillsResult.value.pagination?.hasMore);
+    }
+
+    page += 1;
+  }
+
+  return { salesOrders, waybills, waybillsError };
 }
 
 async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
@@ -652,17 +731,16 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
     const requestedPage = parsePositiveInteger(url.searchParams.get('page'), 1, 10_000);
 
     if (type === 'sales-orders' && view === 'orders') {
-      const [salesOrdersResult, purchaseOrdersResult, waybillsResult] = await Promise.allSettled([
-        fetchCustomerSalesOrders(apiKey, contactId, effectiveProjectId),
+      const [sourcesResult, purchaseOrdersResult] = await Promise.allSettled([
+        fetchOrdersViewSources(apiKey, contactId, effectiveProjectId),
         fetchCustomerPurchaseOrders(apiKey, contactId, effectiveProjectId),
-        fetchCustomerWaybills(apiKey, contactId, effectiveProjectId),
       ]);
-      if (salesOrdersResult.status === 'rejected') throw salesOrdersResult.reason;
+      if (sourcesResult.status === 'rejected') throw sourcesResult.reason;
 
       const results = combineOrdersWithStandaloneWaybills(
-        salesOrdersResult.value,
+        sourcesResult.value.salesOrders,
         purchaseOrdersResult.status === 'fulfilled' ? purchaseOrdersResult.value : [],
-        waybillsResult.status === 'fulfilled' ? waybillsResult.value : [],
+        sourcesResult.value.waybills,
       );
       const start = (requestedPage - 1) * V2_PAGE_SIZE;
       return jsonResponse({
@@ -673,22 +751,25 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
         hasMore: start + V2_PAGE_SIZE < results.length,
         results: results.slice(start, start + V2_PAGE_SIZE),
         ...(purchaseOrdersResult.status === 'rejected' ? { purchaseOrdersError: true } : {}),
-        ...(waybillsResult.status === 'rejected' ? { waybillsError: true } : {}),
+        ...(sourcesResult.value.waybillsError ? { waybillsError: true } : {}),
       });
     }
 
     if (type === 'waybills' && isWaybillCategory(category)) {
-      const matchingWaybills = (await fetchCustomerWaybills(apiKey, contactId, effectiveProjectId))
-        .filter((waybill) => WAYBILL_CATEGORY_KINDS[category].includes(waybill.kind ?? 'unclassified'));
-      const start = (requestedPage - 1) * V2_PAGE_SIZE;
-      const pageResults = matchingWaybills.slice(start, start + V2_PAGE_SIZE);
+      const categoryPage = await fetchWaybillCategoryPage(
+        apiKey,
+        contactId,
+        effectiveProjectId,
+        category,
+        requestedPage,
+      );
       return jsonResponse({
         type,
         scope,
         page: requestedPage,
         pageSize: V2_PAGE_SIZE,
-        hasMore: start + V2_PAGE_SIZE < matchingWaybills.length,
-        results: pageResults.map(mapInternalWaybill),
+        hasMore: categoryPage.hasMore,
+        results: categoryPage.items.map(mapInternalWaybill),
       });
     }
 

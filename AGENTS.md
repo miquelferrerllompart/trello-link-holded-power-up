@@ -122,7 +122,7 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 |---|---|---|
 | `GET /contacts/search?q=` | `GET /contacts?query=` | Contact search (summaries) for the search popup |
 | `GET /projects/search?q=` | `GET /projects?query=` | Project search → `{ id, name, contactName, key }` |
-| `GET /v2/documents/search?contactId=&projectId=&type=&scope=&page=&cursor=` | `/sales-orders` \| `/waybills` \| `/invoices` \| `/estimates` (+ `/purchase-orders`) | One page of docs for the active card-back tab |
+| `GET /v2/documents/search?contactId=&projectId=&type=&scope=&page=&cursor=&category=&view=` | `/sales-orders` \| `/waybills` \| `/invoices` \| `/estimates` (+ `/purchase-orders`) | One page of docs for the active card-back tab |
 | `GET /v2/documents/:type/:id/attachments` | `GET /:type/:id/attachments` | Lazy attachment metadata with browser-safe proxy URLs |
 | `GET /v2/documents/:type/:id/attachments/:attachmentId` | Absolute authenticated `downloadUrl` from the metadata response | Validated binary/image proxy; opaque IDs are preserved exactly |
 | `GET /v2/contacts/:id` | `GET /contacts/:id` | Contact detail (camelCase `customFields`) for the "Importante" box + address picker |
@@ -134,13 +134,21 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
   (drops it → all of the customer's docs).
 - Sales orders, waybills, and invoices page by `page` (`pageSize` fixed 10); estimates page by `cursor`
   (`hasMore` + `nextCursor`). No totals — the UI shows `‹ Página N ›`. Sorted newest-first by issue date.
+- Waybill `category=work` returns only `labour`, `mixed`, `extra`, and `unclassified`; it continues through
+  up to 40 upstream pages until it can fill the requested UI page, rather than truncating after the 10-page
+  relation limit. The UI uses this for **Partes de trabajo**. `view=orders` on `sales-orders` combines orders
+  with standalone warehouse movements for **Pedidos**. Only warehouse movements without `sourceOrder` render
+  independently; related movements remain under their order. Every Pedidos UI page uses the same bounded source
+  window — up to 15 100-item sales-order and waybill pages — before the merged list is sorted and sliced. This
+  prevents duplicated or skipped rows across pagination while keeping Worker subrequests bounded; after that
+  safety limit, `hasMore` only describes the loaded window.
 - Status pills come from server-derived enums — `internalStatus` (sales/purchase orders),
   `workflowStatus` (waybills), `displayStatus` (invoices/estimates) — mapped to canonical Spanish labels in
   `src/sales-order-display.ts` (mirrored inline in `card-back.html`).
-- **Purchase orders and waybills** are fetched alongside sales orders (independent bounded loops over
+- **Purchase orders and related waybills** are fetched alongside sales orders (independent bounded loops over
   `/purchase-orders` and `/waybills`) and nested under each order by `sourceOrder.id`; orphan/off-page
-  relations are dropped. Only `material` and `refund` waybill kinds render beneath sales orders;
-  every waybill kind remains available with a Spanish kind subtitle in the main Albaranes tab.
+  relations are dropped. `material`, `refund`, and `unclassified` waybills render beneath sales orders; in
+  the `view=orders` response, matching standalone material/return movements render as top-level Pedidos rows.
   Degraded relation fetches add
   `purchaseOrdersError: true` or `waybillsError: true` independently. No extra nested tabs — both
   relation types render as tree children.
@@ -153,11 +161,12 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 
 ## Card-back document view
 
-`public/card-back.html` (inline JS). Auto-loads the first tab (Albaranes) when a **customer** is
-linked; other tabs (Albaranes, Facturas, Presupuestos) lazy-load on click. Scope toggle is
-`Proyecto vinculado | Todos`. Related material/devolución waybills (blue/red kind subtitles beneath
+`public/card-back.html` (inline JS). Auto-loads the first tab (**Partes de trabajo**) when a **customer** is
+linked; **Pedidos**, Facturas, and Presupuestos lazy-load on click. Scope toggle is
+`Proyecto vinculado | Todos`. Related material/devolución/sin clasificar waybills (kind subtitles beneath
 the document number, with status grouped beside the identity) and purchase orders (purple) nest under
-their sales order on a shared relation rail. States: skeleton load,
+their sales order on a shared relation rail. Documents are grouped by their displayed day, with only the hour
+on each row. States: skeleton load,
 `DATA_NOT_READY` ("Sincronizando…") + retry, quiet relation-degraded notes.
 
 ## Common issues / gotchas
