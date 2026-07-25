@@ -2063,7 +2063,7 @@
         return '<div class="documents-note">' + emptyMessage + '</div>';
       }
 
-      var dayGroups = groupDocumentsByDay(items);
+      var dayGroups = groupDocumentsByDay(sortRelatedDocuments(items));
 
       var rows = dayGroups.map(function(group, groupIndex) {
         var headingId = 'document-day-' + tab.key + '-' + groupIndex;

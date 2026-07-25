@@ -548,6 +548,40 @@ async function fetchCustomerWaybills(
   return items;
 }
 
+async function fetchWaybillCategoryPage(
+  apiKey: string,
+  contactId: string,
+  projectId: string | null,
+  category: WaybillCategory,
+  requestedPage: number,
+): Promise<{ items: Array<Record<string, any>>; hasMore: boolean }> {
+  const matches: Array<Record<string, any>> = [];
+  const start = (requestedPage - 1) * V2_PAGE_SIZE;
+  const end = start + V2_PAGE_SIZE;
+
+  for (let page = 1; ; page += 1) {
+    const result = await internalApiGet<InternalPage>('/waybills', apiKey, {
+      query: {
+        customerId: contactId,
+        projectId,
+        page: String(page),
+        pageSize: String(RELATED_WAYBILL_PAGE_SIZE),
+      },
+    });
+    for (const waybill of result.items ?? []) {
+      if (WAYBILL_CATEGORY_KINDS[category].includes(waybill.kind ?? 'unclassified')) {
+        matches.push(waybill);
+      }
+    }
+    if (matches.length > end) {
+      return { items: matches.slice(start, end), hasMore: true };
+    }
+    if (!result.pagination?.hasMore) {
+      return { items: matches.slice(start, end), hasMore: false };
+    }
+  }
+}
+
 function nestRelatedDocuments(
   salesOrders: ReturnType<typeof mapInternalSalesOrder>[],
   purchaseOrders: Array<Record<string, any>>,
@@ -678,17 +712,20 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
     }
 
     if (type === 'waybills' && isWaybillCategory(category)) {
-      const matchingWaybills = (await fetchCustomerWaybills(apiKey, contactId, effectiveProjectId))
-        .filter((waybill) => WAYBILL_CATEGORY_KINDS[category].includes(waybill.kind ?? 'unclassified'));
-      const start = (requestedPage - 1) * V2_PAGE_SIZE;
-      const pageResults = matchingWaybills.slice(start, start + V2_PAGE_SIZE);
+      const categoryPage = await fetchWaybillCategoryPage(
+        apiKey,
+        contactId,
+        effectiveProjectId,
+        category,
+        requestedPage,
+      );
       return jsonResponse({
         type,
         scope,
         page: requestedPage,
         pageSize: V2_PAGE_SIZE,
-        hasMore: start + V2_PAGE_SIZE < matchingWaybills.length,
-        results: pageResults.map(mapInternalWaybill),
+        hasMore: categoryPage.hasMore,
+        results: categoryPage.items.map(mapInternalWaybill),
       });
     }
 

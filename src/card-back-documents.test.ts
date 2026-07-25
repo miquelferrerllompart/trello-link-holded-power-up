@@ -375,10 +375,31 @@ describe('card-back document view (internal API v2)', () => {
       .toEqual([2, 1]);
     expect(Array.from(dom.window.document.querySelectorAll('.document-row .document-time'))
       .map((time) => time.textContent))
-      .toEqual(['09:12', '16:40', '']);
+      .toEqual(['16:40', '09:12', '']);
     expect(groups[1].querySelector('.document-time')?.classList.contains('document-time--empty'))
       .toBe(true);
     expect(groups[1].querySelector('.document-time')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('sorts by the displayed day before grouping documents', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [
+        { id: 'first-14', type: 'waybills', documentNumber: 'ALB-PRIMERO-14', workflowStatus: 'prepared', issueDate: '2026-07-15', approvedAt: '2026-07-14T09:00:00', projects: [] },
+        { id: 'only-15', type: 'waybills', documentNumber: 'ALB-15', workflowStatus: 'prepared', issueDate: '2026-07-14', approvedAt: '2026-07-15T08:00:00', projects: [] },
+        { id: 'second-14', type: 'waybills', documentNumber: 'ALB-SEGUNDO-14', workflowStatus: 'prepared', issueDate: '2026-07-13', approvedAt: '2026-07-14T16:00:00', projects: [] },
+      ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const groups = dom.window.document.querySelectorAll('.document-day-group');
+    expect(Array.from(groups).map((group) => group.querySelector('.document-day-label')?.textContent))
+      .toEqual(['Miércoles, 15 de julio de 2026', 'Martes, 14 de julio de 2026']);
+    expect(Array.from(groups[1].querySelectorAll('.document-number')).map((item) => item.textContent))
+      .toEqual(['ALB-SEGUNDO-14', 'ALB-PRIMERO-14']);
   });
 
   it('opens the previews of the most recent work-report day by default and leaves older days unchanged', async () => {
@@ -926,10 +947,10 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).toContain('Denegado');
     expect(text).toContain('1.234,56 €');
     expect(text).not.toContain('Completado');
-    expect(dom.window.document.querySelector('.document-day-label')?.textContent)
-      .toBe('Miércoles, 1 de julio de 2026');
-    expect(dom.window.document.querySelector('.document-row .document-time')?.textContent)
-      .toBe('12:05');
+    expect(Array.from(dom.window.document.querySelectorAll('.document-day-label')).map((label) => label.textContent))
+      .toEqual(['Jueves, 2 de julio de 2026', 'Miércoles, 1 de julio de 2026']);
+    expect(Array.from(dom.window.document.querySelectorAll('.document-row .document-time')).map((time) => time.textContent))
+      .toEqual(['', '12:05']);
   });
 
   it('shows currency symbols instead of three-letter codes for estimate totals', async () => {
@@ -949,7 +970,7 @@ describe('card-back document view (internal API v2)', () => {
 
     const totals = Array.from(dom.window.document.querySelectorAll('.document-total'))
       .map((element) => element.textContent);
-    expect(totals).toEqual(['1.234,56 €', '50,00 $']);
+    expect(totals).toEqual(['50,00 $', '1.234,56 €']);
   });
 
   it('shows invoices for the card-linked customer and project with status and exact amounts', async () => {
