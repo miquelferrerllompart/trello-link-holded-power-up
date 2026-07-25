@@ -1384,6 +1384,8 @@
           pages: {},   // stateKey -> current page number
           cursors: {}, // stateKey -> { pageNumber: cursorToFetchThatPage } (estimates)
           previewStates: {}, // preview ID -> user-selected expanded state
+          previewAttachments: {}, // preview ID -> { path, items }
+          previewAttachmentRequests: {}, // preview ID -> { path, promise }
           pendingTabFocus: null,
         };
       }
@@ -1848,10 +1850,43 @@
         });
     }
 
-    function loadDocumentAttachments(preview, path) {
+    function renderDocumentAttachmentItems(slot, attachments) {
+      slot.setAttribute('data-state', 'loaded');
+      var normalized = getPreviewAttachments({ attachments: attachments });
+      slot.innerHTML = normalized.length
+        ? renderPreviewAttachments(normalized)
+        : '<div class="document-preview-attachments-state">Sin archivos adjuntos.</div>';
+      t.sizeTo(contentDiv).catch(function() {});
+    }
+
+    function renderDocumentAttachmentError(slot, preview, path, view, previewId, err) {
+      console.warn('Holded: error loading attachments', err);
+      slot.setAttribute('data-state', 'error');
+      slot.innerHTML = '<div class="document-preview-attachments-state" role="alert">' +
+        '<span>No se pudieron cargar los adjuntos.</span>' +
+        '<button type="button" class="document-preview-attachments-retry">Reintentar</button>' +
+      '</div>';
+      var retry = slot.querySelector('.document-preview-attachments-retry');
+      if (retry) {
+        retry.addEventListener('click', function() {
+          slot.setAttribute('data-state', 'idle');
+          loadDocumentAttachments(preview, path, view, previewId);
+        });
+      }
+      t.sizeTo(contentDiv).catch(function() {});
+    }
+
+    function loadDocumentAttachments(preview, path, view, previewId) {
       var slot = preview.querySelector('.document-preview-attachments-slot');
       if (!slot || slot.getAttribute('data-state') === 'loading' ||
         slot.getAttribute('data-state') === 'loaded') return;
+
+      var cached = view.previewAttachments[previewId];
+      if (cached && cached.path === path) {
+        preview.setAttribute('data-static-motion', 'true');
+        renderDocumentAttachmentItems(slot, cached.items);
+        return;
+      }
 
       slot.setAttribute('data-state', 'loading');
       slot.innerHTML = '<div class="document-preview-attachments-state" role="status">' +
@@ -1859,30 +1894,36 @@
       '</div>';
       t.sizeTo(contentDiv).catch(function() {});
 
-      fetchDocumentAttachmentPages(path, null, [], 0)
+      var pending = view.previewAttachmentRequests[previewId];
+      if (pending && pending.path === path) {
+        preview.setAttribute('data-static-motion', 'true');
+      }
+      if (!pending || pending.path !== path) {
+        pending = {
+          path: path,
+          promise: fetchDocumentAttachmentPages(path, null, [], 0),
+        };
+        view.previewAttachmentRequests[previewId] = pending;
+      }
+
+      pending.promise
         .then(function(attachments) {
-          slot.setAttribute('data-state', 'loaded');
-          var normalized = getPreviewAttachments({ attachments: attachments });
-          slot.innerHTML = normalized.length
-            ? renderPreviewAttachments(normalized)
-            : '<div class="document-preview-attachments-state">Sin archivos adjuntos.</div>';
-          t.sizeTo(contentDiv).catch(function() {});
+          if (view.previewAttachmentRequests[previewId] === pending) {
+            delete view.previewAttachmentRequests[previewId];
+            view.previewAttachments[previewId] = { path: path, items: attachments };
+          }
+          var resolved = view.previewAttachments[previewId];
+          if (resolved && resolved.path === path) {
+            renderDocumentAttachmentItems(slot, resolved.items);
+          }
         })
         .catch(function(err) {
-          console.warn('Holded: error loading attachments', err);
-          slot.setAttribute('data-state', 'error');
-          slot.innerHTML = '<div class="document-preview-attachments-state" role="alert">' +
-            '<span>No se pudieron cargar los adjuntos.</span>' +
-            '<button type="button" class="document-preview-attachments-retry">Reintentar</button>' +
-          '</div>';
-          var retry = slot.querySelector('.document-preview-attachments-retry');
-          if (retry) {
-            retry.addEventListener('click', function() {
-              slot.setAttribute('data-state', 'idle');
-              loadDocumentAttachments(preview, path);
-            });
+          if (view.previewAttachmentRequests[previewId] === pending) {
+            delete view.previewAttachmentRequests[previewId];
+          } else if (view.previewAttachmentRequests[previewId]) {
+            return;
           }
-          t.sizeTo(contentDiv).catch(function() {});
+          renderDocumentAttachmentError(slot, preview, path, view, previewId, err);
         });
     }
 
@@ -2316,7 +2357,7 @@
           preview.toggleAttribute('hidden', !willExpand);
           var attachmentsPath = getSafeAttachmentsPath(this.getAttribute('data-attachments-url'));
           if (willExpand && attachmentsPath) {
-            loadDocumentAttachments(preview, attachmentsPath);
+            loadDocumentAttachments(preview, attachmentsPath, view, previewId);
           }
           t.sizeTo(contentDiv).catch(function() {});
         });
@@ -2329,7 +2370,7 @@
         var expandedPreview = expandedPreviewId ? document.getElementById(expandedPreviewId) : null;
         var expandedAttachmentsPath = getSafeAttachmentsPath(expandedToggle.getAttribute('data-attachments-url'));
         if (expandedPreview && expandedAttachmentsPath) {
-          loadDocumentAttachments(expandedPreview, expandedAttachmentsPath);
+          loadDocumentAttachments(expandedPreview, expandedAttachmentsPath, view, expandedPreviewId);
         }
       }
 

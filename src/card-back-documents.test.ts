@@ -93,6 +93,9 @@ function loadCardBack(documents, options = {}) {
         }
 
         if (requestUrl.includes('/v2/documents/') && requestUrl.includes('/attachments')) {
+          if (options.attachmentDelayMs) {
+            await new Promise((r) => setTimeout(r, options.attachmentDelayMs));
+          }
           return new Response(JSON.stringify({
             items: options.attachments || [],
             hasMore: false,
@@ -240,7 +243,7 @@ describe('card-back document view (internal API v2)', () => {
   });
 
   it('shows the sales-order internalStatus label, not the document status', async () => {
-    const { dom, urls } = loadCardBack({
+    const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_prepared' })],
       waybills: [],
       estimates: [],
@@ -456,6 +459,38 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('false');
     expect(dom.window.document.querySelector('.document-preview')?.hasAttribute('hidden')).toBe(true);
     expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(attachmentRequests);
+  });
+
+  it('reuses attachments for an expanded work-report preview after the panel rerenders', async () => {
+    const { dom, urls } = loadCardBack({
+      salesOrders: [],
+      invoices: [],
+      estimates: [],
+      waybills: [
+        { id: 'latest', type: 'waybills', documentNumber: 'ALB-ULTIMO', kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-07-15', notes: 'Nota del último día', attachmentsUrl: '/v2/documents/waybills/latest/attachments', projects: [] },
+      ],
+    }, {
+      attachments: [{ id: 'photo', name: 'parte.jpg', url: 'https://cdn.example.com/parte.jpg', mimeType: 'image/jpeg' }],
+      attachmentDelayMs: 200,
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(1);
+
+    selectDocumentTab(dom, 'invoices');
+    selectDocumentTab(dom, 'waybills');
+    await waitForRender();
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('true');
+    const preview = dom.window.document.querySelector('.document-preview');
+    expect(preview?.getAttribute('data-static-motion')).toBe('true');
+    expect(preview?.querySelector('.document-preview-image-link')).not.toBeNull();
+    expect(preview?.textContent).not.toContain('Cargando adjuntos…');
+    expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(1);
   });
 
   it('does not open previews by default on later work-report pages', async () => {
