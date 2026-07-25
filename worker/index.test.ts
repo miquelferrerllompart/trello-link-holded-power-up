@@ -505,6 +505,90 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(body.results[1].waybills?.map((item) => item.id)).toEqual(['material']);
   });
 
+  it('loads Pedidos beyond the tenth upstream sales-order page', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders') || input.includes('/waybills')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+
+      const page = Number(new URL(input).searchParams.get('page'));
+      const items = page <= 10
+        ? Array.from({ length: 100 }, (_, index) => ({
+            id: `so-${(page - 1) * 100 + index + 1}`,
+            docNumber: `PV-${(page - 1) * 100 + index + 1}`,
+            issueDate: '2026-07-15',
+            internalStatus: 'in_process',
+            projects: [],
+          }))
+        : [{ id: 'so-1001', docNumber: 'PV-1001', issueDate: '2026-07-14', internalStatus: 'in_process', projects: [] }];
+      return internalJson({
+        items,
+        pagination: { page, pageSize: 100, hasMore: page < 11 },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=101&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { hasMore: boolean; results: Array<{ id: string }> };
+
+    expect(response.status).toBe(200);
+    expect(body.results.map((item) => item.id)).toEqual(['so-1001']);
+    expect(body.hasMore).toBe(false);
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/sales-orders?customerId=contact-1&page=11&pageSize=100`,
+    );
+  });
+
+  it('finds standalone Pedidos movements after earlier work-report-only waybill pages', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders') || input.includes('/sales-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+
+      const page = Number(new URL(input).searchParams.get('page'));
+      const items = page <= 10
+        ? Array.from({ length: 100 }, (_, index) => ({
+            id: `labour-${(page - 1) * 100 + index + 1}`,
+            docNumber: `ALB-TRABAJO-${(page - 1) * 100 + index + 1}`,
+            kind: 'labour',
+            issueDate: '2026-07-15',
+            workflowStatus: 'prepared',
+            sourceOrder: null,
+            projects: [],
+          }))
+        : [{
+            id: 'refund-1001',
+            docNumber: 'ALB-DEVOLUCION-1001',
+            kind: 'refund',
+            issueDate: '2026-07-14',
+            workflowStatus: 'prepared',
+            sourceOrder: null,
+            projects: [],
+          }];
+      return internalJson({
+        items,
+        pagination: { page, pageSize: 100, hasMore: page < 11 },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=1&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { hasMore: boolean; results: Array<{ id: string }> };
+
+    expect(response.status).toBe(200);
+    expect(body.results.map((item) => item.id)).toEqual(['refund-1001']);
+    expect(body.hasMore).toBe(false);
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=11&pageSize=100`,
+    );
+  });
+
   it('keeps sales orders and flags purchaseOrdersError when the PO fetch fails', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders')) {

@@ -518,7 +518,48 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.document.querySelector('.document-preview')?.hasAttribute('hidden')).toBe(true);
   });
 
-  it('does not repeat a day divider for Pedido children dated the same day as their parent', async () => {
+  it('only omits a Pedido child day divider when it is immediately below its parent', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-1', 'PV-1', {
+        issueDate: '2026-07-14',
+        waybills: [
+          {
+            id: 'wb-newer',
+            type: 'waybills',
+            documentNumber: 'ALB-16',
+            kind: 'material',
+            workflowStatus: 'prepared',
+            issueDate: '2026-07-16',
+            projects: [],
+          },
+          {
+            id: 'wb-same-day',
+            type: 'waybills',
+            documentNumber: 'ALB-14',
+            kind: 'material',
+            workflowStatus: 'prepared',
+            issueDate: '2026-07-14',
+            projects: [],
+          },
+        ],
+      })],
+      estimates: [],
+      waybills: [],
+    });
+    await waitForRender();
+    expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    const relationGroups = dom.window.document.querySelectorAll('.relation-day-group');
+    expect(relationGroups).toHaveLength(2);
+    expect(Array.from(relationGroups).map((group) => group.querySelector('.relation-day-heading')?.textContent))
+      .toEqual(['Jueves, 16 de julio de 2026', 'Martes, 14 de julio de 2026']);
+    expect(relationGroups[1]?.classList.contains('relation-day-group--same-parent-day')).toBe(false);
+    expect(relationGroups[1]?.querySelector('.related-waybill-number')?.textContent).toBe('ALB-14');
+  });
+
+  it('does not repeat a day divider for a Pedido child immediately below its parent', async () => {
     const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', {
         issueDate: '2026-07-15',
@@ -543,7 +584,6 @@ describe('card-back document view (internal API v2)', () => {
     const relationGroup = dom.window.document.querySelector('.relation-day-group');
     expect(relationGroup?.classList.contains('relation-day-group--same-parent-day')).toBe(true);
     expect(relationGroup?.querySelector('.relation-day-heading')).toBeNull();
-    expect(relationGroup?.querySelector('.related-waybill-number')?.textContent).toBe('ALB-1');
   });
 
   it('uses a quiet, accessible date divider that remains legible in dark mode', async () => {

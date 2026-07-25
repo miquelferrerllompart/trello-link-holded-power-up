@@ -473,7 +473,6 @@ function internalErrorResponse(err: unknown): Response {
 const PURCHASE_ORDER_PAGE_SIZE = 100;
 const PURCHASE_ORDER_MAX_PAGES = 10;
 const SALES_ORDER_PAGE_SIZE = 100;
-const SALES_ORDER_MAX_PAGES = 10;
 const RELATED_WAYBILL_PAGE_SIZE = 100;
 const RELATED_WAYBILL_MAX_PAGES = 10;
 const WAYBILL_CATEGORY_MAX_PAGES = 40;
@@ -499,27 +498,6 @@ async function fetchCustomerPurchaseOrders(
         projectId,
         page: String(page),
         pageSize: String(PURCHASE_ORDER_PAGE_SIZE),
-      },
-    });
-    items.push(...(result.items ?? []));
-    if (!result.pagination?.hasMore) break;
-  }
-  return items;
-}
-
-async function fetchCustomerSalesOrders(
-  apiKey: string,
-  contactId: string,
-  projectId: string | null,
-): Promise<Array<Record<string, any>>> {
-  const items: Array<Record<string, any>> = [];
-  for (let page = 1; page <= SALES_ORDER_MAX_PAGES; page += 1) {
-    const result = await internalApiGet<InternalPage>('/sales-orders', apiKey, {
-      query: {
-        customerId: contactId,
-        projectId,
-        page: String(page),
-        pageSize: String(SALES_ORDER_PAGE_SIZE),
       },
     });
     items.push(...(result.items ?? []));
@@ -640,6 +618,74 @@ function combineOrdersWithStandaloneWaybills(
     .sort((left, right) => documentSortDate(right).localeCompare(documentSortDate(left)));
 }
 
+interface OrdersViewSources {
+  salesOrders: Array<Record<string, any>>;
+  waybills: Array<Record<string, any>>;
+  hasMore: boolean;
+  waybillsError: boolean;
+}
+
+async function fetchOrdersViewSources(
+  apiKey: string,
+  contactId: string,
+  projectId: string | null,
+  requestedPage: number,
+): Promise<OrdersViewSources> {
+  const salesOrders: Array<Record<string, any>> = [];
+  const waybills: Array<Record<string, any>> = [];
+  const end = requestedPage * V2_PAGE_SIZE;
+  let salesOrdersHasMore = true;
+  let waybillsHasMore = true;
+  let waybillsError = false;
+  let page = 1;
+
+  while (salesOrdersHasMore || waybillsHasMore) {
+    const [salesOrdersResult, waybillsResult] = await Promise.allSettled([
+      salesOrdersHasMore
+        ? internalApiGet<InternalPage>('/sales-orders', apiKey, {
+            query: {
+              customerId: contactId,
+              projectId,
+              page: String(page),
+              pageSize: String(SALES_ORDER_PAGE_SIZE),
+            },
+          })
+        : Promise.resolve(null),
+      waybillsHasMore
+        ? internalApiGet<InternalPage>('/waybills', apiKey, {
+            query: {
+              customerId: contactId,
+              projectId,
+              page: String(page),
+              pageSize: String(RELATED_WAYBILL_PAGE_SIZE),
+            },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (salesOrdersResult.status === 'rejected') throw salesOrdersResult.reason;
+    if (salesOrdersResult.value) {
+      salesOrders.push(...(salesOrdersResult.value.items ?? []));
+      salesOrdersHasMore = Boolean(salesOrdersResult.value.pagination?.hasMore);
+    }
+
+    if (waybillsResult.status === 'rejected') {
+      waybillsError = true;
+      waybillsHasMore = false;
+    } else if (waybillsResult.value) {
+      waybills.push(...(waybillsResult.value.items ?? []));
+      waybillsHasMore = Boolean(waybillsResult.value.pagination?.hasMore);
+    }
+
+    if (combineOrdersWithStandaloneWaybills(salesOrders, [], waybills).length > end) {
+      return { salesOrders, waybills, hasMore: true, waybillsError };
+    }
+    page += 1;
+  }
+
+  return { salesOrders, waybills, hasMore: false, waybillsError };
+}
+
 async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
   const apiKey = env.EF_INTERNAL_API_KEY;
   if (!apiKey) {
@@ -689,17 +735,16 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
     const requestedPage = parsePositiveInteger(url.searchParams.get('page'), 1, 10_000);
 
     if (type === 'sales-orders' && view === 'orders') {
-      const [salesOrdersResult, purchaseOrdersResult, waybillsResult] = await Promise.allSettled([
-        fetchCustomerSalesOrders(apiKey, contactId, effectiveProjectId),
+      const [sourcesResult, purchaseOrdersResult] = await Promise.allSettled([
+        fetchOrdersViewSources(apiKey, contactId, effectiveProjectId, requestedPage),
         fetchCustomerPurchaseOrders(apiKey, contactId, effectiveProjectId),
-        fetchCustomerWaybills(apiKey, contactId, effectiveProjectId),
       ]);
-      if (salesOrdersResult.status === 'rejected') throw salesOrdersResult.reason;
+      if (sourcesResult.status === 'rejected') throw sourcesResult.reason;
 
       const results = combineOrdersWithStandaloneWaybills(
-        salesOrdersResult.value,
+        sourcesResult.value.salesOrders,
         purchaseOrdersResult.status === 'fulfilled' ? purchaseOrdersResult.value : [],
-        waybillsResult.status === 'fulfilled' ? waybillsResult.value : [],
+        sourcesResult.value.waybills,
       );
       const start = (requestedPage - 1) * V2_PAGE_SIZE;
       return jsonResponse({
@@ -707,10 +752,10 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
         scope,
         page: requestedPage,
         pageSize: V2_PAGE_SIZE,
-        hasMore: start + V2_PAGE_SIZE < results.length,
+        hasMore: sourcesResult.value.hasMore,
         results: results.slice(start, start + V2_PAGE_SIZE),
         ...(purchaseOrdersResult.status === 'rejected' ? { purchaseOrdersError: true } : {}),
-        ...(waybillsResult.status === 'rejected' ? { waybillsError: true } : {}),
+        ...(sourcesResult.value.waybillsError ? { waybillsError: true } : {}),
       });
     }
 

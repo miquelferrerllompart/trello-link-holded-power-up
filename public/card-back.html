@@ -2071,7 +2071,7 @@
       var orderId = String(order.id || 'order').replace(/[^a-zA-Z0-9_-]/g, '-');
       var parentDayKey = getDocumentMoment(order).dayKey;
       return groupDocumentsByDay(sortDocumentsByMoment(items)).map(function(group, groupIndex) {
-        var isSameParentDay = group.moment.dayKey === parentDayKey;
+        var isSameParentDay = groupIndex === 0 && group.moment.dayKey === parentDayKey;
         var headingId = 'relation-day-' + orderId + '-' + groupIndex;
         var headingContent = group.moment.dateTime
           ? '<time class="relation-day-label" datetime="' +
