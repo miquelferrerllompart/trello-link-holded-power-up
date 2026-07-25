@@ -476,6 +476,7 @@ const SALES_ORDER_PAGE_SIZE = 100;
 const RELATED_WAYBILL_PAGE_SIZE = 100;
 const RELATED_WAYBILL_MAX_PAGES = 10;
 const WAYBILL_CATEGORY_MAX_PAGES = 40;
+const ORDERS_VIEW_MAX_PAGES = WAYBILL_CATEGORY_MAX_PAGES;
 const ORDER_WAYBILL_KINDS = ['material', 'refund', 'unclassified'];
 
 function isWaybillCategory(value: string | null): value is WaybillCategory {
@@ -633,13 +634,16 @@ async function fetchOrdersViewSources(
 ): Promise<OrdersViewSources> {
   const salesOrders: Array<Record<string, any>> = [];
   const waybills: Array<Record<string, any>> = [];
+  const visibleSalesOrderIds = new Set<string>();
+  const standaloneWaybills = new Set<Record<string, any>>();
+  const standaloneWaybillsBySourceOrderId = new Map<string, Set<Record<string, any>>>();
   const end = requestedPage * V2_PAGE_SIZE;
   let salesOrdersHasMore = true;
   let waybillsHasMore = true;
   let waybillsError = false;
   let page = 1;
 
-  while (salesOrdersHasMore || waybillsHasMore) {
+  while ((salesOrdersHasMore || waybillsHasMore) && page <= ORDERS_VIEW_MAX_PAGES) {
     const [salesOrdersResult, waybillsResult] = await Promise.allSettled([
       salesOrdersHasMore
         ? internalApiGet<InternalPage>('/sales-orders', apiKey, {
@@ -665,7 +669,18 @@ async function fetchOrdersViewSources(
 
     if (salesOrdersResult.status === 'rejected') throw salesOrdersResult.reason;
     if (salesOrdersResult.value) {
-      salesOrders.push(...(salesOrdersResult.value.items ?? []));
+      for (const salesOrder of salesOrdersResult.value.items ?? []) {
+        salesOrders.push(salesOrder);
+        const salesOrderId = salesOrder.id;
+        if (!salesOrderId) continue;
+
+        visibleSalesOrderIds.add(salesOrderId);
+        const previouslyStandalone = standaloneWaybillsBySourceOrderId.get(salesOrderId);
+        if (!previouslyStandalone) continue;
+
+        for (const waybill of previouslyStandalone) standaloneWaybills.delete(waybill);
+        standaloneWaybillsBySourceOrderId.delete(salesOrderId);
+      }
       salesOrdersHasMore = Boolean(salesOrdersResult.value.pagination?.hasMore);
     }
 
@@ -673,11 +688,24 @@ async function fetchOrdersViewSources(
       waybillsError = true;
       waybillsHasMore = false;
     } else if (waybillsResult.value) {
-      waybills.push(...(waybillsResult.value.items ?? []));
+      for (const waybill of waybillsResult.value.items ?? []) {
+        if (!ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified')) continue;
+
+        waybills.push(waybill);
+        const sourceOrderId = waybill.sourceOrder?.id;
+        if (sourceOrderId && visibleSalesOrderIds.has(sourceOrderId)) continue;
+
+        standaloneWaybills.add(waybill);
+        if (!sourceOrderId) continue;
+
+        const bucket = standaloneWaybillsBySourceOrderId.get(sourceOrderId);
+        if (bucket) bucket.add(waybill);
+        else standaloneWaybillsBySourceOrderId.set(sourceOrderId, new Set([waybill]));
+      }
       waybillsHasMore = Boolean(waybillsResult.value.pagination?.hasMore);
     }
 
-    if (combineOrdersWithStandaloneWaybills(salesOrders, [], waybills).length > end) {
+    if (salesOrders.length + standaloneWaybills.size > end) {
       return { salesOrders, waybills, hasMore: true, waybillsError };
     }
     page += 1;

@@ -589,6 +589,34 @@ describe('Worker /v2 internal-API document routes', () => {
     );
   });
 
+  it('bounds Pedidos scans when upstream waybills never finish paginating', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders') || input.includes('/sales-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+
+      const page = Number(new URL(input).searchParams.get('page'));
+      if (page > 40) throw new Error('Pedidos must not request waybill page 41');
+      return internalJson({ items: [], pagination: { page, pageSize: 100, hasMore: true } });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=1&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { hasMore: boolean; results: Array<{ id: string }> };
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ hasMore: false, results: [] });
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=40&pageSize=100`,
+    );
+    expect(fetchImpl.mock.calls.map((call) => call[0])).not.toContain(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=41&pageSize=100`,
+    );
+  });
+
   it('keeps sales orders and flags purchaseOrdersError when the PO fetch fails', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders')) {

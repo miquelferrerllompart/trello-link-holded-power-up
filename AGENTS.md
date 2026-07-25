@@ -137,9 +137,10 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 - Waybill `category=work` returns only `labour`, `mixed`, `extra`, and `unclassified`; it continues through
   up to 40 upstream pages until it can fill the requested UI page, rather than truncating after the 10-page
   relation limit. The UI uses this for **Partes de trabajo**. `view=orders` on `sales-orders` combines orders
-  with standalone warehouse movements for **Pedidos** and continues through 100-item sales-order and waybill
-  pages until it can fill the requested UI page plus one candidate, rather than silently truncating at the
-  10-page relation limit.
+  with standalone warehouse movements for **Pedidos** and continues through up to 40 100-item sales-order
+  and waybill pages until it can fill the requested UI page plus one candidate. At that safety limit it
+  returns `hasMore: false`, avoiding unbounded Worker subrequests while still going beyond the 10-page
+  relation limit.
 - Status pills come from server-derived enums — `internalStatus` (sales/purchase orders),
   `workflowStatus` (waybills), `displayStatus` (invoices/estimates) — mapped to canonical Spanish labels in
   `src/sales-order-display.ts` (mirrored inline in `card-back.html`).
