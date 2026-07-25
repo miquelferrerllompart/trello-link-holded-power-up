@@ -1350,7 +1350,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(contentText(dom)).toContain('No se pudieron cargar las compras.');
   });
 
-  it('keeps sales orders visible and warns quietly when related waybills fail to load', async () => {
+  it('keeps sales orders visible and warns when waybills fail to load in Pedidos', async () => {
     const { dom } = loadCardBack(
       { salesOrders: [salesOrder('so-1', 'PV-1')], waybills: [], estimates: [] },
       { waybillsError: true },
@@ -1361,7 +1361,7 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     expect(contentText(dom)).toContain('PV-1');
-    expect(contentText(dom)).toContain('No se pudieron cargar los albaranes relacionados.');
+    expect(contentText(dom)).toContain('No se pudieron cargar los albaranes.');
   });
 
   it('moves focus and lazy-loads document tabs with the arrow keys', async () => {

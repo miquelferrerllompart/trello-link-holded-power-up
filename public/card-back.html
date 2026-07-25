@@ -2147,7 +2147,7 @@
         ? '<div class="documents-note">No se pudieron cargar las compras.</div>'
         : '';
       var waybillsNote = (tab.type === 'sales-orders' && result.waybillsError)
-        ? '<div class="documents-note">No se pudieron cargar los albaranes relacionados.</div>'
+        ? '<div class="documents-note">No se pudieron cargar los albaranes.</div>'
         : '';
 
       return '<div class="document-list">' + rows + '</div>' + purchaseOrdersNote + waybillsNote;
