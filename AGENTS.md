@@ -135,9 +135,9 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
 - Sales orders, waybills, and invoices page by `page` (`pageSize` fixed 10); estimates page by `cursor`
   (`hasMore` + `nextCursor`). No totals — the UI shows `‹ Página N ›`. Sorted newest-first by issue date.
 - Waybill `category=work` returns only `labour`, `mixed`, `extra`, and `unclassified`; it continues through
-  upstream pages until it can fill the requested UI page, rather than truncating before filtering. The UI uses
-  this for **Partes de trabajo**. `view=orders` on `sales-orders` combines orders with standalone warehouse
-  movements for **Pedidos**.
+  up to 40 upstream pages until it can fill the requested UI page, rather than truncating after the 10-page
+  relation limit. The UI uses this for **Partes de trabajo**. `view=orders` on `sales-orders` combines orders
+  with standalone warehouse movements for **Pedidos**.
 - Status pills come from server-derived enums — `internalStatus` (sales/purchase orders),
   `workflowStatus` (waybills), `displayStatus` (invoices/estimates) — mapped to canonical Spanish labels in
   `src/sales-order-display.ts` (mirrored inline in `card-back.html`).

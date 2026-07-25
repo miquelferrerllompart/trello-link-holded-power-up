@@ -476,6 +476,7 @@ const SALES_ORDER_PAGE_SIZE = 100;
 const SALES_ORDER_MAX_PAGES = 10;
 const RELATED_WAYBILL_PAGE_SIZE = 100;
 const RELATED_WAYBILL_MAX_PAGES = 10;
+const WAYBILL_CATEGORY_MAX_PAGES = 40;
 const ORDER_WAYBILL_KINDS = ['material', 'refund', 'unclassified'];
 
 function isWaybillCategory(value: string | null): value is WaybillCategory {
@@ -559,7 +560,7 @@ async function fetchWaybillCategoryPage(
   const start = (requestedPage - 1) * V2_PAGE_SIZE;
   const end = start + V2_PAGE_SIZE;
 
-  for (let page = 1; ; page += 1) {
+  for (let page = 1; page <= WAYBILL_CATEGORY_MAX_PAGES; page += 1) {
     const result = await internalApiGet<InternalPage>('/waybills', apiKey, {
       query: {
         customerId: contactId,
@@ -580,6 +581,8 @@ async function fetchWaybillCategoryPage(
       return { items: matches.slice(start, end), hasMore: false };
     }
   }
+
+  return { items: matches.slice(start, end), hasMore: false };
 }
 
 function nestRelatedDocuments(

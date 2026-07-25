@@ -741,6 +741,35 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(body.hasMore).toBe(false);
   });
 
+  it('bounds category scans when upstream pagination does not terminate', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      const page = Number(new URL(input).searchParams.get('page'));
+      return internalJson({
+        items: [{
+          id: `material-${page}`,
+          docNumber: `ALB-MATERIAL-${page}`,
+          kind: 'material',
+          issueDate: '2026-07-10',
+          workflowStatus: 'prepared',
+          projects: [],
+        }],
+        pagination: { page, pageSize: 100, hasMore: true },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=waybills&category=work&page=10000&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { results: Array<{ id: string }>; hasMore: boolean };
+
+    expect(response.status).toBe(200);
+    expect(fetchImpl).toHaveBeenCalledTimes(40);
+    expect(body.results).toEqual([]);
+    expect(body.hasMore).toBe(false);
+  });
+
   it('includes material, returns, and unclassified waybills in the Almacén category', async () => {
     const waybill = (id: string, kind: string) => ({
       id,
