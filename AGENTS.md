@@ -138,10 +138,10 @@ route is internal-only — no Holded pass-through, no KV cache. Unknown routes �
   up to 40 upstream pages until it can fill the requested UI page, rather than truncating after the 10-page
   relation limit. The UI uses this for **Partes de trabajo**. `view=orders` on `sales-orders` combines orders
   with standalone warehouse movements for **Pedidos**. Only warehouse movements without `sourceOrder` render
-  independently; related movements remain under their order. The view stops sales-order pages once it can fill
-  the requested UI page plus one candidate, then scans up to 10 waybill pages for those visible relations. If
-  the page is not yet known, it can scan up to 40 source pages; at that safety limit it returns `hasMore: false`
-  to avoid unbounded Worker subrequests while still going beyond the 10-page relation limit.
+  independently; related movements remain under their order. Every Pedidos UI page uses the same bounded source
+  window — up to 15 100-item sales-order and waybill pages — before the merged list is sorted and sliced. This
+  prevents duplicated or skipped rows across pagination while keeping Worker subrequests bounded; after that
+  safety limit, `hasMore` only describes the loaded window.
 - Status pills come from server-derived enums — `internalStatus` (sales/purchase orders),
   `workflowStatus` (waybills), `displayStatus` (invoices/estimates) — mapped to canonical Spanish labels in
   `src/sales-order-display.ts` (mirrored inline in `card-back.html`).

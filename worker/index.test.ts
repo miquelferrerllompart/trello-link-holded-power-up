@@ -589,6 +589,57 @@ describe('Worker /v2 internal-API document routes', () => {
     );
   });
 
+  it('uses a stable Pedidos source window across UI pages', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/sales-orders')) {
+        return internalJson({
+          items: Array.from({ length: 15 }, (_, index) => ({
+            id: `so-${index + 1}`,
+            docNumber: `PV-${index + 1}`,
+            issueDate: '2020-01-01',
+            internalStatus: 'in_process',
+            projects: [],
+          })),
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+        });
+      }
+
+      const page = Number(new URL(input).searchParams.get('page'));
+      return internalJson({
+        items: [{
+          id: `wb-${page}`,
+          docNumber: `ALB-${page}`,
+          kind: 'refund',
+          issueDate: '2026-07-15',
+          workflowStatus: 'prepared',
+          sourceOrder: null,
+          projects: [],
+        }],
+        pagination: { page, pageSize: 100, hasMore: page < 12 },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const responses = await Promise.all([1, 2, 3].map((page) => worker.fetch(
+      new Request(`https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=${page}&scope=all`),
+      envV2,
+    )));
+    const pages = await Promise.all(responses.map(async (response) => {
+      expect(response.status).toBe(200);
+      const body = await response.json() as { results: Array<{ id: string }> };
+      return body.results.map((item) => item.id);
+    }));
+
+    expect(pages).toEqual([
+      Array.from({ length: 10 }, (_, index) => `wb-${index + 1}`),
+      ['wb-11', 'wb-12', ...Array.from({ length: 8 }, (_, index) => `so-${index + 1}`)],
+      Array.from({ length: 7 }, (_, index) => `so-${index + 9}`),
+    ]);
+  });
+
   it('loads later warehouse waybill pages for the Pedidos shown on the requested page', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders')) {
@@ -688,7 +739,7 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(laterPage.results.at(-1)).toMatchObject({ id: 'so-150', waybills: [{ id: 'mat-150' }] });
   });
 
-  it('caps relation-only Pedidos waybill scans after the first UI page is known', async () => {
+  it('caps Pedidos source scans at the common fixed window', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders')) {
         return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
@@ -707,7 +758,7 @@ describe('Worker /v2 internal-API document routes', () => {
       }
 
       const page = Number(new URL(input).searchParams.get('page'));
-      if (page > 10) throw new Error('relation-only scan must not request waybill page 11');
+      if (page > 15) throw new Error('Pedidos must not request waybill page 16');
       return internalJson({
         items: [{
           id: `mat-${page}`,
@@ -731,12 +782,12 @@ describe('Worker /v2 internal-API document routes', () => {
 
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ hasMore: true });
-    expect(body.results[0]).toMatchObject({ id: 'so-1', waybills: Array.from({ length: 10 }, (_, index) => ({ id: `mat-${index + 1}` })) });
+    expect(body.results[0]).toMatchObject({ id: 'so-1', waybills: Array.from({ length: 15 }, (_, index) => ({ id: `mat-${index + 1}` })) });
     expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
-      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=10&pageSize=100`,
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=15&pageSize=100`,
     );
     expect(fetchImpl.mock.calls.map((call) => call[0])).not.toContain(
-      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=11&pageSize=100`,
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=16&pageSize=100`,
     );
   });
 
@@ -747,7 +798,7 @@ describe('Worker /v2 internal-API document routes', () => {
       }
 
       const page = Number(new URL(input).searchParams.get('page'));
-      if (page > 40) throw new Error('Pedidos must not request waybill page 41');
+      if (page > 15) throw new Error('Pedidos must not request waybill page 16');
       return internalJson({ items: [], pagination: { page, pageSize: 100, hasMore: true } });
     });
     vi.stubGlobal('fetch', fetchImpl);
@@ -761,10 +812,10 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(response.status).toBe(200);
     expect(body).toMatchObject({ hasMore: false, results: [] });
     expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
-      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=40&pageSize=100`,
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=15&pageSize=100`,
     );
     expect(fetchImpl.mock.calls.map((call) => call[0])).not.toContain(
-      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=41&pageSize=100`,
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=16&pageSize=100`,
     );
   });
 

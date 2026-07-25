@@ -476,8 +476,7 @@ const SALES_ORDER_PAGE_SIZE = 100;
 const RELATED_WAYBILL_PAGE_SIZE = 100;
 const RELATED_WAYBILL_MAX_PAGES = 10;
 const WAYBILL_CATEGORY_MAX_PAGES = 40;
-const ORDERS_VIEW_MAX_PAGES = WAYBILL_CATEGORY_MAX_PAGES;
-const ORDERS_VIEW_RELATION_MAX_PAGES = 10;
+const ORDERS_VIEW_MAX_PAGES = 15;
 const ORDER_WAYBILL_KINDS = ['material', 'refund', 'unclassified'];
 
 function isWaybillCategory(value: string | null): value is WaybillCategory {
@@ -620,7 +619,6 @@ function combineOrdersWithStandaloneWaybills(
 interface OrdersViewSources {
   salesOrders: Array<Record<string, any>>;
   waybills: Array<Record<string, any>>;
-  hasMore: boolean;
   waybillsError: boolean;
 }
 
@@ -628,20 +626,15 @@ async function fetchOrdersViewSources(
   apiKey: string,
   contactId: string,
   projectId: string | null,
-  requestedPage: number,
 ): Promise<OrdersViewSources> {
   const salesOrders: Array<Record<string, any>> = [];
   const waybills: Array<Record<string, any>> = [];
-  const standaloneWaybills = new Set<Record<string, any>>();
-  const end = requestedPage * V2_PAGE_SIZE;
   let salesOrdersHasMore = true;
   let waybillsHasMore = true;
   let waybillsError = false;
-  let hasMore = false;
   let page = 1;
-  let pageLimit = ORDERS_VIEW_MAX_PAGES;
 
-  while ((salesOrdersHasMore || waybillsHasMore) && page <= pageLimit) {
+  while ((salesOrdersHasMore || waybillsHasMore) && page <= ORDERS_VIEW_MAX_PAGES) {
     const [salesOrdersResult, waybillsResult] = await Promise.allSettled([
       salesOrdersHasMore
         ? internalApiGet<InternalPage>('/sales-orders', apiKey, {
@@ -679,23 +672,14 @@ async function fetchOrdersViewSources(
         if (!ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified')) continue;
 
         waybills.push(waybill);
-        if (!waybill.sourceOrder?.id) standaloneWaybills.add(waybill);
       }
       waybillsHasMore = Boolean(waybillsResult.value.pagination?.hasMore);
     }
 
-    if (salesOrders.length + standaloneWaybills.size > end) {
-      // The UI page is now known to have a successor, so sales-order scanning
-      // can stop. Keep reading a bounded number of waybill pages: they are
-      // also child relations for visible orders, not only top-level candidates.
-      hasMore = true;
-      salesOrdersHasMore = false;
-      pageLimit = Math.min(pageLimit, Math.max(page, ORDERS_VIEW_RELATION_MAX_PAGES));
-    }
     page += 1;
   }
 
-  return { salesOrders, waybills, hasMore, waybillsError };
+  return { salesOrders, waybills, waybillsError };
 }
 
 async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
@@ -748,7 +732,7 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
 
     if (type === 'sales-orders' && view === 'orders') {
       const [sourcesResult, purchaseOrdersResult] = await Promise.allSettled([
-        fetchOrdersViewSources(apiKey, contactId, effectiveProjectId, requestedPage),
+        fetchOrdersViewSources(apiKey, contactId, effectiveProjectId),
         fetchCustomerPurchaseOrders(apiKey, contactId, effectiveProjectId),
       ]);
       if (sourcesResult.status === 'rejected') throw sourcesResult.reason;
@@ -764,7 +748,7 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
         scope,
         page: requestedPage,
         pageSize: V2_PAGE_SIZE,
-        hasMore: sourcesResult.value.hasMore,
+        hasMore: start + V2_PAGE_SIZE < results.length,
         results: results.slice(start, start + V2_PAGE_SIZE),
         ...(purchaseOrdersResult.status === 'rejected' ? { purchaseOrdersError: true } : {}),
         ...(sourcesResult.value.waybillsError ? { waybillsError: true } : {}),
