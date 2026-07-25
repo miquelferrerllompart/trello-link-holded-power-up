@@ -639,6 +639,107 @@ describe('Worker /v2 internal-API document routes', () => {
     );
   });
 
+  it('keeps a related warehouse waybill out of standalone Pedidos until its order page is loaded', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({
+          items: [{
+            id: 'mat-150',
+            docNumber: 'ALB-MATERIAL-150',
+            kind: 'material',
+            issueDate: '2026-07-20',
+            workflowStatus: 'prepared',
+            sourceOrder: { id: 'so-150', docNumber: 'PV-150' },
+            projects: [],
+          }],
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+        });
+      }
+
+      const page = Number(new URL(input).searchParams.get('page'));
+      return internalJson({
+        items: Array.from({ length: 100 }, (_, index) => {
+          const id = (page - 1) * 100 + index + 1;
+          return { id: `so-${id}`, docNumber: `PV-${id}`, issueDate: '2026-07-15', internalStatus: 'in_process', projects: [] };
+        }),
+        pagination: { page, pageSize: 100, hasMore: page < 2 },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const firstPageResponse = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=1&scope=all'),
+      envV2,
+    );
+    const firstPage = await firstPageResponse.json() as { results: Array<{ id: string; type: string }> };
+
+    const laterPageResponse = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=15&scope=all'),
+      envV2,
+    );
+    const laterPage = await laterPageResponse.json() as { results: Array<{ id: string; waybills: Array<{ id: string }> }> };
+
+    expect(firstPageResponse.status).toBe(200);
+    expect(firstPage.results.map((item) => item.id)).not.toContain('mat-150');
+    expect(laterPageResponse.status).toBe(200);
+    expect(laterPage.results.at(-1)).toMatchObject({ id: 'so-150', waybills: [{ id: 'mat-150' }] });
+  });
+
+  it('caps relation-only Pedidos waybill scans after the first UI page is known', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/sales-orders')) {
+        return internalJson({
+          items: Array.from({ length: 11 }, (_, index) => ({
+            id: `so-${index + 1}`,
+            docNumber: `PV-${index + 1}`,
+            issueDate: '2026-07-15',
+            internalStatus: 'in_process',
+            projects: [],
+          })),
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+        });
+      }
+
+      const page = Number(new URL(input).searchParams.get('page'));
+      if (page > 10) throw new Error('relation-only scan must not request waybill page 11');
+      return internalJson({
+        items: [{
+          id: `mat-${page}`,
+          docNumber: `ALB-MATERIAL-${page}`,
+          kind: 'material',
+          issueDate: '2026-07-15',
+          workflowStatus: 'prepared',
+          sourceOrder: { id: 'so-1', docNumber: 'PV-1' },
+          projects: [],
+        }],
+        pagination: { page, pageSize: 100, hasMore: true },
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=1&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { hasMore: boolean; results: Array<{ id: string; waybills: Array<{ id: string }> }> };
+
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ hasMore: true });
+    expect(body.results[0]).toMatchObject({ id: 'so-1', waybills: Array.from({ length: 10 }, (_, index) => ({ id: `mat-${index + 1}` })) });
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=10&pageSize=100`,
+    );
+    expect(fetchImpl.mock.calls.map((call) => call[0])).not.toContain(
+      `${INTERNAL_BASE}/waybills?customerId=contact-1&page=11&pageSize=100`,
+    );
+  });
+
   it('bounds Pedidos scans when upstream waybills never finish paginating', async () => {
     const fetchImpl = vi.fn(async (input: string) => {
       if (input.includes('/purchase-orders') || input.includes('/sales-orders')) {

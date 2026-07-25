@@ -477,6 +477,7 @@ const RELATED_WAYBILL_PAGE_SIZE = 100;
 const RELATED_WAYBILL_MAX_PAGES = 10;
 const WAYBILL_CATEGORY_MAX_PAGES = 40;
 const ORDERS_VIEW_MAX_PAGES = WAYBILL_CATEGORY_MAX_PAGES;
+const ORDERS_VIEW_RELATION_MAX_PAGES = 10;
 const ORDER_WAYBILL_KINDS = ['material', 'refund', 'unclassified'];
 
 function isWaybillCategory(value: string | null): value is WaybillCategory {
@@ -605,12 +606,9 @@ function combineOrdersWithStandaloneWaybills(
   waybills: Array<Record<string, any>>,
 ) {
   const salesOrders = salesOrderItems.map(mapInternalSalesOrder);
-  const visibleOrderIds = new Set(salesOrders.map((order) => order.id));
   const standaloneWaybills = waybills
     .filter((waybill) => {
-      const sourceOrderId = waybill.sourceOrder?.id;
-      return ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified') &&
-        (!sourceOrderId || !visibleOrderIds.has(sourceOrderId));
+      return ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified') && !waybill.sourceOrder?.id;
     })
     .map(mapInternalWaybill);
 
@@ -634,17 +632,16 @@ async function fetchOrdersViewSources(
 ): Promise<OrdersViewSources> {
   const salesOrders: Array<Record<string, any>> = [];
   const waybills: Array<Record<string, any>> = [];
-  const visibleSalesOrderIds = new Set<string>();
   const standaloneWaybills = new Set<Record<string, any>>();
-  const standaloneWaybillsBySourceOrderId = new Map<string, Set<Record<string, any>>>();
   const end = requestedPage * V2_PAGE_SIZE;
   let salesOrdersHasMore = true;
   let waybillsHasMore = true;
   let waybillsError = false;
   let hasMore = false;
   let page = 1;
+  let pageLimit = ORDERS_VIEW_MAX_PAGES;
 
-  while ((salesOrdersHasMore || waybillsHasMore) && page <= ORDERS_VIEW_MAX_PAGES) {
+  while ((salesOrdersHasMore || waybillsHasMore) && page <= pageLimit) {
     const [salesOrdersResult, waybillsResult] = await Promise.allSettled([
       salesOrdersHasMore
         ? internalApiGet<InternalPage>('/sales-orders', apiKey, {
@@ -670,18 +667,7 @@ async function fetchOrdersViewSources(
 
     if (salesOrdersResult.status === 'rejected') throw salesOrdersResult.reason;
     if (salesOrdersResult.value) {
-      for (const salesOrder of salesOrdersResult.value.items ?? []) {
-        salesOrders.push(salesOrder);
-        const salesOrderId = salesOrder.id;
-        if (!salesOrderId) continue;
-
-        visibleSalesOrderIds.add(salesOrderId);
-        const previouslyStandalone = standaloneWaybillsBySourceOrderId.get(salesOrderId);
-        if (!previouslyStandalone) continue;
-
-        for (const waybill of previouslyStandalone) standaloneWaybills.delete(waybill);
-        standaloneWaybillsBySourceOrderId.delete(salesOrderId);
-      }
+      salesOrders.push(...(salesOrdersResult.value.items ?? []));
       salesOrdersHasMore = Boolean(salesOrdersResult.value.pagination?.hasMore);
     }
 
@@ -693,25 +679,18 @@ async function fetchOrdersViewSources(
         if (!ORDER_WAYBILL_KINDS.includes(waybill.kind ?? 'unclassified')) continue;
 
         waybills.push(waybill);
-        const sourceOrderId = waybill.sourceOrder?.id;
-        if (sourceOrderId && visibleSalesOrderIds.has(sourceOrderId)) continue;
-
-        standaloneWaybills.add(waybill);
-        if (!sourceOrderId) continue;
-
-        const bucket = standaloneWaybillsBySourceOrderId.get(sourceOrderId);
-        if (bucket) bucket.add(waybill);
-        else standaloneWaybillsBySourceOrderId.set(sourceOrderId, new Set([waybill]));
+        if (!waybill.sourceOrder?.id) standaloneWaybills.add(waybill);
       }
       waybillsHasMore = Boolean(waybillsResult.value.pagination?.hasMore);
     }
 
     if (salesOrders.length + standaloneWaybills.size > end) {
       // The UI page is now known to have a successor, so sales-order scanning
-      // can stop. Keep reading waybills: they are also the child relations for
-      // the visible orders, not only candidates for top-level Pedidos rows.
+      // can stop. Keep reading a bounded number of waybill pages: they are
+      // also child relations for visible orders, not only top-level candidates.
       hasMore = true;
       salesOrdersHasMore = false;
+      pageLimit = Math.min(pageLimit, Math.max(page, ORDERS_VIEW_RELATION_MAX_PAGES));
     }
     page += 1;
   }
