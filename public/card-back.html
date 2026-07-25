@@ -532,7 +532,7 @@
       padding-top: 7px;
       border-top: 1px solid #091e420f;
     }
-    .document-preview-note--internal .document-preview-label {
+    .document-preview-note--secondary .document-preview-label {
       color: #7a869a;
     }
     .document-preview-label {
@@ -552,7 +552,7 @@
       overflow-wrap: anywhere;
       white-space: pre-wrap;
     }
-    .document-preview-note--internal .document-preview-text {
+    .document-preview-note--secondary .document-preview-text {
       color: #626f86;
       font-size: 11px;
       line-height: 16px;
@@ -1085,8 +1085,8 @@
       }
       .document-preview-notes { background: #a6c5e214; }
       .document-preview-note + .document-preview-note { border-top-color: #a6c5e214; }
-      .document-preview-note--internal .document-preview-label,
-      .document-preview-note--internal .document-preview-text { color: #8c9bab; }
+      .document-preview-note--secondary .document-preview-label,
+      .document-preview-note--secondary .document-preview-text { color: #8c9bab; }
       .document-preview-label,
       .document-preview-attachments-state,
       .document-preview-file-open { color: #8c9bab; }
@@ -1383,6 +1383,7 @@
           scope: 'matched',
           pages: {},   // stateKey -> current page number
           cursors: {}, // stateKey -> { pageNumber: cursorToFetchThatPage } (estimates)
+          previewStates: {}, // preview ID -> user-selected expanded state
           pendingTabFocus: null,
         };
       }
@@ -1725,6 +1726,14 @@
         '-' + encodeURIComponent(String(documentItem.id || 'unknown'));
     }
 
+    function getDocumentPreviewExpandedState(view, documentItem, defaultExpanded) {
+      var previewId = getDocumentPreviewId(documentItem);
+      var previewStates = view.previewStates || {};
+      return Object.prototype.hasOwnProperty.call(previewStates, previewId)
+        ? previewStates[previewId]
+        : defaultExpanded;
+    }
+
     function renderDocumentPreviewToggle(documentItem, isExpanded) {
       if (!hasDocumentPreview(documentItem)) return '';
       var preview = getDocumentPreviewContent(documentItem);
@@ -1796,7 +1805,7 @@
       for (var noteIndex = 0; noteIndex < noteSections.length; noteIndex++) {
         var note = noteSections[noteIndex];
         if (!note.text) continue;
-        notes += '<div class="document-preview-note' + (note.secondary ? ' document-preview-note--internal' : '') + '">' +
+        notes += '<div class="document-preview-note' + (note.secondary ? ' document-preview-note--secondary' : '') + '">' +
           '<span class="document-preview-label">' + note.label + '</span>' +
           '<div class="document-preview-text">' + escapeHtml(note.text) + '</div>' +
         '</div>';
@@ -1939,7 +1948,7 @@
       renderDocumentPreview(documentItem, isPreviewExpanded);
     }
 
-    function renderPurchaseOrderRow(purchaseOrder) {
+    function renderPurchaseOrderRow(purchaseOrder, isPreviewExpanded) {
       var number = getDocumentNumber(purchaseOrder);
       var supplier = purchaseOrder.supplier && purchaseOrder.supplier.name ? purchaseOrder.supplier.name : '';
       return '<div class="relation-child-row purchase-order-row' +
@@ -1951,9 +1960,9 @@
         '</span>' +
         renderPill(getDocumentPill(purchaseOrder)) +
         renderDocumentTime(purchaseOrder) +
-        renderDocumentActions(purchaseOrder, number) +
+        renderDocumentActions(purchaseOrder, number, isPreviewExpanded) +
       '</div>' +
-      renderDocumentPreview(purchaseOrder);
+      renderDocumentPreview(purchaseOrder, isPreviewExpanded);
     }
 
     function renderWaybillKind(kind) {
@@ -1971,7 +1980,7 @@
         : '';
     }
 
-    function renderRelatedWaybillRow(waybill) {
+    function renderRelatedWaybillRow(waybill, isPreviewExpanded) {
       var number = getDocumentNumber(waybill);
       return '<div class="relation-child-row related-waybill-row' +
         (hasDocumentPreview(waybill) ? ' relation-child-row--has-preview' : '') + '">' +
@@ -1984,9 +1993,9 @@
           renderPill(getDocumentPill(waybill)) +
         '</span>' +
         renderDocumentTime(waybill) +
-        renderDocumentActions(waybill, number) +
+        renderDocumentActions(waybill, number, isPreviewExpanded) +
       '</div>' +
-      renderDocumentPreview(waybill);
+      renderDocumentPreview(waybill, isPreviewExpanded);
     }
 
     function groupDocumentsByDay(items) {
@@ -2002,7 +2011,7 @@
       }, []);
     }
 
-    function sortRelatedDocuments(items) {
+    function sortDocumentsByMoment(items) {
       return items.map(function(item, index) {
         return { item: item, index: index, moment: getDocumentMoment(item) };
       }).sort(function(left, right) {
@@ -2017,10 +2026,10 @@
       });
     }
 
-    function renderRelationDayGroups(order, items) {
+    function renderRelationDayGroups(order, items, view) {
       var orderId = String(order.id || 'order').replace(/[^a-zA-Z0-9_-]/g, '-');
       var parentDayKey = getDocumentMoment(order).dayKey;
-      return groupDocumentsByDay(sortRelatedDocuments(items)).map(function(group, groupIndex) {
+      return groupDocumentsByDay(sortDocumentsByMoment(items)).map(function(group, groupIndex) {
         var isSameParentDay = group.moment.dayKey === parentDayKey;
         var headingId = 'relation-day-' + orderId + '-' + groupIndex;
         var headingContent = group.moment.dateTime
@@ -2033,37 +2042,40 @@
           (isSameParentDay ? '' : ' aria-labelledby="' + headingId + '"') + '>' +
           (isSameParentDay ? '' : '<h5 class="relation-day-heading" id="' + headingId + '">' + headingContent + '</h5>') +
           group.items.map(function(item) {
+            var isPreviewExpanded = getDocumentPreviewExpandedState(view, item, false);
             return item.type === 'purchase-orders'
-              ? renderPurchaseOrderRow(item)
-              : renderRelatedWaybillRow(item);
+              ? renderPurchaseOrderRow(item, isPreviewExpanded)
+              : renderRelatedWaybillRow(item, isPreviewExpanded);
           }).join('') +
         '</section>';
       }).join('');
     }
 
-    function renderSalesOrderGroup(order, data, scope) {
+    function renderSalesOrderGroup(order, data, scope, view) {
       // Pedidos also contains warehouse documents without a source order. They
       // intentionally use the regular document row rather than an empty rail.
-      if (order.type === 'waybills') return renderDocumentRow(order, data, scope);
-      var html = renderDocumentRow(order, data, scope);
+      if (order.type === 'waybills') {
+        return renderDocumentRow(order, data, scope, getDocumentPreviewExpandedState(view, order, false));
+      }
+      var html = renderDocumentRow(order, data, scope, getDocumentPreviewExpandedState(view, order, false));
       var purchaseOrders = order.purchaseOrders || [];
       var waybills = order.waybills || [];
       if (purchaseOrders.length || waybills.length) {
         html += '<div class="relation-rail">' +
-          renderRelationDayGroups(order, waybills.concat(purchaseOrders)) +
+          renderRelationDayGroups(order, waybills.concat(purchaseOrders), view) +
         '</div>';
       }
       return html;
     }
 
-    function renderDocumentRows(result, tab, data, scope) {
+    function renderDocumentRows(result, tab, data, scope, view) {
       var items = result.results || [];
       if (items.length === 0) {
         var emptyMessage = (data.projectId && scope === 'matched') ? tab.emptyProject : tab.emptyAll;
         return '<div class="documents-note">' + emptyMessage + '</div>';
       }
 
-      var dayGroups = groupDocumentsByDay(sortRelatedDocuments(items));
+      var dayGroups = groupDocumentsByDay(sortDocumentsByMoment(items));
 
       var rows = dayGroups.map(function(group, groupIndex) {
         var headingId = 'document-day-' + tab.key + '-' + groupIndex;
@@ -2075,8 +2087,15 @@
             '</time>'
           : '<span class="document-day-label">' + escapeHtml(group.moment.dayLabel) + '</span>';
         var groupRows = tab.type === 'sales-orders'
-          ? group.items.map(function(order) { return renderSalesOrderGroup(order, data, scope); }).join('')
-          : group.items.map(function(item) { return renderDocumentRow(item, data, scope, shouldExpandPreviews); }).join('');
+          ? group.items.map(function(order) { return renderSalesOrderGroup(order, data, scope, view); }).join('')
+          : group.items.map(function(item) {
+              return renderDocumentRow(
+                item,
+                data,
+                scope,
+                getDocumentPreviewExpandedState(view, item, shouldExpandPreviews)
+              );
+            }).join('');
         return '<section class="document-day-group" aria-labelledby="' + headingId + '">' +
           '<h4 class="document-day-heading" id="' + headingId + '">' + headingContent + '</h4>' +
           groupRows +
@@ -2207,7 +2226,7 @@
       var content = '';
 
       if (result) {
-        content = renderDocumentRows(result, activeTab, data, scope) + renderPagination(result);
+        content = renderDocumentRows(result, activeTab, data, scope, view) + renderPagination(result);
       } else if (errorInfo) {
         var message = errorInfo.code === 'DATA_NOT_READY'
           ? 'Sincronizando datos de Holded… vuelve a intentarlo en un momento.'
@@ -2289,6 +2308,7 @@
           if (!preview) return;
 
           var willExpand = this.getAttribute('aria-expanded') !== 'true';
+          view.previewStates[previewId] = willExpand;
           preview.setAttribute('data-static-motion', event.detail === 0 ? 'true' : 'false');
           this.setAttribute('aria-expanded', willExpand ? 'true' : 'false');
           var label = this.querySelector('.document-preview-toggle-label');

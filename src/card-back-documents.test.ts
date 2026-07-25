@@ -240,7 +240,7 @@ describe('card-back document view (internal API v2)', () => {
   });
 
   it('shows the sales-order internalStatus label, not the document status', async () => {
-    const { dom } = loadCardBack({
+    const { dom, urls } = loadCardBack({
       salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_prepared' })],
       waybills: [],
       estimates: [],
@@ -428,6 +428,34 @@ describe('card-back document view (internal API v2)', () => {
     expect(olderToggle?.getAttribute('aria-expanded')).toBe('false');
     expect(olderToggle?.textContent).toContain('Ver más');
     expect(olderPreview?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('keeps a manually collapsed latest work-report preview closed after the panel rerenders', async () => {
+    const { dom, urls } = loadCardBack({
+      salesOrders: [],
+      invoices: [],
+      estimates: [],
+      waybills: [
+        { id: 'latest', type: 'waybills', documentNumber: 'ALB-ULTIMO', kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-07-15', notes: 'Nota del último día', attachmentsUrl: '/v2/documents/waybills/latest/attachments', projects: [] },
+      ],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    dom.window.document.querySelector('.document-preview-toggle')?.click();
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    const attachmentRequests = urls.filter((url) => url.includes('/waybills/latest/attachments')).length;
+    expect(attachmentRequests).toBe(1);
+
+    selectDocumentTab(dom, 'invoices');
+    await waitForRender();
+    selectDocumentTab(dom, 'waybills');
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('false');
+    expect(dom.window.document.querySelector('.document-preview')?.hasAttribute('hidden')).toBe(true);
+    expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(attachmentRequests);
   });
 
   it('does not open previews by default on later work-report pages', async () => {
@@ -698,8 +726,8 @@ describe('card-back document view (internal API v2)', () => {
     expect(noteSections).toHaveLength(2);
     expect(notes?.querySelectorAll('.document-preview-label')[0]?.textContent).toBe('Internas');
     expect(notes?.querySelectorAll('.document-preview-label')[1]?.textContent).toBe('Notas');
-    expect(internalNote?.classList.contains('document-preview-note--internal')).toBe(false);
-    expect(waybillNote?.classList.contains('document-preview-note--internal')).toBe(true);
+    expect(internalNote?.classList.contains('document-preview-note--secondary')).toBe(false);
+    expect(waybillNote?.classList.contains('document-preview-note--secondary')).toBe(true);
     expect(dom.window.getComputedStyle(notes).backgroundColor).toBe('rgb(241, 242, 244)');
     expect(dom.window.getComputedStyle(internalNote).borderLeftWidth).toBe('0px');
     expect(dom.window.getComputedStyle(internalNote).backgroundColor).toBe('transparent');
