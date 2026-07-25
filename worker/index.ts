@@ -641,6 +641,7 @@ async function fetchOrdersViewSources(
   let salesOrdersHasMore = true;
   let waybillsHasMore = true;
   let waybillsError = false;
+  let hasMore = false;
   let page = 1;
 
   while ((salesOrdersHasMore || waybillsHasMore) && page <= ORDERS_VIEW_MAX_PAGES) {
@@ -706,12 +707,16 @@ async function fetchOrdersViewSources(
     }
 
     if (salesOrders.length + standaloneWaybills.size > end) {
-      return { salesOrders, waybills, hasMore: true, waybillsError };
+      // The UI page is now known to have a successor, so sales-order scanning
+      // can stop. Keep reading waybills: they are also the child relations for
+      // the visible orders, not only candidates for top-level Pedidos rows.
+      hasMore = true;
+      salesOrdersHasMore = false;
     }
     page += 1;
   }
 
-  return { salesOrders, waybills, hasMore: false, waybillsError };
+  return { salesOrders, waybills, hasMore, waybillsError };
 }
 
 async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
