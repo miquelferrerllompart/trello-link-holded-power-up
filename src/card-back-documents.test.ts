@@ -491,7 +491,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(styles.display).toBe('flex');
     expect(styles.fontSize).toBe('11px');
     expect(styles.fontWeight).toBe('700');
-    expect(styles.color).toBe('rgb(68, 84, 111)');
+    expect(styles.color).toBe('rgb(94, 108, 132)');
     expect(css).toContain('.document-day-heading::after');
     expect(css).toContain('.document-day-heading { color: #8c9bab; }');
   });
@@ -527,6 +527,38 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(dom.window.document.querySelector('.document-day-label')?.textContent)
       .toBe(`Ayer, ${expectedDate}`);
+  });
+
+  it('calls the current calendar day Hoy while keeping its full date', async () => {
+    const today = new Date();
+    const issueDate = [
+      today.getFullYear(),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ].join('-');
+    const expectedDate = today.toLocaleDateString('es-ES', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      estimates: [],
+      waybills: [{
+        id: 'wb-today',
+        type: 'waybills',
+        documentNumber: 'ALB-HOY',
+        workflowStatus: 'prepared',
+        issueDate,
+        projects: [],
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(dom.window.document.querySelector('.document-day-label')?.textContent)
+      .toBe(`Hoy, ${expectedDate}`);
   });
 
   it('shows every work-report kind as a subtitle beneath its number', async () => {
@@ -639,15 +671,20 @@ describe('card-back document view (internal API v2)', () => {
 
     const notes = preview?.querySelector('.document-preview-notes');
     const noteSections = notes?.querySelectorAll('.document-preview-note');
-    const internalNote = notes?.querySelector('.document-preview-note--internal');
+    const internalNote = noteSections?.[0];
+    const waybillNote = noteSections?.[1];
     expect(notes).not.toBeNull();
     expect(noteSections).toHaveLength(2);
-    expect(notes?.querySelectorAll('.document-preview-label')[0]?.textContent).toBe('Notas');
-    expect(notes?.querySelectorAll('.document-preview-label')[1]?.textContent).toBe('Internas');
+    expect(notes?.querySelectorAll('.document-preview-label')[0]?.textContent).toBe('Internas');
+    expect(notes?.querySelectorAll('.document-preview-label')[1]?.textContent).toBe('Notas');
+    expect(internalNote?.classList.contains('document-preview-note--internal')).toBe(false);
+    expect(waybillNote?.classList.contains('document-preview-note--internal')).toBe(true);
     expect(dom.window.getComputedStyle(notes).backgroundColor).toBe('rgb(241, 242, 244)');
     expect(dom.window.getComputedStyle(internalNote).borderLeftWidth).toBe('0px');
     expect(dom.window.getComputedStyle(internalNote).backgroundColor).toBe('transparent');
     expect(dom.window.getComputedStyle(internalNote?.querySelector('.document-preview-text')).color)
+      .toBe('rgb(68, 84, 111)');
+    expect(dom.window.getComputedStyle(waybillNote?.querySelector('.document-preview-text')).color)
       .toBe('rgb(98, 111, 134)');
 
     const previewStyles = dom.window.getComputedStyle(preview);
@@ -861,6 +898,12 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
     expect(dom.window.document.querySelector('.document-row .document-kind-icon')?.getAttribute('src'))
       .toBe('/icons/document-kinds/estimate.svg');
+  });
+
+  it('uses a solid light-blue background for the sales-order icon', () => {
+    const salesOrderIcon = readFileSync(resolve(__dirname, '../public/icons/document-kinds/sales-order.svg'), 'utf8');
+
+    expect(salesOrderIcon).toContain('<rect width="42" height="42" rx="8" fill="#E0E7FF"/>');
   });
 
   it('shows estimate displayStatus labels (Aceptado / Denegado)', async () => {

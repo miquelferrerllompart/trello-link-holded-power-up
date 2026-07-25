@@ -327,7 +327,7 @@
       gap: 8px;
       min-width: 0;
       margin: 3px 6px 1px;
-      color: #44546f;
+      color: #5e6c84;
       font-size: 11px;
       font-weight: 700;
       letter-spacing: 0.01em;
@@ -1413,6 +1413,13 @@
 
     function formatDocumentDayLabel(date) {
       var now = new Date();
+      if (isSameCalendarDay(date, now)) {
+        return 'Hoy, ' + date.toLocaleDateString('es-ES', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        });
+      }
       var yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
       if (isSameCalendarDay(date, yesterday)) {
         return 'Ayer, ' + date.toLocaleDateString('es-ES', {
@@ -1776,16 +1783,22 @@
       if (!hasDocumentPreview(documentItem)) return '';
 
       var notes = '';
-      if (preview.notes) {
-        notes += '<div class="document-preview-note">' +
-          '<span class="document-preview-label">Notas</span>' +
-          '<div class="document-preview-text">' + escapeHtml(preview.notes) + '</div>' +
-        '</div>';
-      }
-      if (preview.internalNotes) {
-        notes += '<div class="document-preview-note document-preview-note--internal">' +
-          '<span class="document-preview-label">Internas</span>' +
-          '<div class="document-preview-text">' + escapeHtml(preview.internalNotes) + '</div>' +
+      var internalNotesFirst = documentItem.type === 'waybills';
+      var noteSections = internalNotesFirst
+        ? [
+            { label: 'Internas', text: preview.internalNotes, secondary: false },
+            { label: 'Notas', text: preview.notes, secondary: true },
+          ]
+        : [
+            { label: 'Notas', text: preview.notes, secondary: false },
+            { label: 'Internas', text: preview.internalNotes, secondary: true },
+          ];
+      for (var noteIndex = 0; noteIndex < noteSections.length; noteIndex++) {
+        var note = noteSections[noteIndex];
+        if (!note.text) continue;
+        notes += '<div class="document-preview-note' + (note.secondary ? ' document-preview-note--internal' : '') + '">' +
+          '<span class="document-preview-label">' + note.label + '</span>' +
+          '<div class="document-preview-text">' + escapeHtml(note.text) + '</div>' +
         '</div>';
       }
 
