@@ -292,7 +292,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(contentText(dom)).toContain('Totalmente entregado');
   });
 
-  it('fetches fresh document data on a Trello rerender regardless of cache age', async () => {
+  it('fetches fresh document data on a Trello rerender', async () => {
     const documents = {
       salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
       waybills: [],
