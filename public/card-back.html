@@ -1365,10 +1365,18 @@
       { key: 'estimates', type: 'estimates', label: 'Presupuestos', loadingLabel: 'presupuestos', emptyAll: 'Este cliente no tiene presupuestos.', emptyProject: 'No hay presupuestos en el proyecto vinculado.' },
     ];
     var DOCUMENT_PAGE_SIZE = 10;
-    var documentsCache = {};
+    var documentResults = {};
     var documentRequests = {};
     var documentErrors = {};
     var documentViews = {};
+    var documentRequestGeneration = 0;
+
+    function invalidateDocumentResults() {
+      documentRequestGeneration += 1;
+      documentResults = {};
+      documentRequests = {};
+      documentErrors = {};
+    }
 
     function getDocumentsViewKey(data) {
       return (data.contactId || '') + '|' + (data.projectId || '');
@@ -2195,8 +2203,9 @@
     }
 
     function ensureDocumentsPage(data, tab, scope, page) {
-      var cacheKey = getDocumentsPageKey(data, tab, scope, page);
-      if (documentsCache[cacheKey] || documentRequests[cacheKey]) return;
+      var pageKey = getDocumentsPageKey(data, tab, scope, page);
+      var requestGeneration = documentRequestGeneration;
+      if (documentResults[pageKey] || documentRequests[pageKey] === requestGeneration) return;
 
       var view = getDocumentsView(data);
       var stateKey = getDocumentsStateKey(scope, tab);
@@ -2213,20 +2222,21 @@
         params.set('pageSize', String(DOCUMENT_PAGE_SIZE));
       }
 
-      documentRequests[cacheKey] = true;
-      delete documentErrors[cacheKey];
+      documentRequests[pageKey] = requestGeneration;
+      delete documentErrors[pageKey];
 
-      fetch(HOLDED_PROXY_URL + '/v2/documents/search?' + params.toString())
+      fetch(HOLDED_PROXY_URL + '/v2/documents/search?' + params.toString(), { cache: 'no-store' })
         .then(function(response) {
           return response.json()
             .catch(function() { return {}; })
             .then(function(body) { return { ok: response.ok, body: body }; });
         })
         .then(function(res) {
-          delete documentRequests[cacheKey];
+          if (requestGeneration !== documentRequestGeneration) return;
+          delete documentRequests[pageKey];
           if (!res.ok) {
             var code = res.body && res.body.error && res.body.error.code;
-            documentErrors[cacheKey] = { code: code === 'DATA_NOT_READY' ? 'DATA_NOT_READY' : 'GENERIC' };
+            documentErrors[pageKey] = { code: code === 'DATA_NOT_READY' ? 'DATA_NOT_READY' : 'GENERIC' };
             renderDocumentsPanel(data);
             return;
           }
@@ -2239,12 +2249,13 @@
               view.cursors[stateKey][page + 1] = result.nextCursor;
             }
           }
-          documentsCache[cacheKey] = result;
+          documentResults[pageKey] = result;
           renderDocumentsPanel(data);
         })
         .catch(function(err) {
-          delete documentRequests[cacheKey];
-          documentErrors[cacheKey] = { code: 'GENERIC' };
+          if (requestGeneration !== documentRequestGeneration) return;
+          delete documentRequests[pageKey];
+          documentErrors[pageKey] = { code: 'GENERIC' };
           console.warn('Holded: error loading documents', err);
           renderDocumentsPanel(data);
         });
@@ -2261,9 +2272,9 @@
       var scope = view.scope === 'all' ? 'all' : 'matched';
       var stateKey = getDocumentsStateKey(scope, activeTab);
       var page = view.pages[stateKey] || 1;
-      var cacheKey = getDocumentsPageKey(data, activeTab, scope, page);
-      var result = documentsCache[cacheKey];
-      var errorInfo = documentErrors[cacheKey];
+      var pageKey = getDocumentsPageKey(data, activeTab, scope, page);
+      var result = documentResults[pageKey];
+      var errorInfo = documentErrors[pageKey];
       var content = '';
 
       if (result) {
@@ -2297,6 +2308,7 @@
       var buttons = container.querySelectorAll('.documents-tab');
       for (var i = 0; i < buttons.length; i++) {
         buttons[i].addEventListener('click', function() {
+          invalidateDocumentResults();
           view.activeKey = this.getAttribute('data-tab') || 'waybills';
           view.pendingTabFocus = null;
           renderDocumentsPanel(data);
@@ -2314,6 +2326,7 @@
           else return;
 
           event.preventDefault();
+          invalidateDocumentResults();
           view.activeKey = DOCUMENT_TABS[targetIndex].key;
           view.pendingTabFocus = view.activeKey;
           renderDocumentsPanel(data);
@@ -2325,6 +2338,7 @@
         scopeButtons[scopeIndex].addEventListener('click', function() {
           var nextScope = this.getAttribute('data-document-scope') === 'all' ? 'all' : 'matched';
           if (nextScope === view.scope) return;
+          invalidateDocumentResults();
           view.scope = nextScope;
           // Land on page 1 of the newly selected scope to avoid an out-of-range page.
           view.pages[getDocumentsStateKey(nextScope, activeTab)] = 1;
@@ -2336,6 +2350,7 @@
       for (var j = 0; j < pageButtons.length; j++) {
         pageButtons[j].addEventListener('click', function() {
           var targetPage = Number(this.getAttribute('data-page')) || 1;
+          invalidateDocumentResults();
           view.pages[stateKey] = targetPage;
           renderDocumentsPanel(data);
         });
@@ -2377,7 +2392,7 @@
       var retryButton = container.querySelector('.documents-retry');
       if (retryButton) {
         retryButton.addEventListener('click', function() {
-          delete documentErrors[cacheKey];
+          delete documentErrors[pageKey];
           renderDocumentsPanel(data);
         });
       }
@@ -2554,6 +2569,7 @@
 
     render();
     t.render(function() {
+      invalidateDocumentResults();
       render();
     });
   </script>

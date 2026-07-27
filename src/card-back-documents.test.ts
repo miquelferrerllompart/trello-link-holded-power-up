@@ -56,6 +56,9 @@ function loadCardBack(documents, options = {}) {
   const setCalls = [];
   const popupCalls = [];
   const authState = { authorizeCalls: 0 };
+  let renderCallback;
+  let nextScheduledRefreshId = 1;
+  const scheduledRefreshes = new Map();
   let restApiAuthorized = options.authorized !== false;
   let cardData = {
     contactId: options.contactId === null ? undefined : 'contact-1',
@@ -70,6 +73,19 @@ function loadCardBack(documents, options = {}) {
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     beforeParse(window) {
+      const nativeSetTimeout = window.setTimeout.bind(window);
+      const nativeClearTimeout = window.clearTimeout.bind(window);
+      window.setTimeout = (callback, delay, ...args) => {
+        if (delay === 5_000) {
+          const id = nextScheduledRefreshId++;
+          scheduledRefreshes.set(id, () => callback(...args));
+          return id;
+        }
+        return nativeSetTimeout(callback, delay, ...args);
+      };
+      window.clearTimeout = (id) => {
+        if (!scheduledRefreshes.delete(id)) nativeClearTimeout(id);
+      };
       window.confirm = () => options.confirmUnlink === true;
       window.fetch = async (url, init) => {
         const requestUrl = String(url);
@@ -77,6 +93,7 @@ function loadCardBack(documents, options = {}) {
         requests.push({ url: requestUrl, init });
 
         if (requestUrl.includes('/v2/documents/search')) {
+          const responseBody = buildDocumentsPage(documents, requestUrl, options);
           if (options.documentDelayMs) {
             await new Promise((r) => setTimeout(r, options.documentDelayMs));
           }
@@ -86,7 +103,7 @@ function loadCardBack(documents, options = {}) {
               headers: { 'Content-Type': 'application/json' },
             });
           }
-          return new Response(JSON.stringify(buildDocumentsPage(documents, requestUrl, options)), {
+          return new Response(JSON.stringify(responseBody), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
           });
@@ -131,13 +148,29 @@ function loadCardBack(documents, options = {}) {
           popup: (opts) => { popupCalls.push(opts); },
           closePopup: () => undefined,
           sizeTo: () => Promise.resolve(),
-          render: () => undefined,
+          render: (callback) => { renderCallback = callback; },
         }),
       };
     },
   });
 
-  return { dom, urls, requests, setCalls, popupCalls, authState };
+  return {
+    dom,
+    urls,
+    requests,
+    setCalls,
+    popupCalls,
+    authState,
+    rerender: () => renderCallback?.(),
+    runScheduledDocumentRefresh: () => {
+      const next = scheduledRefreshes.entries().next().value;
+      if (!next) return false;
+      const [id, callback] = next;
+      scheduledRefreshes.delete(id);
+      callback();
+      return true;
+    },
+  };
 }
 
 async function waitForRender() {
@@ -255,6 +288,119 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(contentText(dom)).toContain('Parcialmente preparado');
     expect(contentText(dom)).not.toContain('Completado');
+  });
+
+  it('fetches fresh document data whenever a tab is activated again', async () => {
+    const documents = {
+      salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
+      waybills: [],
+      invoices: [],
+      estimates: [],
+    };
+    const { dom, urls } = loadCardBack(documents);
+    const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
+
+    await waitForRender();
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(contentText(dom)).toContain('Parcialmente entregado');
+    expect(salesOrderRequests()).toHaveLength(1);
+
+    documents.salesOrders[0].internalStatus = 'all_delivered';
+    selectDocumentTab(dom, 'invoices');
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(salesOrderRequests()).toHaveLength(2);
+    expect(contentText(dom)).toContain('Totalmente entregado');
+  });
+
+  it('keeps an unchanged open document panel stable without scheduled refreshes', async () => {
+    const documents = {
+      salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
+      waybills: [],
+      invoices: [],
+      estimates: [],
+    };
+    const { dom, urls, runScheduledDocumentRefresh } = loadCardBack(documents);
+    const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
+
+    await waitForRender();
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(contentText(dom)).toContain('Parcialmente entregado');
+    expect(salesOrderRequests()).toHaveLength(1);
+
+    documents.salesOrders[0].internalStatus = 'all_delivered';
+    expect(runScheduledDocumentRefresh()).toBe(false);
+    await waitForRender();
+
+    expect(salesOrderRequests()).toHaveLength(1);
+    expect(contentText(dom)).toContain('Parcialmente entregado');
+  });
+
+  it('fetches fresh document data on a Trello rerender', async () => {
+    const documents = {
+      salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
+      waybills: [],
+      invoices: [],
+      estimates: [],
+    };
+    const { dom, urls, rerender } = loadCardBack(documents);
+    const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
+
+    await waitForRender();
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(contentText(dom)).toContain('Parcialmente entregado');
+    expect(salesOrderRequests()).toHaveLength(1);
+
+    documents.salesOrders[0].internalStatus = 'all_delivered';
+    rerender();
+    await waitForRender();
+
+    expect(salesOrderRequests()).toHaveLength(2);
+    expect(contentText(dom)).toContain('Totalmente entregado');
+  });
+
+  it('replaces an in-flight document request when Trello rerenders', async () => {
+    const documents = {
+      salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
+      waybills: [],
+      invoices: [],
+      estimates: [],
+    };
+    const { dom, urls, rerender } = loadCardBack(documents, { documentDelayMs: 80 });
+    const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
+
+    await waitForRender();
+    selectDocumentTab(dom, 'salesOrders');
+    expect(salesOrderRequests()).toHaveLength(1);
+
+    documents.salesOrders[0].internalStatus = 'all_delivered';
+    rerender();
+    await new Promise((resolve) => setTimeout(resolve, 180));
+
+    expect(salesOrderRequests()).toHaveLength(2);
+    expect(contentText(dom)).toContain('Totalmente entregado');
+    expect(contentText(dom)).not.toContain('Parcialmente entregado');
+  });
+
+  it('asks the browser not to reuse its HTTP cache for document requests', async () => {
+    const { requests } = loadCardBack({
+      salesOrders: [],
+      waybills: [],
+      invoices: [],
+      estimates: [],
+    });
+
+    await waitForRender();
+
+    const documentRequest = requests.find(({ url }) => url.includes('/v2/documents/search'));
+    expect(documentRequest?.init?.cache).toBe('no-store');
   });
 
   it('offers branded Holded and Eléctrica Ferrer destinations for sales orders', async () => {
