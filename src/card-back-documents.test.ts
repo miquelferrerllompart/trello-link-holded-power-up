@@ -57,6 +57,7 @@ function loadCardBack(documents, options = {}) {
   const popupCalls = [];
   const authState = { authorizeCalls: 0 };
   let nowMs = options.nowMs ?? Date.now();
+  let renderCallback;
   let restApiAuthorized = options.authorized !== false;
   let cardData = {
     contactId: options.contactId === null ? undefined : 'contact-1',
@@ -133,7 +134,7 @@ function loadCardBack(documents, options = {}) {
           popup: (opts) => { popupCalls.push(opts); },
           closePopup: () => undefined,
           sizeTo: () => Promise.resolve(),
-          render: () => undefined,
+          render: (callback) => { renderCallback = callback; },
         }),
       };
     },
@@ -147,6 +148,7 @@ function loadCardBack(documents, options = {}) {
     popupCalls,
     authState,
     advanceTime: (milliseconds) => { nowMs += milliseconds; },
+    rerender: () => renderCallback?.(),
   };
 }
 
@@ -300,6 +302,45 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(salesOrderRequests()).toHaveLength(2);
     expect(contentText(dom)).toContain('Totalmente entregado');
+  });
+
+  it('fetches fresh document data on a Trello rerender regardless of cache age', async () => {
+    const documents = {
+      salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
+      waybills: [],
+      invoices: [],
+      estimates: [],
+    };
+    const { dom, urls, rerender } = loadCardBack(documents, { nowMs: 1_000 });
+    const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
+
+    await waitForRender();
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(contentText(dom)).toContain('Parcialmente entregado');
+    expect(salesOrderRequests()).toHaveLength(1);
+
+    documents.salesOrders[0].internalStatus = 'all_delivered';
+    rerender();
+    await waitForRender();
+
+    expect(salesOrderRequests()).toHaveLength(2);
+    expect(contentText(dom)).toContain('Totalmente entregado');
+  });
+
+  it('asks the browser not to reuse its HTTP cache for document requests', async () => {
+    const { requests } = loadCardBack({
+      salesOrders: [],
+      waybills: [],
+      invoices: [],
+      estimates: [],
+    });
+
+    await waitForRender();
+
+    const documentRequest = requests.find(({ url }) => url.includes('/v2/documents/search'));
+    expect(documentRequest?.init?.cache).toBe('no-store');
   });
 
   it('offers branded Holded and Eléctrica Ferrer destinations for sales orders', async () => {

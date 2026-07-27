@@ -1379,6 +1379,11 @@
       return null;
     }
 
+    function invalidateDocumentResults() {
+      documentsCache = {};
+      documentErrors = {};
+    }
+
     function getDocumentsViewKey(data) {
       return (data.contactId || '') + '|' + (data.projectId || '');
     }
@@ -2225,7 +2230,7 @@
       documentRequests[cacheKey] = true;
       delete documentErrors[cacheKey];
 
-      fetch(HOLDED_PROXY_URL + '/v2/documents/search?' + params.toString())
+      fetch(HOLDED_PROXY_URL + '/v2/documents/search?' + params.toString(), { cache: 'no-store' })
         .then(function(response) {
           return response.json()
             .catch(function() { return {}; })
@@ -2563,6 +2568,7 @@
 
     render();
     t.render(function() {
+      invalidateDocumentResults();
       render();
     });
   </script>
