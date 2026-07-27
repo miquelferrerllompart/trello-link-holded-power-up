@@ -56,6 +56,7 @@ function loadCardBack(documents, options = {}) {
   const setCalls = [];
   const popupCalls = [];
   const authState = { authorizeCalls: 0 };
+  let nowMs = options.nowMs ?? Date.now();
   let restApiAuthorized = options.authorized !== false;
   let cardData = {
     contactId: options.contactId === null ? undefined : 'contact-1',
@@ -70,6 +71,7 @@ function loadCardBack(documents, options = {}) {
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     beforeParse(window) {
+      window.Date.now = () => nowMs;
       window.confirm = () => options.confirmUnlink === true;
       window.fetch = async (url, init) => {
         const requestUrl = String(url);
@@ -137,7 +139,15 @@ function loadCardBack(documents, options = {}) {
     },
   });
 
-  return { dom, urls, requests, setCalls, popupCalls, authState };
+  return {
+    dom,
+    urls,
+    requests,
+    setCalls,
+    popupCalls,
+    authState,
+    advanceTime: (milliseconds) => { nowMs += milliseconds; },
+  };
 }
 
 async function waitForRender() {
@@ -255,6 +265,41 @@ describe('card-back document view (internal API v2)', () => {
 
     expect(contentText(dom)).toContain('Parcialmente preparado');
     expect(contentText(dom)).not.toContain('Completado');
+  });
+
+  it('refreshes a cached document page once it is more than four seconds old', async () => {
+    const documents = {
+      salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
+      waybills: [],
+      invoices: [],
+      estimates: [],
+    };
+    const { dom, urls, advanceTime } = loadCardBack(documents, { nowMs: 1_000 });
+    const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
+
+    await waitForRender();
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(contentText(dom)).toContain('Parcialmente entregado');
+    expect(salesOrderRequests()).toHaveLength(1);
+
+    documents.salesOrders[0].internalStatus = 'all_delivered';
+    advanceTime(4_000);
+    selectDocumentTab(dom, 'invoices');
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(salesOrderRequests()).toHaveLength(1);
+    expect(contentText(dom)).toContain('Parcialmente entregado');
+
+    advanceTime(1);
+    selectDocumentTab(dom, 'invoices');
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    expect(salesOrderRequests()).toHaveLength(2);
+    expect(contentText(dom)).toContain('Totalmente entregado');
   });
 
   it('offers branded Holded and Eléctrica Ferrer destinations for sales orders', async () => {

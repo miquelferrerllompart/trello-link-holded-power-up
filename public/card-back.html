@@ -1365,10 +1365,19 @@
       { key: 'estimates', type: 'estimates', label: 'Presupuestos', loadingLabel: 'presupuestos', emptyAll: 'Este cliente no tiene presupuestos.', emptyProject: 'No hay presupuestos en el proyecto vinculado.' },
     ];
     var DOCUMENT_PAGE_SIZE = 10;
+    var DOCUMENT_CACHE_TTL_MS = 4000;
     var documentsCache = {};
     var documentRequests = {};
     var documentErrors = {};
     var documentViews = {};
+
+    function getCachedDocumentsPage(cacheKey) {
+      var cached = documentsCache[cacheKey];
+      if (!cached) return null;
+      if (Date.now() - cached.storedAt <= DOCUMENT_CACHE_TTL_MS) return cached.result;
+      delete documentsCache[cacheKey];
+      return null;
+    }
 
     function getDocumentsViewKey(data) {
       return (data.contactId || '') + '|' + (data.projectId || '');
@@ -2196,7 +2205,7 @@
 
     function ensureDocumentsPage(data, tab, scope, page) {
       var cacheKey = getDocumentsPageKey(data, tab, scope, page);
-      if (documentsCache[cacheKey] || documentRequests[cacheKey]) return;
+      if (getCachedDocumentsPage(cacheKey) || documentRequests[cacheKey]) return;
 
       var view = getDocumentsView(data);
       var stateKey = getDocumentsStateKey(scope, tab);
@@ -2239,7 +2248,7 @@
               view.cursors[stateKey][page + 1] = result.nextCursor;
             }
           }
-          documentsCache[cacheKey] = result;
+          documentsCache[cacheKey] = { result: result, storedAt: Date.now() };
           renderDocumentsPanel(data);
         })
         .catch(function(err) {
@@ -2262,7 +2271,7 @@
       var stateKey = getDocumentsStateKey(scope, activeTab);
       var page = view.pages[stateKey] || 1;
       var cacheKey = getDocumentsPageKey(data, activeTab, scope, page);
-      var result = documentsCache[cacheKey];
+      var result = getCachedDocumentsPage(cacheKey);
       var errorInfo = documentErrors[cacheKey];
       var content = '';
 
