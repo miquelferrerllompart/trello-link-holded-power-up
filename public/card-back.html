@@ -1365,14 +1365,40 @@
       { key: 'estimates', type: 'estimates', label: 'Presupuestos', loadingLabel: 'presupuestos', emptyAll: 'Este cliente no tiene presupuestos.', emptyProject: 'No hay presupuestos en el proyecto vinculado.' },
     ];
     var DOCUMENT_PAGE_SIZE = 10;
+    var DOCUMENT_REFRESH_INTERVAL_MS = 5000;
     var documentResults = {};
     var documentRequests = {};
     var documentErrors = {};
     var documentViews = {};
+    var documentRefreshTimer = null;
+    var documentRequestGeneration = 0;
+
+    function cancelScheduledDocumentRefresh() {
+      if (documentRefreshTimer !== null) {
+        clearTimeout(documentRefreshTimer);
+        documentRefreshTimer = null;
+      }
+    }
 
     function invalidateDocumentResults() {
+      cancelScheduledDocumentRefresh();
+      documentRequestGeneration += 1;
       documentResults = {};
+      documentRequests = {};
       documentErrors = {};
+    }
+
+    function scheduleDocumentRefresh(data) {
+      cancelScheduledDocumentRefresh();
+      documentRefreshTimer = setTimeout(function() {
+        documentRefreshTimer = null;
+        if (document.hidden) {
+          scheduleDocumentRefresh(data);
+          return;
+        }
+        invalidateDocumentResults();
+        renderDocumentsPanel(data);
+      }, DOCUMENT_REFRESH_INTERVAL_MS);
     }
 
     function getDocumentsViewKey(data) {
@@ -2201,7 +2227,8 @@
 
     function ensureDocumentsPage(data, tab, scope, page) {
       var pageKey = getDocumentsPageKey(data, tab, scope, page);
-      if (documentResults[pageKey] || documentRequests[pageKey]) return;
+      var requestGeneration = documentRequestGeneration;
+      if (documentResults[pageKey] || documentRequests[pageKey] === requestGeneration) return;
 
       var view = getDocumentsView(data);
       var stateKey = getDocumentsStateKey(scope, tab);
@@ -2218,7 +2245,7 @@
         params.set('pageSize', String(DOCUMENT_PAGE_SIZE));
       }
 
-      documentRequests[pageKey] = true;
+      documentRequests[pageKey] = requestGeneration;
       delete documentErrors[pageKey];
 
       fetch(HOLDED_PROXY_URL + '/v2/documents/search?' + params.toString(), { cache: 'no-store' })
@@ -2228,6 +2255,7 @@
             .then(function(body) { return { ok: response.ok, body: body }; });
         })
         .then(function(res) {
+          if (requestGeneration !== documentRequestGeneration) return;
           delete documentRequests[pageKey];
           if (!res.ok) {
             var code = res.body && res.body.error && res.body.error.code;
@@ -2245,9 +2273,11 @@
             }
           }
           documentResults[pageKey] = result;
+          scheduleDocumentRefresh(data);
           renderDocumentsPanel(data);
         })
         .catch(function(err) {
+          if (requestGeneration !== documentRequestGeneration) return;
           delete documentRequests[pageKey];
           documentErrors[pageKey] = { code: 'GENERIC' };
           console.warn('Holded: error loading documents', err);
