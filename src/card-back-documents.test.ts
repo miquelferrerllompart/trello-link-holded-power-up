@@ -56,7 +56,6 @@ function loadCardBack(documents, options = {}) {
   const setCalls = [];
   const popupCalls = [];
   const authState = { authorizeCalls: 0 };
-  let nowMs = options.nowMs ?? Date.now();
   let renderCallback;
   let restApiAuthorized = options.authorized !== false;
   let cardData = {
@@ -72,7 +71,6 @@ function loadCardBack(documents, options = {}) {
     runScripts: 'dangerously',
     pretendToBeVisual: true,
     beforeParse(window) {
-      window.Date.now = () => nowMs;
       window.confirm = () => options.confirmUnlink === true;
       window.fetch = async (url, init) => {
         const requestUrl = String(url);
@@ -147,7 +145,6 @@ function loadCardBack(documents, options = {}) {
     setCalls,
     popupCalls,
     authState,
-    advanceTime: (milliseconds) => { nowMs += milliseconds; },
     rerender: () => renderCallback?.(),
   };
 }
@@ -269,14 +266,14 @@ describe('card-back document view (internal API v2)', () => {
     expect(contentText(dom)).not.toContain('Completado');
   });
 
-  it('refreshes a cached document page once it is more than four seconds old', async () => {
+  it('fetches fresh document data whenever a tab is activated again', async () => {
     const documents = {
       salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
       waybills: [],
       invoices: [],
       estimates: [],
     };
-    const { dom, urls, advanceTime } = loadCardBack(documents, { nowMs: 1_000 });
+    const { dom, urls } = loadCardBack(documents);
     const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
 
     await waitForRender();
@@ -287,15 +284,6 @@ describe('card-back document view (internal API v2)', () => {
     expect(salesOrderRequests()).toHaveLength(1);
 
     documents.salesOrders[0].internalStatus = 'all_delivered';
-    advanceTime(4_000);
-    selectDocumentTab(dom, 'invoices');
-    selectDocumentTab(dom, 'salesOrders');
-    await waitForRender();
-
-    expect(salesOrderRequests()).toHaveLength(1);
-    expect(contentText(dom)).toContain('Parcialmente entregado');
-
-    advanceTime(1);
     selectDocumentTab(dom, 'invoices');
     selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
@@ -311,7 +299,7 @@ describe('card-back document view (internal API v2)', () => {
       invoices: [],
       estimates: [],
     };
-    const { dom, urls, rerender } = loadCardBack(documents, { nowMs: 1_000 });
+    const { dom, urls, rerender } = loadCardBack(documents);
     const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
 
     await waitForRender();
