@@ -316,7 +316,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(contentText(dom)).toContain('Totalmente entregado');
   });
 
-  it('refreshes an unchanged open document panel on schedule', async () => {
+  it('keeps an unchanged open document panel stable without scheduled refreshes', async () => {
     const documents = {
       salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],
       waybills: [],
@@ -334,11 +334,11 @@ describe('card-back document view (internal API v2)', () => {
     expect(salesOrderRequests()).toHaveLength(1);
 
     documents.salesOrders[0].internalStatus = 'all_delivered';
-    expect(runScheduledDocumentRefresh()).toBe(true);
+    expect(runScheduledDocumentRefresh()).toBe(false);
     await waitForRender();
 
-    expect(salesOrderRequests()).toHaveLength(2);
-    expect(contentText(dom)).toContain('Totalmente entregado');
+    expect(salesOrderRequests()).toHaveLength(1);
+    expect(contentText(dom)).toContain('Parcialmente entregado');
   });
 
   it('fetches fresh document data on a Trello rerender', async () => {
