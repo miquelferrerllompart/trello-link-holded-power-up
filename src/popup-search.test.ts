@@ -275,6 +275,7 @@ describe('popup search behavior', () => {
         city: 'Palma',
         postalCode: '07001',
         province: 'Illes Balears',
+        country: 'España',
       },
       shippingAddresses: [],
     });

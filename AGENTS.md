@@ -86,19 +86,28 @@ Linking is done from the **always-visible "Vincula un cliente/proyecto" placehol
 card-back section (they open the same search popups). There is intentionally **no `card-buttons`
 capability** — the placeholders replaced it.
 
-## Description tags
+## Managed description suffix
 
-When linking a contact/project, a tag is appended to the card description: `{{ contact: Name }}` /
-`{{ project: Name }}` (regex tolerates braces in the value). On **unlink**, the tag is removed.
+When linking a contact/project, `syncDescriptionSection` maintains a generated **Cliente y proyecto**
+block at the end of the card description. It contains direct customer/project links, a Google Maps
+link for the selected full address, and quick actions when both entities are linked. The searchable
+`{{ contact: Name }}` / `{{ project: Name }}` tags remain at the end of that block (the tag regex
+tolerates braces in the value).
 
-- Adding happens in the search popup via `src/trello-api.ts` `updateCardDescription` (`ensureAuthorized`
-  → REST PUT).
+On **unlink**, the whole block is regenerated for the remaining entity or removed when neither
+entity remains. User-authored description content is preserved. `SECTION_SIGNATURES` deliberately
+recognizes both the corrected `Eléctrica` spelling and the already-deployed `Elèctrica` variant so
+existing cards migrate without duplicate generated blocks.
+
+- Synchronization happens in the search popup via `src/trello-api.ts` `updateCardDescription`
+  (`ensureAuthorized` → REST PUT).
 - **Unlinking runs in a popup** (`src/popups/unlink.html` → `src/unlink.ts` `unlinkField`), NOT inline
   in the card-back. The card-back-section iframe cannot reliably obtain a REST write token, so the
   card-back's ✕ opens the unlink popup (which has a reliable REST context, like the link flow). Opening
   a popup from inside an iframe **requires passing the mouse event** (`t.popup({ …, mouseEvent: e })`).
 - `appKey` must be passed to both `TrelloPowerUp.initialize()` and `TrelloPowerUp.iframe()` for REST to work.
-- Key files: `src/description-tags.ts` (tag add/remove), `src/unlink.ts` (orchestration), `src/trello-api.ts`.
+- Key files: `src/description-tags.ts` (`syncDescriptionSection` + tag removal),
+  `src/unlink.ts` (orchestration), `src/trello-api.ts` (REST write).
 
 ## Card storage
 
@@ -108,6 +117,8 @@ Card data via `t.set('card', 'shared', 'holdedData', data)`:
 interface CardHoldedData {
   contactId?: string;
   contactName?: string;
+  addressLabel?: string;
+  addressMapQuery?: string;
   projectId?: string;
   projectName?: string;
 }
