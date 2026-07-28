@@ -335,4 +335,73 @@ describe('address selection behavior', () => {
 
     dom.window.close();
   });
+
+  it('labels a shipping address by street and city when its reference is empty', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    trello.get.mockResolvedValue({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: '',
+        city: '',
+        postalCode: '',
+        province: '',
+      },
+      shippingAddresses: [{
+        name: '',
+        address: 'C/ Nord 2',
+        city: 'Palma',
+        postalCode: '07002',
+        province: 'Illes Balears',
+        country: 'España',
+      }],
+    });
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.address-item')).not.toBeNull();
+    });
+    expect(dom.window.document.querySelector('.address-name')?.textContent)
+      .toBe('C/ Nord 2, Palma');
+
+    dom.window.close();
+  });
+
+  it('renders CRM address fields as text instead of HTML', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    const unsafeName = '<img src=x onerror="alert(1)">Obra</img>';
+    const unsafeAddress = '<strong>Calle Norte 2</strong>';
+    trello.get.mockResolvedValue({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: '',
+        city: '',
+        postalCode: '',
+        province: '',
+      },
+      shippingAddresses: [{
+        name: unsafeName,
+        address: unsafeAddress,
+        city: 'Palma',
+        postalCode: '07002',
+        province: 'Illes Balears',
+        country: 'España',
+      }],
+    });
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.address-item')).not.toBeNull();
+    });
+    expect(dom.window.document.querySelector('.address-name img')).toBeNull();
+    expect(dom.window.document.querySelector('.address-name')?.textContent).toBe(unsafeName);
+    expect(dom.window.document.querySelector('.address-detail strong')).toBeNull();
+    expect(dom.window.document.querySelector('.address-detail')?.textContent)
+      .toContain(unsafeAddress);
+
+    dom.window.close();
+  });
 });

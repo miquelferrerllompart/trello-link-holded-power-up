@@ -23,6 +23,17 @@ function formatAddress(address: string | null, city: string | null, postalCode: 
   return [address, [postalCode, city].filter(Boolean).join(' '), province].filter(Boolean).join(', ');
 }
 
+function escapeHtml(value: string): string {
+  const entities: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return value.replace(/[&<>"']/g, (character) => entities[character]);
+}
+
 function buildAddressLabel(address: string | null, city: string | null): string | undefined {
   return [
     formatSpanishTextCase(address || ''),
@@ -155,10 +166,14 @@ async function render() {
 
   // Shipping addresses
   for (const ship of pending.shippingAddresses) {
+    const shippingAddressLabel = formatSpanishTextCase(ship.name)
+      || buildAddressLabel(ship.address, ship.city);
+    if (!shippingAddressLabel) continue;
+
     options.push({
-      label: ship.name,
+      label: shippingAddressLabel,
       detail: formatAddress(ship.address, ship.city, ship.postalCode, ship.province),
-      addressLabel: formatSpanishTextCase(ship.name),
+      addressLabel: shippingAddressLabel,
     });
   }
 
@@ -167,8 +182,8 @@ async function render() {
       <div class="address-item" data-index="${i}">
         <div class="address-icon">📍</div>
         <div class="address-info">
-          <div class="address-name">${opt.label}</div>
-          <div class="address-detail">${opt.detail}</div>
+          <div class="address-name">${escapeHtml(opt.label)}</div>
+          <div class="address-detail">${escapeHtml(opt.detail)}</div>
         </div>
       </div>`)
     .join('') +
