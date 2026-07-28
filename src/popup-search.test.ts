@@ -418,6 +418,8 @@ describe('address selection behavior', () => {
     });
     expect(dom.window.document.querySelector('.address-name')?.textContent)
       .toBe('C/ Nord 2, Palma');
+    expect(dom.window.document.querySelector('.address-detail')?.textContent)
+      .toBe('C/ Nord 2, 07002 Palma, Illes Balears');
 
     dom.window.close();
   });
@@ -489,6 +491,8 @@ describe('address selection behavior', () => {
     await vi.waitFor(() => {
       expect(dom.window.document.querySelector('.address-item')).not.toBeNull();
     });
+    expect(dom.window.document.querySelector('.address-detail')?.textContent)
+      .toBe('C/ Major 1, 07001 Palma, Illes Balears');
     (dom.window.document.querySelector('.address-item') as HTMLElement).click();
 
     await vi.waitFor(() => expect(trello.closePopup).toHaveBeenCalled());

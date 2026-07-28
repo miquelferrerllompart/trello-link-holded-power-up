@@ -190,7 +190,7 @@ async function render() {
     );
     options.push({
       label: 'Dirección fiscal',
-      detail: mapQuery,
+      detail: formatAddress(bill.address, bill.city, bill.postalCode, bill.province),
       addressLabel: billAddressLabel,
       mapQuery,
     });
@@ -211,7 +211,7 @@ async function render() {
 
     options.push({
       label: shippingAddressLabel,
-      detail: mapQuery,
+      detail: formatAddress(ship.address, ship.city, ship.postalCode, ship.province),
       addressLabel: shippingAddressLabel,
       mapQuery,
     });
