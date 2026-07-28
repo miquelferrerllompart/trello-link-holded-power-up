@@ -161,6 +161,8 @@ export interface CardHoldedData {
   contactName?: string;
   /** Short label for the selected address (shipping name or "street, city") */
   addressLabel?: string;
+  /** Complete selected address used for the Google Maps destination. */
+  addressMapQuery?: string;
   projectId?: string;
   projectName?: string;
 }

@@ -53,9 +53,12 @@ Al abrir una tarjeta se muestra una sección "Holded" con tags de color:
 
 En la vista de tablero, las tarjetas muestran badges con icono + nombre del cliente/proyecto vinculado.
 
-### Tags en descripción (búsqueda nativa)
+### Sección en la descripción
 
-Al vincular un cliente o proyecto, se añade automáticamente un tag al final de la descripción de la tarjeta:
+Al vincular un cliente o proyecto, se mantiene al final de la descripción una sección
+**Cliente y proyecto** con enlaces directos al cliente, proyecto y acciones de la app.
+La dirección seleccionada también aparece como enlace universal de Google Maps cuando
+se dispone de su dirección completa. Los tags de búsqueda nativa permanecen al final:
 
 ```
 {{ contact: Nombre del cliente }}
@@ -205,6 +208,7 @@ interface CardHoldedData {
   projectId?: string;    // ID del proyecto en Holded
   projectName?: string;  // Nombre del proyecto
   addressLabel?: string; // Dirección seleccionada (resumen)
+  addressMapQuery?: string; // Dirección completa para Google Maps
 }
 ```
 
