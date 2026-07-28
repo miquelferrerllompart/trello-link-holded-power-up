@@ -142,6 +142,137 @@ describe('popup search behavior', () => {
     dom.window.close();
   });
 
+  it('opens address selection when the contact only has its billing address', async () => {
+    const { dom, trello } = installPopupDom(`
+      <input id="search" />
+      <div id="results"></div>
+    `);
+    trello.card.mockResolvedValue({ id: 'card-1' });
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        total: 1,
+        results: [{ id: 'contact-1', name: 'Cliente Uno' }],
+      })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 'contact-1',
+        name: 'Cliente Uno',
+        billAddress: {
+          address: 'C/ Major 1',
+          city: 'Palma',
+          postalCode: '07001',
+          province: 'Illes Balears',
+        },
+        shippingAddresses: [],
+      }))));
+
+    await import('./popups/search-contact');
+
+    const input = dom.window.document.getElementById('search') as HTMLInputElement;
+    input.value = 'Cliente';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.result-item')).not.toBeNull();
+    });
+    const clickEvent = new dom.window.MouseEvent('click', { bubbles: true });
+    dom.window.document.querySelector('.result-item')!.dispatchEvent(clickEvent);
+
+    await vi.waitFor(() => {
+      expect(trello.popup).toHaveBeenCalledWith({
+        title: 'Seleccionar dirección',
+        url: './select-address.html',
+        height: 300,
+        mouseEvent: clickEvent,
+      });
+    });
+    expect(trello.closePopup).not.toHaveBeenCalled();
+    expect(JSON.parse(dom.window.localStorage.getItem('holdedPendingContact:card-1'))).toEqual({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: 'C/ Major 1',
+        city: 'Palma',
+        postalCode: '07001',
+        province: 'Illes Balears',
+      },
+      shippingAddresses: [],
+    });
+
+    dom.window.close();
+  });
+
+  it('opens address selection after creating a contact', async () => {
+    const { dom, trello } = installPopupDom(`
+      <div id="form">
+        <input id="name" />
+        <input id="code" />
+        <input id="address" />
+        <input id="city" />
+        <input id="postalCode" />
+        <input id="province" />
+        <input id="country" />
+        <input id="email" />
+        <input id="phone" />
+        <div id="type-toggle">
+          <button type="button" data-value="empresa">Empresa</button>
+          <button type="button" data-value="persona">Persona</button>
+        </div>
+        <button type="button" id="submit-btn">Crear contacto</button>
+        <div id="code-duplicate-msg"></div>
+        <div id="error-msg"></div>
+      </div>
+    `);
+    trello.card.mockResolvedValue({ id: 'card-1', desc: '' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      id: 'contact-1',
+    }))));
+
+    await import('./popups/create-contact');
+
+    const values = {
+      name: 'Cliente Uno',
+      code: 'B12345678',
+      address: 'C/ Major 1',
+      city: 'Palma',
+      postalCode: '07001',
+      province: 'Illes Balears',
+      country: 'España',
+      email: 'cliente@example.com',
+    };
+    for (const [id, value] of Object.entries(values)) {
+      (dom.window.document.getElementById(id) as HTMLInputElement).value = value;
+    }
+    dom.window.document.querySelector<HTMLButtonElement>('[data-value="empresa"]')!.click();
+
+    const submit = dom.window.document.getElementById('submit-btn') as HTMLButtonElement;
+    expect(submit.disabled).toBe(false);
+    const clickEvent = new dom.window.MouseEvent('click', { bubbles: true });
+    submit.dispatchEvent(clickEvent);
+
+    await vi.waitFor(() => {
+      expect(trello.popup).toHaveBeenCalledWith({
+        title: 'Seleccionar dirección',
+        url: './select-address.html',
+        height: 300,
+        mouseEvent: clickEvent,
+      });
+    });
+    expect(trello.closePopup).not.toHaveBeenCalled();
+    expect(JSON.parse(dom.window.localStorage.getItem('holdedPendingContact:card-1'))).toEqual({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: 'C/ Major 1',
+        city: 'Palma',
+        postalCode: '07001',
+        province: 'Illes Balears',
+      },
+      shippingAddresses: [],
+    });
+
+    dom.window.close();
+  });
+
   it('shows both the linked client and project code in project results', async () => {
     const { dom } = installPopupDom(`
       <input id="search" />
@@ -167,6 +298,109 @@ describe('popup search behavior', () => {
       expect(dom.window.document.querySelector('.result-status')?.textContent)
         .toBe('Cliente Uno · AUT3');
     });
+
+    dom.window.close();
+  });
+});
+
+describe('address selection behavior', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it('offers address creation without rendering an empty billing address', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    trello.get.mockResolvedValue({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: '',
+        city: '',
+        postalCode: '',
+        province: '',
+      },
+      shippingAddresses: [],
+    });
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.getElementById('create-addr-btn')).not.toBeNull();
+    });
+    expect(dom.window.document.querySelector('.address-item')).toBeNull();
+    expect(dom.window.document.getElementById('create-addr-btn')?.textContent)
+      .toContain('Nueva dirección de envío');
+
+    dom.window.close();
+  });
+
+  it('labels a shipping address by street and city when its reference is empty', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    trello.get.mockResolvedValue({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: '',
+        city: '',
+        postalCode: '',
+        province: '',
+      },
+      shippingAddresses: [{
+        name: '',
+        address: 'C/ Nord 2',
+        city: 'Palma',
+        postalCode: '07002',
+        province: 'Illes Balears',
+        country: 'España',
+      }],
+    });
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.address-item')).not.toBeNull();
+    });
+    expect(dom.window.document.querySelector('.address-name')?.textContent)
+      .toBe('C/ Nord 2, Palma');
+
+    dom.window.close();
+  });
+
+  it('renders CRM address fields as text instead of HTML', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    const unsafeName = '<img src=x onerror="alert(1)">Obra</img>';
+    const unsafeAddress = '<strong>Calle Norte 2</strong>';
+    trello.get.mockResolvedValue({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: '',
+        city: '',
+        postalCode: '',
+        province: '',
+      },
+      shippingAddresses: [{
+        name: unsafeName,
+        address: unsafeAddress,
+        city: 'Palma',
+        postalCode: '07002',
+        province: 'Illes Balears',
+        country: 'España',
+      }],
+    });
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.address-item')).not.toBeNull();
+    });
+    expect(dom.window.document.querySelector('.address-name img')).toBeNull();
+    expect(dom.window.document.querySelector('.address-name')?.textContent).toBe(unsafeName);
+    expect(dom.window.document.querySelector('.address-detail strong')).toBeNull();
+    expect(dom.window.document.querySelector('.address-detail')?.textContent)
+      .toContain(unsafeAddress);
 
     dom.window.close();
   });

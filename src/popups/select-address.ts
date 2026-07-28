@@ -16,17 +16,29 @@ const submissionKeyer = createSubmissionKeyer();
 interface AddressOption {
   label: string;
   detail: string;
+  addressLabel: string;
 }
 
 function formatAddress(address: string | null, city: string | null, postalCode: string, province: string | null): string {
   return [address, [postalCode, city].filter(Boolean).join(' '), province].filter(Boolean).join(', ');
 }
 
-function buildAddressLabel(address: string | null, city: string | null): string {
+function escapeHtml(value: string): string {
+  const entities: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return value.replace(/[&<>"']/g, (character) => entities[character]);
+}
+
+function buildAddressLabel(address: string | null, city: string | null): string | undefined {
   return [
     formatSpanishTextCase(address || ''),
     formatSpanishTextCase(city || ''),
-  ].filter(Boolean).join(', ') || 'Sin dirección';
+  ].filter(Boolean).join(', ') || undefined;
 }
 
 async function selectAddress(pending: PendingContactSelection, addressLabel: string) {
@@ -143,16 +155,25 @@ async function render() {
 
   // Bill address
   const bill = pending.billAddress;
-  options.push({
-    label: 'Dirección fiscal',
-    detail: formatAddress(bill.address, bill.city, bill.postalCode, bill.province),
-  });
+  const billAddressLabel = buildAddressLabel(bill.address, bill.city);
+  if (billAddressLabel) {
+    options.push({
+      label: 'Dirección fiscal',
+      detail: formatAddress(bill.address, bill.city, bill.postalCode, bill.province),
+      addressLabel: billAddressLabel,
+    });
+  }
 
   // Shipping addresses
   for (const ship of pending.shippingAddresses) {
+    const shippingAddressLabel = formatSpanishTextCase(ship.name)
+      || buildAddressLabel(ship.address, ship.city);
+    if (!shippingAddressLabel) continue;
+
     options.push({
-      label: ship.name,
+      label: shippingAddressLabel,
       detail: formatAddress(ship.address, ship.city, ship.postalCode, ship.province),
+      addressLabel: shippingAddressLabel,
     });
   }
 
@@ -161,8 +182,8 @@ async function render() {
       <div class="address-item" data-index="${i}">
         <div class="address-icon">📍</div>
         <div class="address-info">
-          <div class="address-name">${opt.label}</div>
-          <div class="address-detail">${opt.detail}</div>
+          <div class="address-name">${escapeHtml(opt.label)}</div>
+          <div class="address-detail">${escapeHtml(opt.detail)}</div>
         </div>
       </div>`)
     .join('') +
@@ -171,15 +192,7 @@ async function render() {
   addressesDiv.querySelectorAll('.address-item').forEach((el) => {
     el.addEventListener('click', async () => {
       const index = parseInt((el as HTMLElement).dataset.index!, 10);
-      let addressLabel: string;
-
-      if (index === 0) {
-        addressLabel = buildAddressLabel(bill.address, bill.city);
-      } else {
-        addressLabel = formatSpanishTextCase(pending.shippingAddresses[index - 1].name);
-      }
-
-      await selectAddress(pending, addressLabel);
+      await selectAddress(pending, options[index].addressLabel);
     });
   });
 

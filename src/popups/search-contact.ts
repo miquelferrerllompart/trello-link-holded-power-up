@@ -1,7 +1,4 @@
 import { searchContacts, getContactDetail } from '../holded-api';
-import { getCardData, setCardData } from '../storage';
-import { addTag } from '../description-tags';
-import { updateCardDescription } from '../trello-api';
 import { TRELLO_APP_KEY } from '../config';
 import { formatSpanishTextCase } from '../spanish-text-case';
 import { buildPendingContactSelection, savePendingContactSelection } from '../pending-contact';
@@ -86,33 +83,14 @@ function renderResults(contacts: HoldedContact[], query: string) {
         return;
       }
 
-      if (contact.shippingAddresses && contact.shippingAddresses.length > 0) {
-        const pending = buildPendingContactSelection(contact, contactName);
-        await savePendingContactSelection(t, pending);
-        t.popup({
-          title: 'Seleccionar dirección',
-          url: './select-address.html',
-          height: 300,
-          mouseEvent: event,
-        });
-      } else {
-        const addressLabel = [
-          formatSpanishTextCase(contact.billAddress?.address || ''),
-          formatSpanishTextCase(contact.billAddress?.city || ''),
-        ]
-          .filter(Boolean).join(', ') || undefined;
-        const data = await getCardData(t);
-        data.contactId = contact.id;
-        data.contactName = contactName;
-        data.addressLabel = addressLabel;
-        await setCardData(t, data);
-        try {
-          const card = await t.card('id', 'desc');
-          const newDesc = addTag(card.desc || '', 'contact', contactName, addressLabel);
-          await updateCardDescription(t, newDesc);
-        } catch (err) { console.error('Holded: error syncing description', err); }
-        t.closePopup();
-      }
+      const pending = buildPendingContactSelection(contact, contactName);
+      await savePendingContactSelection(t, pending);
+      t.popup({
+        title: 'Seleccionar dirección',
+        url: './select-address.html',
+        height: 300,
+        mouseEvent: event,
+      });
     });
   });
 }
