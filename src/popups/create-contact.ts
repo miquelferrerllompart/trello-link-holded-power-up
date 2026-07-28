@@ -1,10 +1,8 @@
 import { createContact, searchContacts } from '../holded-api';
 import { createSubmissionKeyer } from '../idempotency';
-import { getCardData, setCardData } from '../storage';
-import { addTag } from '../description-tags';
-import { updateCardDescription } from '../trello-api';
 import { TRELLO_APP_KEY } from '../config';
 import { formatSpanishTextCase } from '../spanish-text-case';
+import { savePendingContactSelection } from '../pending-contact';
 import type { TrelloContext } from '../types';
 
 const t = window.TrelloPowerUp.iframe({ appKey: TRELLO_APP_KEY, appName: 'Holded' }) as unknown as TrelloContext;
@@ -22,7 +20,6 @@ const emailInput = document.getElementById('email') as HTMLInputElement;
 const phoneInput = document.getElementById('phone') as HTMLInputElement;
 const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
 const errorMsg = document.getElementById('error-msg') as HTMLDivElement;
-const successMsg = document.getElementById('success-msg') as HTMLDivElement;
 const typeToggle = document.getElementById('type-toggle') as HTMLDivElement;
 
 /** null = not selected yet, 1 = persona, 0 = empresa */
@@ -122,13 +119,12 @@ document.getElementById('form')!.addEventListener('input', updateSubmitState);
 // Initial state
 submitBtn.disabled = true;
 
-submitBtn.addEventListener('click', async () => {
+submitBtn.addEventListener('click', async (event) => {
   if (!validateForm() || isperson === null) return;
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Creando...';
   errorMsg.style.display = 'none';
-  successMsg.style.display = 'none';
 
   try {
     const contactName = formatSpanishTextCase(nameInput.value);
@@ -155,31 +151,25 @@ submitBtn.addEventListener('click', async () => {
     };
     const result = await createContact(payload, submissionKeyer.keyFor(JSON.stringify(payload)));
 
-    // Auto-assign contact to card
-    const contactId = result.id;
-
-    const addressLabel = [billAddress.address, billAddress.city]
-      .filter(Boolean).join(', ') || undefined;
-
-    const data = await getCardData(t);
-    data.contactId = contactId;
-    data.contactName = contactName;
-    data.addressLabel = addressLabel;
-    await setCardData(t, data);
-
-    try {
-      const card = await t.card('id', 'desc');
-      const newDesc = addTag(card.desc || '', 'contact', contactName, addressLabel);
-      await updateCardDescription(t, newDesc);
-    } catch (err) {
-      console.error('Holded: error syncing description', err);
-    }
+    await savePendingContactSelection(t, {
+      contactId: result.id,
+      contactName,
+      billAddress: {
+        address: billAddress.address,
+        city: billAddress.city,
+        postalCode: billAddress.postalCode,
+        province: billAddress.province,
+      },
+      shippingAddresses: [],
+    });
 
     submissionKeyer.reset(); // workflow complete — a later create starts a fresh key
-    successMsg.textContent = `Contacto "${contactName}" creado y vinculado.`;
-    successMsg.style.display = 'block';
-
-    setTimeout(() => t.closePopup(), 1200);
+    t.popup({
+      title: 'Seleccionar dirección',
+      url: './select-address.html',
+      height: 300,
+      mouseEvent: event,
+    });
   } catch (err) {
     errorMsg.textContent = (err as Error).message;
     errorMsg.style.display = 'block';
