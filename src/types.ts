@@ -168,7 +168,9 @@ export interface CardHoldedData {
 }
 
 /** Temporary data stored while the address selection popup is open */
-export type PendingBillAddress = Pick<HoldedAddress, 'address' | 'city' | 'postalCode' | 'province'>;
+export type PendingBillAddress =
+  Pick<HoldedAddress, 'address' | 'city' | 'postalCode' | 'province'> &
+  { country?: string };
 export type PendingShippingAddress = Pick<HoldedShippingAddress, 'name' | 'address' | 'city' | 'postalCode' | 'province' | 'country'>;
 
 export interface PendingContactSelection {

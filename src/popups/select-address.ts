@@ -20,8 +20,16 @@ interface AddressOption {
   mapQuery: string;
 }
 
-function formatAddress(address: string | null, city: string | null, postalCode: string, province: string | null): string {
-  return [address, [postalCode, city].filter(Boolean).join(' '), province].filter(Boolean).join(', ');
+function formatAddress(
+  address: string | null,
+  city: string | null,
+  postalCode: string,
+  province: string | null,
+  country?: string | null,
+): string {
+  return [address, [postalCode, city].filter(Boolean).join(' '), province, country]
+    .filter(Boolean)
+    .join(', ');
 }
 
 function escapeHtml(value: string): string {
@@ -142,7 +150,13 @@ function showCreateForm(pending: PendingContactSelection) {
       await selectAddress(
         pending,
         newAddr.name,
-        formatAddress(newAddr.address, newAddr.city, newAddr.postalCode, newAddr.province),
+        formatAddress(
+          newAddr.address,
+          newAddr.city,
+          newAddr.postalCode,
+          newAddr.province,
+          newAddr.country,
+        ),
       );
       submissionKeyer.reset(); // workflow complete
     } catch (err) {
@@ -167,7 +181,13 @@ async function render() {
   const bill = pending.billAddress;
   const billAddressLabel = buildAddressLabel(bill.address, bill.city);
   if (billAddressLabel) {
-    const mapQuery = formatAddress(bill.address, bill.city, bill.postalCode, bill.province);
+    const mapQuery = formatAddress(
+      bill.address,
+      bill.city,
+      bill.postalCode,
+      bill.province,
+      bill.country,
+    );
     options.push({
       label: 'Dirección fiscal',
       detail: mapQuery,
@@ -181,7 +201,13 @@ async function render() {
     const shippingAddressLabel = formatSpanishTextCase(ship.name)
       || buildAddressLabel(ship.address, ship.city);
     if (!shippingAddressLabel) continue;
-    const mapQuery = formatAddress(ship.address, ship.city, ship.postalCode, ship.province);
+    const mapQuery = formatAddress(
+      ship.address,
+      ship.city,
+      ship.postalCode,
+      ship.province,
+      ship.country,
+    );
 
     options.push({
       label: shippingAddressLabel,

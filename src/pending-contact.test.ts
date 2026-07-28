@@ -41,6 +41,7 @@ describe('buildPendingContactSelection', () => {
         city: 'Palma',
         postalCode: '07001',
         province: 'Illes Balears',
+        country: 'España',
       },
       shippingAddresses: [
         {

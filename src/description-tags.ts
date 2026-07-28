@@ -1,4 +1,5 @@
 import type { CardHoldedData } from './types';
+import { buildElectricaferrerEntityUrl } from './document-links';
 
 // `[\s\S]*?` (non-greedy, any char incl. newlines and braces) up to the first
 // closing `}}`, so tags whose value contains a brace — e.g. "Obra {Fase 2}" —
@@ -8,20 +9,15 @@ const TAG_REGEX: Record<string, RegExp> = {
   project: /\{\{\s*project:[\s\S]*?\}\}/g,
 };
 
-export function addTag(desc: string, type: 'contact' | 'project', name: string, addressLabel?: string): string {
-  const cleaned = removeTag(desc, type);
-  const value = addressLabel ? `${name} | ${addressLabel}` : name;
-  const tag = `{{ ${type}: ${value} }}`;
-  return cleaned ? `${cleaned}\n\n\n${tag}` : tag;
-}
-
 export function removeTag(desc: string, type: 'contact' | 'project'): string {
   return desc.replace(TAG_REGEX[type], '').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-const APP_BASE_URL = 'https://app.electricaferrer.es';
-const SECTION_SIGNATURE =
-  '## Cliente y proyecto\n\n_Sincronizado automáticamente con Elèctrica Ferrer._';
+const ACTION_BASE_URL = 'https://app.electricaferrer.es';
+const SECTION_SIGNATURES = [
+  '## Cliente y proyecto\n\n_Sincronizado automáticamente con Eléctrica Ferrer._',
+  '## Cliente y proyecto\n\n_Sincronizado automáticamente con Elèctrica Ferrer._',
+];
 const ANY_TAG_REGEX = /\{\{\s*(?:contact|project):[\s\S]*?\}\}/g;
 
 function escapeMarkdownLabel(value: string): string {
@@ -31,16 +27,30 @@ function escapeMarkdownLabel(value: string): string {
     .replace(/([\\[\]*_~`])/g, '\\$1');
 }
 
-function stripGeneratedSection(desc: string): string {
-  const sectionStart = desc.lastIndexOf(SECTION_SIGNATURE);
-  if (sectionStart < 0) return desc;
+function stripGeneratedSection(desc: string): { description: string; found: boolean } {
+  const sectionStart = Math.max(
+    ...SECTION_SIGNATURES.map((signature) => desc.lastIndexOf(signature)),
+  );
+  if (sectionStart < 0) return { description: desc, found: false };
 
   const sectionText = desc.slice(sectionStart);
-  let sectionEnd = 0;
-  for (const match of sectionText.matchAll(ANY_TAG_REGEX)) {
-    sectionEnd = (match.index || 0) + match[0].length;
+  const tagMatches = sectionText.matchAll(ANY_TAG_REGEX);
+  const firstTag = tagMatches.next().value;
+  if (!firstTag) return { description: desc, found: false };
+
+  const generatedContent = sectionText.slice(0, firstTag.index || 0);
+  const expectedTagCount =
+    Number(generatedContent.includes('**Cliente:**')) +
+    Number(generatedContent.includes('**Proyecto:**'));
+  let sectionEnd = (firstTag.index || 0) + firstTag[0].length;
+
+  for (let index = 1; index < expectedTagCount; index += 1) {
+    const nextTag = sectionText
+      .slice(sectionEnd)
+      .match(/^\s*(\{\{\s*(?:contact|project):[\s\S]*?\}\})/);
+    if (!nextTag) break;
+    sectionEnd += nextTag[0].length;
   }
-  if (!sectionEnd) return desc;
 
   const separator = '\n\n---\n\n';
   const prefix = desc.slice(0, sectionStart);
@@ -48,12 +58,17 @@ function stripGeneratedSection(desc: string): string {
     ? sectionStart - separator.length
     : sectionStart;
 
-  return `${desc.slice(0, removalStart)}${desc.slice(sectionStart + sectionEnd)}`;
+  return {
+    description: `${desc.slice(0, removalStart)}${desc.slice(sectionStart + sectionEnd)}`,
+    found: true,
+  };
 }
 
 export function syncDescriptionSection(desc: string, data: CardHoldedData): string {
-  const withoutSection = stripGeneratedSection(desc);
-  const cleaned = removeTag(removeTag(withoutSection, 'contact'), 'project');
+  const stripped = stripGeneratedSection(desc);
+  const cleaned = stripped.found
+    ? stripped.description.replace(/\n{3,}/g, '\n\n').trim()
+    : removeTag(removeTag(stripped.description, 'contact'), 'project');
   const contactId = data.contactId?.trim();
   const projectId = data.projectId?.trim();
   const contactName = data.contactName?.trim();
@@ -66,13 +81,14 @@ export function syncDescriptionSection(desc: string, data: CardHoldedData): stri
   const lines = [
     '## Cliente y proyecto',
     '',
-    '_Sincronizado automáticamente con Elèctrica Ferrer._',
+    '_Sincronizado automáticamente con Eléctrica Ferrer._',
   ];
 
   if (hasContact) {
+    const contactUrl = buildElectricaferrerEntityUrl('contact', contactId)!;
     lines.push(
       '',
-      `**Cliente:** [${escapeMarkdownLabel(contactName!)} ↗](${APP_BASE_URL}/contacto/${encodeURIComponent(contactId!)})`
+      `**Cliente:** [${escapeMarkdownLabel(contactName!)} ↗](${contactUrl})`
     );
 
     if (addressMapQuery) {
@@ -84,9 +100,10 @@ export function syncDescriptionSection(desc: string, data: CardHoldedData): stri
   }
 
   if (hasProject) {
+    const projectUrl = buildElectricaferrerEntityUrl('project', projectId)!;
     lines.push(
       '',
-      `**Proyecto:** [${escapeMarkdownLabel(projectName!)} ↗](${APP_BASE_URL}/proyecto/${encodeURIComponent(projectId!)})`
+      `**Proyecto:** [${escapeMarkdownLabel(projectName!)} ↗](${projectUrl})`
     );
   }
 
@@ -96,9 +113,9 @@ export function syncDescriptionSection(desc: string, data: CardHoldedData): stri
       '',
       '### Acciones rápidas',
       '',
-      `- **[🔧 Crear albarán de trabajo ↗](${APP_BASE_URL}/albaran-trabajo/nuevo?${query})**`,
-      `- **[⚡ Crear albarán extra ↗](${APP_BASE_URL}/albaran-trabajo-extra/nuevo?${query})**`,
-      `- **[📦 Crear pedido de material ↗](${APP_BASE_URL}/pedido/nuevo?${query})**`
+      `- **[🔧 Crear albarán de trabajo ↗](${ACTION_BASE_URL}/albaran-trabajo/nuevo?${query})**`,
+      `- **[⚡ Crear albarán extra ↗](${ACTION_BASE_URL}/albaran-trabajo-extra/nuevo?${query})**`,
+      `- **[📦 Crear pedido de material ↗](${ACTION_BASE_URL}/pedido/nuevo?${query})**`
     );
   }
 

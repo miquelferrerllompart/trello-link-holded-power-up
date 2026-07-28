@@ -113,6 +113,7 @@ describe('popup search behavior', () => {
           city: 'Palma',
           postalCode: '07001',
           province: 'Illes Balears',
+          country: 'España',
         },
         shippingAddresses: [{
           name: 'Obra Norte',
@@ -167,6 +168,7 @@ describe('popup search behavior', () => {
           city: 'Palma',
           postalCode: '07001',
           province: 'Illes Balears',
+          country: 'España',
         },
         shippingAddresses: [],
       }))));
@@ -200,6 +202,7 @@ describe('popup search behavior', () => {
         city: 'Palma',
         postalCode: '07001',
         province: 'Illes Balears',
+        country: 'España',
       },
       shippingAddresses: [],
     });
@@ -465,6 +468,7 @@ describe('address selection behavior', () => {
         city: 'Palma',
         postalCode: '07001',
         province: 'Illes Balears',
+        country: 'España',
       },
       shippingAddresses: [],
     };
@@ -492,12 +496,12 @@ describe('address selection behavior', () => {
       '/albaran-trabajo/nuevo?projectId=project-1&customerId=customer-1'
     );
     expect(description).toContain(
-      '**Dirección:** [C/ Major 1, 07001 Palma, Illes Balears ↗](https://www.google.com/maps/search/?api=1&query=C%2F%20Major%201%2C%2007001%20Palma%2C%20Illes%20Balears)'
+      '**Dirección:** [C/ Major 1, 07001 Palma, Illes Balears, España ↗](https://www.google.com/maps/search/?api=1&query=C%2F%20Major%201%2C%2007001%20Palma%2C%20Illes%20Balears%2C%20Espa%C3%B1a)'
     );
     expect(description).toContain('{{ contact: Cliente Uno | C/ Major 1, Palma }}');
     expect(description.endsWith('{{ project: Obra Norte }}')).toBe(true);
     const saved = trello.set.mock.calls.find((call) => call[2] === 'holdedData')?.[3];
-    expect(saved.addressMapQuery).toBe('C/ Major 1, 07001 Palma, Illes Balears');
+    expect(saved.addressMapQuery).toBe('C/ Major 1, 07001 Palma, Illes Balears, España');
 
     dom.window.close();
   });
@@ -510,11 +514,11 @@ describe('address selection behavior', () => {
       billAddress: { address: '', city: '', postalCode: '', province: '' },
       shippingAddresses: [{
         name: 'Obra Norte',
-        address: 'C/ Nord 2',
-        city: 'Palma',
-        postalCode: '07002',
-        province: 'Illes Balears',
-        country: 'España',
+        address: 'Rua Norte 2',
+        city: 'Porto',
+        postalCode: '4000-001',
+        province: 'Porto',
+        country: 'Portugal',
       }],
     };
     trello.get
@@ -535,11 +539,11 @@ describe('address selection behavior', () => {
     await vi.waitFor(() => expect(trello.closePopup).toHaveBeenCalled());
     const description = JSON.parse(fetchImpl.mock.calls[0][1].body).desc;
     expect(description).toContain(
-      'query=C%2F%20Nord%202%2C%2007002%20Palma%2C%20Illes%20Balears'
+      'query=Rua%20Norte%202%2C%204000-001%20Porto%2C%20Porto%2C%20Portugal'
     );
     expect(description).toContain('{{ contact: Cliente Uno | Obra Norte }}');
     const saved = trello.set.mock.calls.find((call) => call[2] === 'holdedData')?.[3];
-    expect(saved.addressMapQuery).toBe('C/ Nord 2, 07002 Palma, Illes Balears');
+    expect(saved.addressMapQuery).toBe('Rua Norte 2, 4000-001 Porto, Porto, Portugal');
 
     dom.window.close();
   });
@@ -585,11 +589,11 @@ describe('address selection behavior', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const description = JSON.parse(fetchImpl.mock.calls[1][1].body).desc;
     expect(description).toContain(
-      'query=C%2F%20Nou%203%2C%2007003%20Palma%2C%20Illes%20Balears'
+      'query=C%2F%20Nou%203%2C%2007003%20Palma%2C%20Illes%20Balears%2C%20Espa%C3%B1a'
     );
     expect(description).toContain('{{ contact: Cliente Uno | Obra Nueva }}');
     const saved = trello.set.mock.calls.find((call) => call[2] === 'holdedData')?.[3];
-    expect(saved.addressMapQuery).toBe('C/ Nou 3, 07003 Palma, Illes Balears');
+    expect(saved.addressMapQuery).toBe('C/ Nou 3, 07003 Palma, Illes Balears, España');
 
     dom.window.close();
   });

@@ -33,6 +33,7 @@ export function buildPendingContactSelection(contact: HoldedContact, contactName
       city: clean(contact.billAddress?.city),
       postalCode: clean(contact.billAddress?.postalCode),
       province: clean(contact.billAddress?.province),
+      country: clean(contact.billAddress?.country),
     },
     shippingAddresses: (contact.shippingAddresses || []).map((address) => ({
       name: clean(address.name),
