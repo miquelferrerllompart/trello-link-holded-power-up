@@ -147,6 +147,7 @@ describe('popup search behavior', () => {
       <input id="search" />
       <div id="results"></div>
     `);
+    trello.card.mockResolvedValue({ id: 'card-1' });
     vi.stubGlobal('fetch', vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({
         total: 1,
@@ -208,7 +209,6 @@ describe('popup search behavior', () => {
         <button type="button" id="submit-btn">Crear contacto</button>
         <div id="code-duplicate-msg"></div>
         <div id="error-msg"></div>
-        <div id="success-msg"></div>
       </div>
     `);
     trello.card.mockResolvedValue({ id: 'card-1', desc: '' });

@@ -114,15 +114,6 @@
       font-size: 13px;
       display: none;
     }
-    .success-msg {
-      margin-top: 6px;
-      padding: 6px 8px;
-      background: #e3fcef;
-      color: #1b7742;
-      border-radius: 3px;
-      font-size: 13px;
-      display: none;
-    }
 
     @media (prefers-color-scheme: dark) {
       body { color: #b6c2cf; }
@@ -146,7 +137,6 @@
       .submit-btn:hover { background: #85b8ff; }
       .submit-btn:disabled { background: #a6c5e229; color: #8c9bab; }
       .error-msg { background: #42221f; color: #f87168; }
-      .success-msg { background: #1c3329; color: #4bce97; }
     }
   </style>
   <script src="https://p.trellocdn.com/power-up.min.js"></script>
@@ -215,7 +205,6 @@
 
     <button type="button" class="submit-btn" id="submit-btn">Crear contacto</button>
     <div class="error-msg" id="error-msg"></div>
-    <div class="success-msg" id="success-msg"></div>
   </div>
   <script type="module" src="./create-contact.ts"></script>
 </body>
