@@ -41,6 +41,7 @@ describe('buildPendingContactSelection', () => {
         city: 'Palma',
         postalCode: '07001',
         province: 'Illes Balears',
+        country: 'España',
       },
       shippingAddresses: [
         {
@@ -79,7 +80,13 @@ describe('savePendingContactSelection', () => {
     const pending: PendingContactSelection = {
       contactId: 'contact-1',
       contactName: 'Cliente',
-      billAddress: { address: 'C/ Mayor 1', city: 'Palma', postalCode: '07001', province: 'Illes Balears' },
+      billAddress: {
+        address: 'C/ Mayor 1',
+        city: 'Palma',
+        postalCode: '07001',
+        province: 'Illes Balears',
+        country: 'España',
+      },
       shippingAddresses: [],
     };
 

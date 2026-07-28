@@ -1,5 +1,5 @@
 import { getCardData, setCardData } from '../storage';
-import { addTag } from '../description-tags';
+import { syncDescriptionSection } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
 import { addShippingAddress } from '../holded-api';
 import { createSubmissionKeyer } from '../idempotency';
@@ -17,10 +17,19 @@ interface AddressOption {
   label: string;
   detail: string;
   addressLabel: string;
+  mapQuery: string;
 }
 
-function formatAddress(address: string | null, city: string | null, postalCode: string, province: string | null): string {
-  return [address, [postalCode, city].filter(Boolean).join(' '), province].filter(Boolean).join(', ');
+function formatAddress(
+  address: string | null,
+  city: string | null,
+  postalCode: string,
+  province: string | null,
+  country?: string | null,
+): string {
+  return [address, [postalCode, city].filter(Boolean).join(' '), province, country]
+    .filter(Boolean)
+    .join(', ');
 }
 
 function escapeHtml(value: string): string {
@@ -41,17 +50,22 @@ function buildAddressLabel(address: string | null, city: string | null): string 
   ].filter(Boolean).join(', ') || undefined;
 }
 
-async function selectAddress(pending: PendingContactSelection, addressLabel: string) {
+async function selectAddress(
+  pending: PendingContactSelection,
+  addressLabel: string,
+  addressMapQuery: string,
+) {
   const contactName = formatSpanishTextCase(pending.contactName);
   const data = await getCardData(t);
   data.contactId = pending.contactId;
   data.contactName = contactName;
   data.addressLabel = addressLabel;
+  data.addressMapQuery = addressMapQuery || undefined;
   await setCardData(t, data);
 
   try {
     const card = await t.card('id', 'desc');
-    const newDesc = addTag(card.desc || '', 'contact', contactName, addressLabel);
+    const newDesc = syncDescriptionSection(card.desc || '', data);
     await updateCardDescription(t, newDesc);
   } catch (err) { console.error('Holded: error syncing description', err); }
 
@@ -133,7 +147,17 @@ function showCreateForm(pending: PendingContactSelection) {
 
       const key = submissionKeyer.keyFor(JSON.stringify({ contactId: pending.contactId, newAddr }));
       await addShippingAddress(pending.contactId, newAddr, key);
-      await selectAddress(pending, newAddr.name);
+      await selectAddress(
+        pending,
+        newAddr.name,
+        formatAddress(
+          newAddr.address,
+          newAddr.city,
+          newAddr.postalCode,
+          newAddr.province,
+          newAddr.country,
+        ),
+      );
       submissionKeyer.reset(); // workflow complete
     } catch (err) {
       errorMsg.textContent = (err as Error).message;
@@ -157,10 +181,18 @@ async function render() {
   const bill = pending.billAddress;
   const billAddressLabel = buildAddressLabel(bill.address, bill.city);
   if (billAddressLabel) {
+    const mapQuery = formatAddress(
+      bill.address,
+      bill.city,
+      bill.postalCode,
+      bill.province,
+      bill.country,
+    );
     options.push({
       label: 'Dirección fiscal',
       detail: formatAddress(bill.address, bill.city, bill.postalCode, bill.province),
       addressLabel: billAddressLabel,
+      mapQuery,
     });
   }
 
@@ -169,11 +201,19 @@ async function render() {
     const shippingAddressLabel = formatSpanishTextCase(ship.name)
       || buildAddressLabel(ship.address, ship.city);
     if (!shippingAddressLabel) continue;
+    const mapQuery = formatAddress(
+      ship.address,
+      ship.city,
+      ship.postalCode,
+      ship.province,
+      ship.country,
+    );
 
     options.push({
       label: shippingAddressLabel,
       detail: formatAddress(ship.address, ship.city, ship.postalCode, ship.province),
       addressLabel: shippingAddressLabel,
+      mapQuery,
     });
   }
 
@@ -192,7 +232,11 @@ async function render() {
   addressesDiv.querySelectorAll('.address-item').forEach((el) => {
     el.addEventListener('click', async () => {
       const index = parseInt((el as HTMLElement).dataset.index!, 10);
-      await selectAddress(pending, options[index].addressLabel);
+      await selectAddress(
+        pending,
+        options[index].addressLabel,
+        options[index].mapQuery,
+      );
     });
   });
 

@@ -1,38 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { addTag, removeTag } from './description-tags';
-
-describe('addTag', () => {
-  it('adds contact tag to empty description', () => {
-    expect(addTag('', 'contact', 'José García')).toBe('{{ contact: José García }}');
-  });
-
-  it('adds project tag to empty description', () => {
-    expect(addTag('', 'project', 'Reforma cocina')).toBe('{{ project: Reforma cocina }}');
-  });
-
-  it('appends tag after existing description with blank lines', () => {
-    const result = addTag('Existing description', 'contact', 'Alice');
-    expect(result).toBe('Existing description\n\n\n{{ contact: Alice }}');
-  });
-
-  it('replaces existing tag of same type', () => {
-    const desc = 'Some text\n\n\n{{ contact: Old Name }}';
-    const result = addTag(desc, 'contact', 'New Name');
-    expect(result).toBe('Some text\n\n\n{{ contact: New Name }}');
-  });
-
-  it('includes address label when provided', () => {
-    const result = addTag('', 'contact', 'Alice', 'C/ Mayor 1, Madrid');
-    expect(result).toBe('{{ contact: Alice | C/ Mayor 1, Madrid }}');
-  });
-
-  it('does not affect other tag types', () => {
-    const desc = 'Text\n\n\n{{ project: My Project }}';
-    const result = addTag(desc, 'contact', 'Alice');
-    expect(result).toContain('{{ project: My Project }}');
-    expect(result).toContain('{{ contact: Alice }}');
-  });
-});
+import { removeTag, syncDescriptionSection } from './description-tags';
 
 describe('removeTag', () => {
   it('removes contact tag', () => {
@@ -69,9 +36,175 @@ describe('removeTag', () => {
     const desc = 'Nota\n\n\n{{ contact: Empresa {Grupo} S.L. }}';
     expect(removeTag(desc, 'contact')).toBe('Nota');
   });
+});
 
-  it('round-trips add then remove for a braced name', () => {
-    const withTag = addTag('Nota previa', 'project', 'Obra {Fase 2}');
-    expect(removeTag(withTag, 'project')).toBe('Nota previa');
+describe('syncDescriptionSection', () => {
+  it('links the complete selected address to Google Maps', () => {
+    const result = syncDescriptionSection('', {
+      contactId: 'customer-1',
+      contactName: 'Cliente Uno',
+      addressLabel: 'Obra Norte',
+      addressMapQuery: 'C/ Nord 2, 07002 Palma, Illes Balears',
+    });
+
+    expect(result).toContain(
+      '**Dirección:** [C/ Nord 2, 07002 Palma, Illes Balears ↗](https://www.google.com/maps/search/?api=1&query=C%2F%20Nord%202%2C%2007002%20Palma%2C%20Illes%20Balears)',
+    );
+    expect(result).toContain('{{ contact: Cliente Uno | Obra Norte }}');
+  });
+
+  it('adds readable mobile actions and keeps the searchable tags at the end', () => {
+    const result = syncDescriptionSection('Revisar medidas antes de empezar.', {
+      contactId: 'customer-1',
+      contactName: 'Hotel Mar Blau',
+      addressLabel: 'Passeig Marítim 8',
+      projectId: 'project-1',
+      projectName: 'Renovación del cuadro general',
+    });
+
+    expect(result).toBe(
+      'Revisar medidas antes de empezar.\n\n' +
+      '---\n\n' +
+      '## Cliente y proyecto\n\n' +
+      '_Sincronizado automáticamente con Eléctrica Ferrer._\n\n' +
+      '**Cliente:** [Hotel Mar Blau ↗](https://app.electricaferrer.es/contacto/customer-1)\n\n' +
+      '**Proyecto:** [Renovación del cuadro general ↗](https://app.electricaferrer.es/proyecto/project-1)\n\n' +
+      '### Acciones rápidas\n\n' +
+      '- **[🔧 Crear albarán de trabajo ↗](https://app.electricaferrer.es/albaran-trabajo/nuevo?projectId=project-1&customerId=customer-1)**\n' +
+      '- **[⚡ Crear albarán extra ↗](https://app.electricaferrer.es/albaran-trabajo-extra/nuevo?projectId=project-1&customerId=customer-1)**\n' +
+      '- **[📦 Crear pedido de material ↗](https://app.electricaferrer.es/pedido/nuevo?projectId=project-1&customerId=customer-1)**\n\n' +
+      '{{ contact: Hotel Mar Blau | Passeig Marítim 8 }}\n' +
+      '{{ project: Renovación del cuadro general }}'
+    );
+  });
+
+  it('shows the linked customer without creation actions until a project is linked', () => {
+    const result = syncDescriptionSection('', {
+      contactId: 'customer-1',
+      contactName: 'Hotel Mar Blau',
+    });
+
+    expect(result).toContain('**Cliente:** [Hotel Mar Blau ↗]');
+    expect(result).toContain('{{ contact: Hotel Mar Blau }}');
+    expect(result).not.toContain('**Proyecto:**');
+    expect(result).not.toContain('### Acciones rápidas');
+    expect(result).not.toContain('/albaran-trabajo/nuevo');
+  });
+
+  it('replaces the previous generated suffix and preserves text added after it', () => {
+    const previous = syncDescriptionSection('Nota original.', {
+      contactId: 'customer-old',
+      contactName: 'Cliente anterior',
+      projectId: 'project-old',
+      projectName: 'Proyecto anterior',
+    });
+
+    const result = syncDescriptionSection(`${previous}\n\nNota añadida después.`, {
+      contactId: 'customer-new',
+      contactName: 'Cliente nuevo',
+      projectId: 'project-new',
+      projectName: 'Proyecto nuevo',
+    });
+
+    expect(result.match(/## Cliente y proyecto/g)).toHaveLength(1);
+    expect(result).not.toContain('customer-old');
+    expect(result).not.toContain('project-old');
+    expect(result).toContain('Nota original.');
+    expect(result).toContain('Nota añadida después.');
+    expect(result.endsWith('{{ project: Proyecto nuevo }}')).toBe(true);
+  });
+
+  it('preserves user text and tags appended after the generated section', () => {
+    const previous = syncDescriptionSection('Nota original.', {
+      contactId: 'customer-old',
+      contactName: 'Cliente anterior',
+      projectId: 'project-old',
+      projectName: 'Proyecto anterior',
+    });
+    const appended = `${previous}\n\nNota de otra automatización.\n\n{{ contact: Referencia externa }}`;
+
+    const result = syncDescriptionSection(appended, {
+      contactId: 'customer-new',
+      contactName: 'Cliente nuevo',
+      projectId: 'project-new',
+      projectName: 'Proyecto nuevo',
+    });
+
+    expect(result).toContain('Nota de otra automatización.');
+    expect(result).toContain('{{ contact: Referencia externa }}');
+    expect(result.match(/## Cliente y proyecto/g)).toHaveLength(1);
+  });
+
+  it('migrates the deployed misspelled section without duplicating it', () => {
+    const legacy =
+      'Nota original.\n\n---\n\n' +
+      '## Cliente y proyecto\n\n' +
+      '_Sincronizado automáticamente con Elèctrica Ferrer._\n\n' +
+      '**Cliente:** [Cliente anterior ↗](https://app.electricaferrer.es/contacto/customer-old)\n\n' +
+      '{{ contact: Cliente anterior }}';
+
+    const result = syncDescriptionSection(legacy, {
+      contactId: 'customer-new',
+      contactName: 'Cliente nuevo',
+    });
+
+    expect(result.match(/## Cliente y proyecto/g)).toHaveLength(1);
+    expect(result).toContain('_Sincronizado automáticamente con Eléctrica Ferrer._');
+    expect(result).not.toContain('Elèctrica');
+    expect(result).toContain('Nota original.');
+  });
+
+  it('escapes CRM names so they cannot break the Markdown action section', () => {
+    const result = syncDescriptionSection('', {
+      contactId: 'customer/1',
+      contactName: 'Cliente [Norte]',
+      projectId: 'project 1',
+      projectName: 'Obra *principal*',
+    });
+
+    expect(result).toContain(
+      '**Cliente:** [Cliente \\[Norte\\] ↗](https://app.electricaferrer.es/contacto/customer%2F1)'
+    );
+    expect(result).toContain(
+      '**Proyecto:** [Obra \\*principal\\* ↗](https://app.electricaferrer.es/proyecto/project%201)'
+    );
+    expect(result).toContain('projectId=project%201&customerId=customer%2F1');
+    expect(result).toContain('{{ contact: Cliente [Norte] }}');
+    expect(result).toContain('{{ project: Obra *principal* }}');
+  });
+
+  it('migrates the existing searchable tags into the generated suffix', () => {
+    const result = syncDescriptionSection(
+      'Texto del usuario.\n\n\n{{ contact: Cliente anterior }}\n\n\n{{ project: Proyecto anterior }}',
+      {
+        contactId: 'customer-new',
+        contactName: 'Cliente nuevo',
+        projectId: 'project-new',
+        projectName: 'Proyecto nuevo',
+      }
+    );
+
+    expect(result.match(/\{\{ contact:/g)).toHaveLength(1);
+    expect(result.match(/\{\{ project:/g)).toHaveLength(1);
+    expect(result).not.toContain('Cliente anterior');
+    expect(result).not.toContain('Proyecto anterior');
+    expect(result.startsWith('Texto del usuario.\n\n---')).toBe(true);
+  });
+
+  it('removes the whole generated suffix when neither entity remains linked', () => {
+    const previous = syncDescriptionSection('Primera nota.', {
+      contactId: 'customer-1',
+      contactName: 'Cliente',
+      projectId: 'project-1',
+      projectName: 'Proyecto',
+    });
+
+    expect(syncDescriptionSection(`${previous}\n\nÚltima nota.`, {}))
+      .toBe('Primera nota.\n\nÚltima nota.');
+  });
+
+  it('does not create an unmanageable suffix from an incomplete stored entity', () => {
+    expect(syncDescriptionSection('Nota intacta.', { contactId: 'customer-without-name' }))
+      .toBe('Nota intacta.');
   });
 });

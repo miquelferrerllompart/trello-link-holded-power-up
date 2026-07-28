@@ -161,12 +161,15 @@ export interface CardHoldedData {
   contactName?: string;
   /** Short label for the selected address (shipping name or "street, city") */
   addressLabel?: string;
+  /** Complete selected address used for the Google Maps destination. */
+  addressMapQuery?: string;
   projectId?: string;
   projectName?: string;
 }
 
 /** Temporary data stored while the address selection popup is open */
-export type PendingBillAddress = Pick<HoldedAddress, 'address' | 'city' | 'postalCode' | 'province'>;
+export type PendingBillAddress =
+  Pick<HoldedAddress, 'address' | 'city' | 'postalCode' | 'province' | 'country'>;
 export type PendingShippingAddress = Pick<HoldedShippingAddress, 'name' | 'address' | 'city' | 'postalCode' | 'province' | 'country'>;
 
 export interface PendingContactSelection {

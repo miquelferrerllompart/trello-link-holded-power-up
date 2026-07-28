@@ -9,7 +9,13 @@ function installPopupDom(markup: string) {
     closePopup: vi.fn(),
     get: vi.fn(),
     set: vi.fn(),
+    remove: vi.fn(),
     card: vi.fn(),
+    getRestApi: () => ({
+      isAuthorized: async () => true,
+      authorize: async () => undefined,
+      getToken: async () => 'trello-token',
+    }),
   };
 
   Object.assign(dom.window, {
@@ -107,6 +113,7 @@ describe('popup search behavior', () => {
           city: 'Palma',
           postalCode: '07001',
           province: 'Illes Balears',
+          country: 'España',
         },
         shippingAddresses: [{
           name: 'Obra Norte',
@@ -161,6 +168,7 @@ describe('popup search behavior', () => {
           city: 'Palma',
           postalCode: '07001',
           province: 'Illes Balears',
+          country: 'España',
         },
         shippingAddresses: [],
       }))));
@@ -194,6 +202,7 @@ describe('popup search behavior', () => {
         city: 'Palma',
         postalCode: '07001',
         province: 'Illes Balears',
+        country: 'España',
       },
       shippingAddresses: [],
     });
@@ -266,6 +275,7 @@ describe('popup search behavior', () => {
         city: 'Palma',
         postalCode: '07001',
         province: 'Illes Balears',
+        country: 'España',
       },
       shippingAddresses: [],
     });
@@ -298,6 +308,50 @@ describe('popup search behavior', () => {
       expect(dom.window.document.querySelector('.result-status')?.textContent)
         .toBe('Cliente Uno · AUT3');
     });
+
+    dom.window.close();
+  });
+
+  it('adds the mobile creation links after linking a project to a customer', async () => {
+    const { dom, trello } = installPopupDom(`
+      <input id="search" />
+      <div id="results"></div>
+    `);
+    trello.get.mockResolvedValue({
+      contactId: 'customer-1',
+      contactName: 'Cliente Uno',
+    });
+    trello.card.mockResolvedValue({ id: 'card-1', desc: 'Nota de montaje.' });
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        total: 1,
+        results: [{ id: 'project-1', name: 'Obra Norte' }],
+      })))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await import('./popups/search-project');
+
+    const input = dom.window.document.getElementById('search') as HTMLInputElement;
+    input.value = 'Obra';
+    input.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.result-item')).not.toBeNull();
+    });
+    (dom.window.document.querySelector('.result-item') as HTMLElement).click();
+
+    await vi.waitFor(() => expect(trello.closePopup).toHaveBeenCalled());
+    const description = JSON.parse(fetchImpl.mock.calls[1][1].body).desc;
+    expect(description).toContain(
+      '/albaran-trabajo/nuevo?projectId=project-1&customerId=customer-1'
+    );
+    expect(description).toContain(
+      '/albaran-trabajo-extra/nuevo?projectId=project-1&customerId=customer-1'
+    );
+    expect(description).toContain(
+      '/pedido/nuevo?projectId=project-1&customerId=customer-1'
+    );
+    expect(description.endsWith('{{ project: Obra Norte }}')).toBe(true);
 
     dom.window.close();
   });
@@ -364,6 +418,8 @@ describe('address selection behavior', () => {
     });
     expect(dom.window.document.querySelector('.address-name')?.textContent)
       .toBe('C/ Nord 2, Palma');
+    expect(dom.window.document.querySelector('.address-detail')?.textContent)
+      .toBe('C/ Nord 2, 07002 Palma, Illes Balears');
 
     dom.window.close();
   });
@@ -401,6 +457,148 @@ describe('address selection behavior', () => {
     expect(dom.window.document.querySelector('.address-detail strong')).toBeNull();
     expect(dom.window.document.querySelector('.address-detail')?.textContent)
       .toContain(unsafeAddress);
+
+    dom.window.close();
+  });
+
+  it('adds the mobile creation links after linking a customer to a project', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    const pending = {
+      contactId: 'customer-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: 'C/ Major 1',
+        city: 'Palma',
+        postalCode: '07001',
+        province: 'Illes Balears',
+        country: 'España',
+      },
+      shippingAddresses: [],
+    };
+    trello.get
+      .mockResolvedValueOnce(pending)
+      .mockResolvedValueOnce({
+        projectId: 'project-1',
+        projectName: 'Obra Norte',
+      })
+      .mockResolvedValueOnce(pending);
+    trello.card.mockResolvedValue({ id: 'card-1', desc: 'Nota de montaje.' });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.address-item')).not.toBeNull();
+    });
+    expect(dom.window.document.querySelector('.address-detail')?.textContent)
+      .toBe('C/ Major 1, 07001 Palma, Illes Balears');
+    (dom.window.document.querySelector('.address-item') as HTMLElement).click();
+
+    await vi.waitFor(() => expect(trello.closePopup).toHaveBeenCalled());
+    const description = JSON.parse(fetchImpl.mock.calls[0][1].body).desc;
+    expect(description).toContain(
+      '/albaran-trabajo/nuevo?projectId=project-1&customerId=customer-1'
+    );
+    expect(description).toContain(
+      '**Dirección:** [C/ Major 1, 07001 Palma, Illes Balears, España ↗](https://www.google.com/maps/search/?api=1&query=C%2F%20Major%201%2C%2007001%20Palma%2C%20Illes%20Balears%2C%20Espa%C3%B1a)'
+    );
+    expect(description).toContain('{{ contact: Cliente Uno | C/ Major 1, Palma }}');
+    expect(description.endsWith('{{ project: Obra Norte }}')).toBe(true);
+    const saved = trello.set.mock.calls.find((call) => call[2] === 'holdedData')?.[3];
+    expect(saved.addressMapQuery).toBe('C/ Major 1, 07001 Palma, Illes Balears, España');
+
+    dom.window.close();
+  });
+
+  it('uses the full shipping address for Maps instead of its short reference', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    const pending = {
+      contactId: 'customer-1',
+      contactName: 'Cliente Uno',
+      billAddress: { address: '', city: '', postalCode: '', province: '' },
+      shippingAddresses: [{
+        name: 'Obra Norte',
+        address: 'Rua Norte 2',
+        city: 'Porto',
+        postalCode: '4000-001',
+        province: 'Porto',
+        country: 'Portugal',
+      }],
+    };
+    trello.get
+      .mockResolvedValueOnce(pending)
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce(pending);
+    trello.card.mockResolvedValue({ id: 'card-1', desc: '' });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.querySelector('.address-item')).not.toBeNull();
+    });
+    (dom.window.document.querySelector('.address-item') as HTMLElement).click();
+
+    await vi.waitFor(() => expect(trello.closePopup).toHaveBeenCalled());
+    const description = JSON.parse(fetchImpl.mock.calls[0][1].body).desc;
+    expect(description).toContain(
+      'query=Rua%20Norte%202%2C%204000-001%20Porto%2C%20Porto%2C%20Portugal'
+    );
+    expect(description).toContain('{{ contact: Cliente Uno | Obra Norte }}');
+    const saved = trello.set.mock.calls.find((call) => call[2] === 'holdedData')?.[3];
+    expect(saved.addressMapQuery).toBe('Rua Norte 2, 4000-001 Porto, Porto, Portugal');
+
+    dom.window.close();
+  });
+
+  it('adds the newly created shipping address as a Google Maps link', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    const pending = {
+      contactId: 'customer-1',
+      contactName: 'Cliente Uno',
+      billAddress: { address: '', city: '', postalCode: '', province: '' },
+      shippingAddresses: [],
+    };
+    trello.get
+      .mockResolvedValueOnce(pending)
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce(pending);
+    trello.card.mockResolvedValue({ id: 'card-1', desc: '' });
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchImpl);
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.getElementById('create-addr-btn')).not.toBeNull();
+    });
+    dom.window.document.getElementById('create-addr-btn')!.click();
+
+    const values = {
+      'addr-name': 'Obra Nueva',
+      'addr-address': 'C/ Nou 3',
+      'addr-city': 'Palma',
+      'addr-postalCode': '07003',
+      'addr-province': 'Illes Balears',
+    };
+    for (const [id, value] of Object.entries(values)) {
+      (dom.window.document.getElementById(id) as HTMLInputElement).value = value;
+    }
+    dom.window.document.getElementById('create-form')!
+      .dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    (dom.window.document.getElementById('btn-create') as HTMLButtonElement).click();
+
+    await vi.waitFor(() => expect(trello.closePopup).toHaveBeenCalled());
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    const description = JSON.parse(fetchImpl.mock.calls[1][1].body).desc;
+    expect(description).toContain(
+      'query=C%2F%20Nou%203%2C%2007003%20Palma%2C%20Illes%20Balears%2C%20Espa%C3%B1a'
+    );
+    expect(description).toContain('{{ contact: Cliente Uno | Obra Nueva }}');
+    const saved = trello.set.mock.calls.find((call) => call[2] === 'holdedData')?.[3];
+    expect(saved.addressMapQuery).toBe('C/ Nou 3, 07003 Palma, Illes Balears, España');
 
     dom.window.close();
   });

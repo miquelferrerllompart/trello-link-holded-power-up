@@ -1,6 +1,6 @@
 import { searchProjects } from '../holded-api';
 import { getCardData, setCardData } from '../storage';
-import { addTag } from '../description-tags';
+import { syncDescriptionSection } from '../description-tags';
 import { updateCardDescription } from '../trello-api';
 import { TRELLO_APP_KEY } from '../config';
 import type { HoldedProject, TrelloContext } from '../types';
@@ -60,7 +60,7 @@ function renderResults(projects: HoldedProject[], query: string) {
       await setCardData(t, data);
       try {
         const card = await t.card('id', 'desc');
-        const newDesc = addTag(card.desc || '', 'project', name);
+        const newDesc = syncDescriptionSection(card.desc || '', data);
         await updateCardDescription(t, newDesc);
       } catch (err) { console.error('Holded: error syncing description', err); }
       t.closePopup();

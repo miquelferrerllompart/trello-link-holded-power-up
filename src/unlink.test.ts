@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { unlinkField } from './unlink';
+import { syncDescriptionSection } from './description-tags';
 
 function makeContext(desc: string, data: Record<string, unknown>) {
   return {
@@ -22,10 +23,15 @@ describe('unlinkField', () => {
   it('removes the contact tag from the description and clears it from storage', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchImpl);
-    const t = makeContext(
-      'Notas del cliente\n\n\n{{ contact: Cliente | Calle Mayor 1 }}\n\n\n{{ project: Obra Norte }}',
-      { contactId: 'c1', contactName: 'Cliente', addressLabel: 'Calle Mayor 1', projectId: 'p1', projectName: 'Obra Norte' },
-    );
+    const data = {
+      contactId: 'c1',
+      contactName: 'Cliente',
+      addressLabel: 'Calle Mayor 1',
+      addressMapQuery: 'Calle Mayor 1, 07001 Palma, Illes Balears',
+      projectId: 'p1',
+      projectName: 'Obra Norte',
+    };
+    const t = makeContext(syncDescriptionSection('Notas del cliente', data), data);
 
     await unlinkField(t, 'contact');
 
@@ -34,23 +40,28 @@ describe('unlinkField', () => {
     expect(put[1].method).toBe('PUT');
     const desc = JSON.parse(put[1].body).desc;
     expect(desc).not.toContain('{{ contact:');
+    expect(desc).not.toContain('**Cliente:**');
     expect(desc).toContain('{{ project: Obra Norte }}'); // project tag preserved
+    expect(desc).toContain('**Proyecto:** [Obra Norte ↗]');
+    expect(desc).not.toContain('### Acciones rápidas');
 
     const saved = t.set.mock.calls[t.set.mock.calls.length - 1][3];
     expect(saved.contactId).toBeUndefined();
     expect(saved.contactName).toBeUndefined();
     expect(saved.addressLabel).toBeUndefined();
+    expect(saved.addressMapQuery).toBeUndefined();
     expect(saved.projectId).toBe('p1'); // project link preserved
   });
 
   it('removes a project tag whose value contains braces', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchImpl);
-    const t = makeContext('{{ project: Obra {Fase 2} }}', { projectId: 'p1', projectName: 'Obra {Fase 2}' });
+    const data = { projectId: 'p1', projectName: 'Obra {Fase 2}' };
+    const t = makeContext(syncDescriptionSection('Nota previa', data), data);
 
     await unlinkField(t, 'project');
 
-    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).desc).toBe('');
+    expect(JSON.parse(fetchImpl.mock.calls[0][1].body).desc).toBe('Nota previa');
     expect(t.set.mock.calls[t.set.mock.calls.length - 1][3].projectId).toBeUndefined();
   });
 

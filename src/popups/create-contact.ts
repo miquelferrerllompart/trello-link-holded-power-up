@@ -159,6 +159,7 @@ submitBtn.addEventListener('click', async (event) => {
         city: billAddress.city,
         postalCode: billAddress.postalCode,
         province: billAddress.province,
+        country: billAddress.country,
       },
       shippingAddresses: [],
     });
