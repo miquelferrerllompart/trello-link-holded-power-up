@@ -186,6 +186,17 @@ describe('popup search behavior', () => {
       });
     });
     expect(trello.closePopup).not.toHaveBeenCalled();
+    expect(JSON.parse(dom.window.localStorage.getItem('holdedPendingContact:card-1'))).toEqual({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: 'C/ Major 1',
+        city: 'Palma',
+        postalCode: '07001',
+        province: 'Illes Balears',
+      },
+      shippingAddresses: [],
+    });
 
     dom.window.close();
   });
@@ -247,6 +258,17 @@ describe('popup search behavior', () => {
       });
     });
     expect(trello.closePopup).not.toHaveBeenCalled();
+    expect(JSON.parse(dom.window.localStorage.getItem('holdedPendingContact:card-1'))).toEqual({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: 'C/ Major 1',
+        city: 'Palma',
+        postalCode: '07001',
+        province: 'Illes Balears',
+      },
+      shippingAddresses: [],
+    });
 
     dom.window.close();
   });
@@ -276,6 +298,40 @@ describe('popup search behavior', () => {
       expect(dom.window.document.querySelector('.result-status')?.textContent)
         .toBe('Cliente Uno · AUT3');
     });
+
+    dom.window.close();
+  });
+});
+
+describe('address selection behavior', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  it('offers address creation without rendering an empty billing address', async () => {
+    const { dom, trello } = installPopupDom('<div id="addresses"></div>');
+    trello.get.mockResolvedValue({
+      contactId: 'contact-1',
+      contactName: 'Cliente Uno',
+      billAddress: {
+        address: '',
+        city: '',
+        postalCode: '',
+        province: '',
+      },
+      shippingAddresses: [],
+    });
+
+    await import('./popups/select-address');
+
+    await vi.waitFor(() => {
+      expect(dom.window.document.getElementById('create-addr-btn')).not.toBeNull();
+    });
+    expect(dom.window.document.querySelector('.address-item')).toBeNull();
+    expect(dom.window.document.getElementById('create-addr-btn')?.textContent)
+      .toContain('Nueva dirección de envío');
 
     dom.window.close();
   });
