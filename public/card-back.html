@@ -593,6 +593,28 @@
       outline: 2px solid #388bff;
       outline-offset: 1px;
     }
+    .document-preview-load-more {
+      display: block;
+      width: 100%;
+      margin-top: 7px;
+      padding: 6px 8px;
+      border: 1px solid #091e4224;
+      border-radius: 6px;
+      background: #091e420f;
+      color: #0c66e4;
+      cursor: pointer;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 16px;
+      transition: background 120ms ease, border-color 120ms ease, transform 100ms cubic-bezier(0.23, 1, 0.32, 1);
+    }
+    .document-preview-load-more:hover { background: #091e4224; border-color: #579dff; }
+    .document-preview-load-more:active { transform: scale(0.98); }
+    .document-preview-load-more:focus-visible {
+      outline: 2px solid #388bff;
+      outline-offset: 1px;
+    }
     .document-preview-image {
       display: block;
       width: 100%;
@@ -1104,6 +1126,8 @@
       }
       .document-preview-image-link:hover { border-color: #579dff; }
       .document-preview-image { background: #38414a; }
+      .document-preview-load-more { border-color: #a6c5e229; background: #a6c5e214; color: #85b8ff; }
+      .document-preview-load-more:hover { background: #a6c5e229; border-color: #579dff; }
       .document-preview-file {
         border-color: #a6c5e229;
         background: #2c333a;
@@ -1154,6 +1178,7 @@
       .document-preview-toggle,
       .document-preview-chevron,
       .document-preview-image-link,
+      .document-preview-load-more,
       .document-preview-attachments-retry,
       .document-preview-file { transition: none; }
       .document-preview-attachments-slot[data-state="loaded"]
@@ -1365,16 +1390,32 @@
       { key: 'estimates', type: 'estimates', label: 'Presupuestos', loadingLabel: 'presupuestos', emptyAll: 'Este cliente no tiene presupuestos.', emptyProject: 'No hay presupuestos en el proyecto vinculado.' },
     ];
     var DOCUMENT_PAGE_SIZE = 10;
+    var ATTACHMENT_BATCH_SIZE = 5;
     var documentResults = {};
     var documentRequests = {};
+    var documentRequestControllers = {};
     var documentErrors = {};
     var documentViews = {};
     var documentRequestGeneration = 0;
 
     function invalidateDocumentResults() {
+      Object.keys(documentRequestControllers).forEach(function(pageKey) {
+        documentRequestControllers[pageKey].abort();
+      });
+      Object.keys(documentViews).forEach(function(viewKey) {
+        var view = documentViews[viewKey];
+        Object.keys(view.previewAttachmentRequests).forEach(function(previewId) {
+          var pending = view.previewAttachmentRequests[previewId];
+          if (pending.controller) pending.controller.abort();
+        });
+        view.previewAttachments = {};
+        view.previewAttachmentRequests = {};
+        view.previewAttachmentVisibleCounts = {};
+      });
       documentRequestGeneration += 1;
       documentResults = {};
       documentRequests = {};
+      documentRequestControllers = {};
       documentErrors = {};
     }
 
@@ -1394,6 +1435,7 @@
           previewStates: {}, // preview ID -> user-selected expanded state
           previewAttachments: {}, // preview ID -> { path, items }
           previewAttachmentRequests: {}, // preview ID -> { path, promise }
+          previewAttachmentVisibleCounts: {}, // preview ID -> visible image count
           pendingTabFocus: null,
         };
       }
@@ -1760,13 +1802,16 @@
         '</button>';
     }
 
-    function renderPreviewAttachments(attachments) {
+    function renderPreviewAttachments(attachments, visibleImageCount, previewId) {
       var images = attachments.filter(function(attachment) { return attachment.isImage; });
       var files = attachments.filter(function(attachment) { return !attachment.isImage; });
+      var imageLimit = Math.max(ATTACHMENT_BATCH_SIZE, Number(visibleImageCount) || ATTACHMENT_BATCH_SIZE);
+      var visibleImages = images.slice(0, imageLimit);
+      var remainingImages = images.length - visibleImages.length;
       var imagesHtml = images.length
         ? '<div class="document-preview-attachment-section document-preview-images-section">' +
             '<span class="document-preview-attachment-heading document-preview-images-heading">Imágenes · ' + images.length + '</span>' +
-            '<div class="document-preview-images">' + images.map(function(image) {
+            '<div class="document-preview-images">' + visibleImages.map(function(image) {
               return '<a class="document-preview-image-link" href="' + escapeHtml(image.url) + '"' +
                 ' target="_blank" rel="noopener noreferrer" aria-label="Abrir ' + escapeHtml(image.name) + ' en una pestaña nueva">' +
                   '<img class="document-preview-image" src="' + escapeHtml(image.thumbnailUrl || image.url) + '"' +
@@ -1774,6 +1819,11 @@
                   '<span class="document-preview-image-name">' + escapeHtml(image.name) + '</span>' +
                 '</a>';
             }).join('') + '</div>' +
+            (remainingImages && previewId
+              ? '<button type="button" class="document-preview-load-more" data-preview-id="' + escapeHtml(previewId) + '">' +
+                  'Cargar más · ' + Math.min(ATTACHMENT_BATCH_SIZE, remainingImages) + ' imágenes' +
+                '</button>'
+              : '') +
           '</div>'
         : '';
       var filesHtml = files.length
@@ -1797,9 +1847,10 @@
         : '';
     }
 
-    function renderDocumentPreview(documentItem, isExpanded) {
+    function renderDocumentPreview(documentItem, isExpanded, view) {
       var preview = getDocumentPreviewContent(documentItem);
       if (!hasDocumentPreview(documentItem)) return '';
+      var previewId = getDocumentPreviewId(documentItem);
 
       var notes = '';
       var internalNotesFirst = documentItem.type === 'waybills';
@@ -1821,8 +1872,15 @@
         '</div>';
       }
 
+      if (preview.attachments.length && !view.previewAttachments[previewId]) {
+        view.previewAttachments[previewId] = { path: 'inline', items: preview.attachments };
+      }
       var attachments = preview.attachments.length
-        ? renderPreviewAttachments(preview.attachments)
+        ? renderPreviewAttachments(
+            preview.attachments,
+            view.previewAttachmentVisibleCounts[previewId],
+            previewId
+          )
         : (preview.attachmentsUrl
           ? '<div class="document-preview-attachments-slot" aria-live="polite"></div>'
           : '');
@@ -1838,12 +1896,12 @@
       '</div>';
     }
 
-    function fetchDocumentAttachmentPages(path, cursor, items, pageCount) {
+    function fetchDocumentAttachmentPages(path, cursor, items, pageCount, signal) {
       if (pageCount >= 20) return Promise.resolve(items);
       var requestUrl = new URL(HOLDED_PROXY_URL + path);
       if (cursor) requestUrl.searchParams.set('cursor', cursor);
 
-      return fetch(requestUrl.toString())
+      return fetch(requestUrl.toString(), { cache: 'no-store', signal: signal })
         .then(function(response) {
           return response.json()
             .catch(function() { return {}; })
@@ -1851,20 +1909,65 @@
               if (!response.ok) throw new Error('attachment-list');
               var nextItems = items.concat(Array.isArray(body.items) ? body.items : []);
               if (body.hasMore && body.nextCursor) {
-                return fetchDocumentAttachmentPages(path, body.nextCursor, nextItems, pageCount + 1);
+                return fetchDocumentAttachmentPages(path, body.nextCursor, nextItems, pageCount + 1, signal);
               }
               return nextItems;
             });
         });
     }
 
-    function renderDocumentAttachmentItems(slot, attachments) {
+    function renderDocumentAttachmentItems(slot, attachments, view, previewId) {
       slot.setAttribute('data-state', 'loaded');
       var normalized = getPreviewAttachments({ attachments: attachments });
       slot.innerHTML = normalized.length
-        ? renderPreviewAttachments(normalized)
+        ? renderPreviewAttachments(
+            normalized,
+            view.previewAttachmentVisibleCounts[previewId],
+            previewId
+          )
         : '<div class="document-preview-attachments-state">Sin archivos adjuntos.</div>';
       t.sizeTo(contentDiv).catch(function() {});
+    }
+
+    function bindDocumentPreviewLoadMore(container) {
+      if (container.getAttribute('data-load-more-bound') === 'true') return;
+      container.setAttribute('data-load-more-bound', 'true');
+      container.addEventListener('click', function(event) {
+        var target = event.target;
+        var button = target && target.closest
+          ? target.closest('.document-preview-load-more')
+          : null;
+        if (!button || !container.contains(button)) return;
+
+        var previewId = button.getAttribute('data-preview-id');
+        var preview = previewId ? document.getElementById(previewId) : null;
+        if (!previewId || !preview) return;
+
+        var view = getDocumentsView({
+          contactId: container.getAttribute('data-contact-id') || '',
+          projectId: container.getAttribute('data-project-id') || '',
+        });
+        var cached = view.previewAttachments[previewId];
+        if (!cached) return;
+
+        var visibleCount = (view.previewAttachmentVisibleCounts[previewId] || ATTACHMENT_BATCH_SIZE) +
+          ATTACHMENT_BATCH_SIZE;
+        view.previewAttachmentVisibleCounts[previewId] = visibleCount;
+        var slot = preview.querySelector('.document-preview-attachments-slot');
+        if (slot) {
+          renderDocumentAttachmentItems(slot, cached.items, view, previewId);
+          return;
+        }
+
+        var normalized = cached.path === 'inline'
+          ? cached.items
+          : getPreviewAttachments({ attachments: cached.items });
+        var attachmentBlock = preview.querySelector('.document-preview-attachments');
+        if (attachmentBlock) {
+          attachmentBlock.outerHTML = renderPreviewAttachments(normalized, visibleCount, previewId);
+          t.sizeTo(contentDiv).catch(function() {});
+        }
+      });
     }
 
     function renderDocumentAttachmentError(slot, preview, path, view, previewId, err) {
@@ -1892,7 +1995,7 @@
       var cached = view.previewAttachments[previewId];
       if (cached && cached.path === path) {
         preview.setAttribute('data-static-motion', 'true');
-        renderDocumentAttachmentItems(slot, cached.items);
+        renderDocumentAttachmentItems(slot, cached.items, view, previewId);
         return;
       }
 
@@ -1907,9 +2010,11 @@
         preview.setAttribute('data-static-motion', 'true');
       }
       if (!pending || pending.path !== path) {
+        var controller = new AbortController();
         pending = {
           path: path,
-          promise: fetchDocumentAttachmentPages(path, null, [], 0),
+          controller: controller,
+          promise: fetchDocumentAttachmentPages(path, null, [], 0, controller.signal),
         };
         view.previewAttachmentRequests[previewId] = pending;
       }
@@ -1922,7 +2027,7 @@
           }
           var resolved = view.previewAttachments[previewId];
           if (resolved && resolved.path === path) {
-            renderDocumentAttachmentItems(slot, resolved.items);
+            renderDocumentAttachmentItems(slot, resolved.items, view, previewId);
           }
         })
         .catch(function(err) {
@@ -1931,6 +2036,7 @@
           } else if (view.previewAttachmentRequests[previewId]) {
             return;
           }
+          if (err && err.name === 'AbortError') return;
           renderDocumentAttachmentError(slot, preview, path, view, previewId, err);
         });
     }
@@ -1972,7 +2078,7 @@
         ' src="' + getDocumentKindIconSource(documentItem) + '" alt="" aria-hidden="true" />';
     }
 
-    function renderDocumentRow(documentItem, data, scope, isPreviewExpanded) {
+    function renderDocumentRow(documentItem, data, scope, isPreviewExpanded, view) {
       var number = getDocumentNumber(documentItem);
       var isWaybill = documentItem.type === 'waybills';
       var hasPreview = hasDocumentPreview(documentItem);
@@ -1994,10 +2100,10 @@
         renderDocumentTime(documentItem) +
         renderDocumentActions(documentItem, number, isPreviewExpanded) +
       '</div>' +
-      renderDocumentPreview(documentItem, isPreviewExpanded);
+      renderDocumentPreview(documentItem, isPreviewExpanded, view);
     }
 
-    function renderPurchaseOrderRow(purchaseOrder, isPreviewExpanded) {
+    function renderPurchaseOrderRow(purchaseOrder, isPreviewExpanded, view) {
       var number = getDocumentNumber(purchaseOrder);
       var supplier = purchaseOrder.supplier && purchaseOrder.supplier.name ? purchaseOrder.supplier.name : '';
       return '<div class="relation-child-row purchase-order-row' +
@@ -2011,7 +2117,7 @@
         renderDocumentTime(purchaseOrder) +
         renderDocumentActions(purchaseOrder, number, isPreviewExpanded) +
       '</div>' +
-      renderDocumentPreview(purchaseOrder, isPreviewExpanded);
+      renderDocumentPreview(purchaseOrder, isPreviewExpanded, view);
     }
 
     function renderWaybillKind(kind) {
@@ -2029,7 +2135,7 @@
         : '';
     }
 
-    function renderRelatedWaybillRow(waybill, isPreviewExpanded) {
+    function renderRelatedWaybillRow(waybill, isPreviewExpanded, view) {
       var number = getDocumentNumber(waybill);
       return '<div class="relation-child-row related-waybill-row' +
         (hasDocumentPreview(waybill) ? ' relation-child-row--has-preview' : '') + '">' +
@@ -2044,7 +2150,7 @@
         renderDocumentTime(waybill) +
         renderDocumentActions(waybill, number, isPreviewExpanded) +
       '</div>' +
-      renderDocumentPreview(waybill, isPreviewExpanded);
+      renderDocumentPreview(waybill, isPreviewExpanded, view);
     }
 
     function groupDocumentsByDay(items) {
@@ -2093,8 +2199,8 @@
           group.items.map(function(item) {
             var isPreviewExpanded = getDocumentPreviewExpandedState(view, item, false);
             return item.type === 'purchase-orders'
-              ? renderPurchaseOrderRow(item, isPreviewExpanded)
-              : renderRelatedWaybillRow(item, isPreviewExpanded);
+              ? renderPurchaseOrderRow(item, isPreviewExpanded, view)
+              : renderRelatedWaybillRow(item, isPreviewExpanded, view);
           }).join('') +
         '</section>';
       }).join('');
@@ -2104,9 +2210,9 @@
       // Pedidos also contains warehouse documents without a source order. They
       // intentionally use the regular document row rather than an empty rail.
       if (order.type === 'waybills') {
-        return renderDocumentRow(order, data, scope, getDocumentPreviewExpandedState(view, order, false));
+        return renderDocumentRow(order, data, scope, getDocumentPreviewExpandedState(view, order, false), view);
       }
-      var html = renderDocumentRow(order, data, scope, getDocumentPreviewExpandedState(view, order, false));
+      var html = renderDocumentRow(order, data, scope, getDocumentPreviewExpandedState(view, order, false), view);
       var purchaseOrders = order.purchaseOrders || [];
       var waybills = order.waybills || [];
       if (purchaseOrders.length || waybills.length) {
@@ -2142,7 +2248,8 @@
                 item,
                 data,
                 scope,
-                getDocumentPreviewExpandedState(view, item, shouldExpandPreviews)
+                getDocumentPreviewExpandedState(view, item, shouldExpandPreviews),
+                view
               );
             }).join('');
         return '<section class="document-day-group" aria-labelledby="' + headingId + '">' +
@@ -2223,9 +2330,11 @@
       }
 
       documentRequests[pageKey] = requestGeneration;
+      var controller = new AbortController();
+      documentRequestControllers[pageKey] = controller;
       delete documentErrors[pageKey];
 
-      fetch(HOLDED_PROXY_URL + '/v2/documents/search?' + params.toString(), { cache: 'no-store' })
+      fetch(HOLDED_PROXY_URL + '/v2/documents/search?' + params.toString(), { cache: 'no-store', signal: controller.signal })
         .then(function(response) {
           return response.json()
             .catch(function() { return {}; })
@@ -2234,6 +2343,7 @@
         .then(function(res) {
           if (requestGeneration !== documentRequestGeneration) return;
           delete documentRequests[pageKey];
+          delete documentRequestControllers[pageKey];
           if (!res.ok) {
             var code = res.body && res.body.error && res.body.error.code;
             documentErrors[pageKey] = { code: code === 'DATA_NOT_READY' ? 'DATA_NOT_READY' : 'GENERIC' };
@@ -2255,6 +2365,8 @@
         .catch(function(err) {
           if (requestGeneration !== documentRequestGeneration) return;
           delete documentRequests[pageKey];
+          delete documentRequestControllers[pageKey];
+          if (err && err.name === 'AbortError') return;
           documentErrors[pageKey] = { code: 'GENERIC' };
           console.warn('Holded: error loading documents', err);
           renderDocumentsPanel(data);
@@ -2267,6 +2379,7 @@
         container.getAttribute('data-contact-id') !== (data.contactId || '') ||
         container.getAttribute('data-project-id') !== (data.projectId || '')) return;
 
+      bindDocumentPreviewLoadMore(container);
       var view = getDocumentsView(data);
       var activeTab = getDocumentTab(view.activeKey);
       var scope = view.scope === 'all' ? 'all' : 'matched';
