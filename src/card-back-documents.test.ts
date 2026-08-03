@@ -373,7 +373,7 @@ describe('card-back document view (internal API v2)', () => {
       invoices: [],
       estimates: [],
     };
-    const { dom, urls, rerender } = loadCardBack(documents, { documentDelayMs: 80 });
+    const { dom, urls, requests, rerender } = loadCardBack(documents, { documentDelayMs: 80 });
     const salesOrderRequests = () => urls.filter((url) => url.includes('type=sales-orders'));
 
     await waitForRender();
@@ -382,6 +382,7 @@ describe('card-back document view (internal API v2)', () => {
 
     documents.salesOrders[0].internalStatus = 'all_delivered';
     rerender();
+    expect(requests.find(({ url }) => url.includes('type=sales-orders'))?.init?.signal?.aborted).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 180));
 
     expect(salesOrderRequests()).toHaveLength(2);
@@ -607,8 +608,8 @@ describe('card-back document view (internal API v2)', () => {
     expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(attachmentRequests);
   });
 
-  it('reuses attachments for an expanded work-report preview after the panel rerenders', async () => {
-    const { dom, urls } = loadCardBack({
+  it('does not retain attachment metadata after the panel rerenders', async () => {
+    const { dom, urls, requests } = loadCardBack({
       salesOrders: [],
       invoices: [],
       estimates: [],
@@ -628,15 +629,14 @@ describe('card-back document view (internal API v2)', () => {
 
     selectDocumentTab(dom, 'invoices');
     selectDocumentTab(dom, 'waybills');
-    await waitForRender();
-    await waitForRender();
+    await new Promise((resolve) => setTimeout(resolve, 250));
 
     expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('true');
     const preview = dom.window.document.querySelector('.document-preview');
-    expect(preview?.getAttribute('data-static-motion')).toBe('true');
     expect(preview?.querySelector('.document-preview-image-link')).not.toBeNull();
     expect(preview?.textContent).not.toContain('Cargando adjuntos…');
-    expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(1);
+    expect(urls.filter((url) => url.includes('/waybills/latest/attachments'))).toHaveLength(2);
+    expect(requests.find(({ url }) => url.includes('/waybills/latest/attachments'))?.init?.cache).toBe('no-store');
   });
 
   it('does not open previews by default on later work-report pages', async () => {
@@ -662,6 +662,40 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.document.querySelector('.documents-page-label')?.textContent).toBe('Página 2');
     expect(dom.window.document.querySelector('.document-preview-toggle')?.getAttribute('aria-expanded')).toBe('false');
     expect(dom.window.document.querySelector('.document-preview')?.hasAttribute('hidden')).toBe(true);
+  });
+
+  it('renders work-report images in batches of five', async () => {
+    const attachments = Array.from({ length: 11 }, (_, index) => ({
+      id: `photo-${index + 1}`,
+      name: `foto-${index + 1}.jpg`,
+      url: `https://cdn.example.com/foto-${index + 1}.jpg`,
+      mimeType: 'image/jpeg',
+    }));
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      invoices: [],
+      estimates: [],
+      waybills: [
+        { id: 'many-images', type: 'waybills', documentNumber: 'ALB-FOTOS', kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-07-15', attachmentsUrl: '/v2/documents/waybills/many-images/attachments', projects: [] },
+      ],
+    }, { attachments });
+
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    expect(dom.window.document.querySelectorAll('.document-preview-image-link')).toHaveLength(5);
+    const loadMore = dom.window.document.querySelector('.document-preview-load-more');
+    expect(loadMore?.textContent).toContain('Cargar más');
+
+    loadMore?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    expect(dom.window.document.querySelectorAll('.document-preview-image-link')).toHaveLength(10);
+
+    dom.window.document.querySelector('.document-preview-load-more')?.dispatchEvent(
+      new dom.window.MouseEvent('click', { bubbles: true }),
+    );
+    expect(dom.window.document.querySelectorAll('.document-preview-image-link')).toHaveLength(11);
+    expect(dom.window.document.querySelector('.document-preview-load-more')).toBeNull();
   });
 
   it('only omits a Pedido child day divider when it is immediately below its parent', async () => {
