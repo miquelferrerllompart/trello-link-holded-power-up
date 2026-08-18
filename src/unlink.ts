@@ -15,6 +15,8 @@ export async function unlinkField(t: TrelloContext, field: 'contact' | 'project'
   if (field === 'contact') {
     delete data.contactId;
     delete data.contactName;
+    delete data.email;
+    delete data.phone;
     delete data.addressLabel;
     delete data.addressMapQuery;
   } else {

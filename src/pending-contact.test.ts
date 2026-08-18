@@ -6,6 +6,8 @@ describe('buildPendingContactSelection', () => {
   it('keeps only the address fields needed by the address popup', () => {
     const contact = {
       id: 'contact-1',
+      email: 'cliente@example.com',
+      phone: '971 123 456',
       billAddress: {
         address: '  C/ Mayor 1  ',
         city: '  Palma  ',
@@ -36,6 +38,8 @@ describe('buildPendingContactSelection', () => {
     expect(pending).toEqual({
       contactId: 'contact-1',
       contactName: 'Cliente',
+      email: 'cliente@example.com',
+      phone: '971 123 456',
       billAddress: {
         address: 'C/ Mayor 1',
         city: 'Palma',
