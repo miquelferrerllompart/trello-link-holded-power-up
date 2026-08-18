@@ -289,6 +289,117 @@ describe('Worker /v2 internal-API document routes', () => {
     });
   });
 
+  it('includes the sales-order creation date and creator from document events', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/documents/sales-order/so-creator/events')) {
+        return internalJson({
+          items: [{
+            type: 'document.created',
+            occurredAt: '2026-08-18T13:25:44.078Z',
+            user: { email: 'creator@example.com', name: 'Andrés Gamundí Campomar' },
+          }],
+          hasMore: false,
+          nextCursor: null,
+        });
+      }
+      if (input.includes('/purchase-orders') || input.includes('/waybills')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false }, readiness: 'ready' });
+      }
+      return internalJson({
+        items: [{
+          id: 'so-creator',
+          docNumber: 'PV-26-008783',
+          issueDate: '2026-08-18',
+          dueDate: null,
+          status: 'pending',
+          rawStatus: '0',
+          isDraft: false,
+          approvedAt: null,
+          customer: { id: 'contact-1', name: 'Acme' },
+          projects: [],
+          totalUnits: 1,
+          deliveryCount: 0,
+          internalStatus: 'requested',
+          notes: null,
+          internalNotes: null,
+          attachmentsUrl: '/internal/v1/sales-orders/so-creator/attachments',
+        }],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+        readiness: 'ready',
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&page=1&scope=matched'),
+      envV2,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.results[0]).toMatchObject({
+      id: 'so-creator',
+      createdAt: '2026-08-18T13:25:44.078Z',
+      createdBy: 'Andrés Gamundí Campomar',
+    });
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/documents/sales-order/so-creator/events?limit=50`,
+    );
+  });
+
+  it('includes the work-report creation date and creator from document events', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/documents/waybill/wb-creator/events')) {
+        return internalJson({
+          items: [{
+            type: 'document.created',
+            occurredAt: '2026-08-18T13:25:44.078Z',
+            user: { name: 'Marta Ferrer' },
+          }],
+          hasMore: false,
+          nextCursor: null,
+        });
+      }
+      return internalJson({
+        items: [{
+          id: 'wb-creator',
+          docNumber: 'ALB-26-000123',
+          kind: 'labour',
+          issueDate: '2026-08-18',
+          status: 'pending',
+          rawStatus: '0',
+          approvedAt: null,
+          workflowStatus: 'prepared',
+          customer: { id: 'contact-1', name: 'Acme' },
+          projects: [],
+          sourceOrder: null,
+          notes: null,
+          internalNotes: null,
+          attachmentsUrl: '/internal/v1/waybills/wb-creator/attachments',
+        }],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+        readiness: 'ready',
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=waybills&category=work&page=1&scope=matched'),
+      envV2,
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.results[0]).toMatchObject({
+      id: 'wb-creator',
+      createdAt: '2026-08-18T13:25:44.078Z',
+      createdBy: 'Marta Ferrer',
+    });
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/documents/waybill/wb-creator/events?limit=50`,
+    );
+  });
+
   it('nests purchase orders under their source sales order and drops orphan/off-page POs', async () => {
     const salesOrder = (id: string, docNumber: string) => ({
       id,
@@ -1050,7 +1161,7 @@ describe('Worker /v2 internal-API document routes', () => {
     const body = await response.json() as { results: Array<{ id: string }>; hasMore: boolean };
 
     expect(response.status).toBe(200);
-    expect(fetchImpl).toHaveBeenCalledTimes(11);
+    expect(fetchImpl.mock.calls.filter(([input]) => input.includes('/waybills?'))).toHaveLength(11);
     expect(body.results.map((item) => item.id)).toEqual(['labour-after-1000']);
     expect(body.hasMore).toBe(false);
   });
@@ -1079,7 +1190,7 @@ describe('Worker /v2 internal-API document routes', () => {
     const body = await response.json() as { results: Array<{ id: string }>; hasMore: boolean };
 
     expect(response.status).toBe(200);
-    expect(fetchImpl).toHaveBeenCalledTimes(40);
+    expect(fetchImpl.mock.calls.filter(([input]) => input.includes('/waybills?'))).toHaveLength(40);
     expect(body.results).toEqual([]);
     expect(body.hasMore).toBe(false);
   });

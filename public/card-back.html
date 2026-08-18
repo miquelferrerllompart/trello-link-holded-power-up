@@ -739,6 +739,21 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .document-identity {
+      display: grid;
+      min-width: 0;
+      gap: 1px;
+    }
+    .document-creator {
+      min-width: 0;
+      overflow: hidden;
+      color: #6b778c;
+      font-size: 10px;
+      font-weight: 600;
+      line-height: 13px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .document-meta {
       display: flex;
       min-width: 0;
@@ -1065,6 +1080,7 @@
       .documents-count,
       .documents-hint,
       .document-time,
+      .document-creator,
       .documents-note,
       .documents-loading-label,
       .documents-range,
@@ -1236,7 +1252,8 @@
         grid-row: 1;
       }
       .document-row > .document-number,
-      .document-row > .document-waybill-identity {
+      .document-row > .document-waybill-identity,
+      .document-row > .document-identity {
         grid-column: 2;
         grid-row: 1;
       }
@@ -1572,6 +1589,17 @@
       return dateLabel + ' ' + timeLabel;
     }
 
+    function formatCreationDateLabel(value) {
+      if (!value) return '';
+      var date = new Date(String(value));
+      if (Number.isNaN(date.getTime())) return '';
+      return date.toLocaleDateString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    }
+
     function getDocumentNumber(documentItem) {
       var fallback = documentItem.type === 'sales-orders' ? 'PV ' :
         documentItem.type === 'purchase-orders' ? 'PC ' :
@@ -1588,6 +1616,22 @@
 
     function getDocumentMoment(documentItem) {
       return getDateMoment(documentItem.approvedAt || documentItem.sentAt || documentItem.issueDate);
+    }
+
+    function renderDocumentCreator(documentItem) {
+      var isSalesOrder = documentItem.type === 'sales-orders';
+      var isWorkReport = documentItem.type === 'waybills' &&
+        ['labour', 'mixed', 'extra', 'unclassified'].includes(documentItem.kind || 'unclassified');
+      if (!isSalesOrder && !isWorkReport) return '';
+      var createdBy = String(documentItem.createdBy || '').trim();
+      var createdAt = formatCreationDateLabel(documentItem.createdAt);
+      if (!createdBy && !createdAt) return '';
+      var verb = isWorkReport ? 'Realizado' : 'Creado';
+      var text = createdBy ? verb + ' por ' + createdBy : verb + ' el ' + createdAt;
+      if (createdBy && createdAt) text += ' · ' + createdAt;
+      return '<span class="document-creator" title="' + escapeHtml(text) + '">' +
+        escapeHtml(text) +
+      '</span>';
     }
 
     function renderDocumentTime(documentItem) {
@@ -2086,8 +2130,12 @@
         ? '<span class="document-waybill-identity">' +
             '<span class="document-number">' + escapeHtml(number) + '</span>' +
             renderWaybillKind(documentItem.kind) +
+            renderDocumentCreator(documentItem) +
           '</span>'
-        : '<span class="document-number">' + escapeHtml(number) + '</span>';
+        : '<span class="document-identity">' +
+            '<span class="document-number">' + escapeHtml(number) + '</span>' +
+            renderDocumentCreator(documentItem) +
+          '</span>';
       return '<div class="document-row' + (isWaybill ? ' document-row--waybill' : '') +
         (hasPreview ? ' document-row--has-preview' : '') + '">' +
         renderDocumentKindIcon(documentItem, false) +
