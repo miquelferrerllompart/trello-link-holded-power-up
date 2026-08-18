@@ -290,6 +290,50 @@ describe('card-back document view (internal API v2)', () => {
     expect(contentText(dom)).not.toContain('Completado');
   });
 
+  it('shows who created a sales order and when it was created', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-creator', 'PV-26-008783', {
+        createdAt: '2026-08-18T13:25:44.078Z',
+        createdBy: 'Andrés Gamundí Campomar',
+      })],
+      waybills: [],
+      estimates: [],
+    });
+    await waitForRender();
+    expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    const creator = dom.window.document.querySelector('.document-creator');
+    expect(creator?.textContent).toContain('Creado por Andrés Gamundí Campomar');
+    expect(creator?.textContent).toContain('18/08/2026');
+  });
+
+  it('shows who completed a work report and when it was created', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [],
+      waybills: [{
+        id: 'wb-creator',
+        type: 'waybills',
+        documentNumber: 'ALB-26-000123',
+        kind: 'labour',
+        workflowStatus: 'prepared',
+        issueDate: '2026-08-18',
+        createdAt: '2026-08-18T13:25:44.078Z',
+        createdBy: 'Marta Ferrer',
+        projects: [],
+      }],
+      estimates: [],
+    });
+    await waitForRender();
+    expand(dom);
+    await waitForRender();
+
+    const creator = dom.window.document.querySelector('.document-creator');
+    expect(creator?.textContent).toContain('Realizado por Marta Ferrer');
+    expect(creator?.textContent).toContain('18/08/2026');
+  });
+
   it('fetches fresh document data whenever a tab is activated again', async () => {
     const documents = {
       salesOrders: [salesOrder('so-1', 'PV-1', { internalStatus: 'partially_delivered' })],

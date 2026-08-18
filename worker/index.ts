@@ -176,9 +176,43 @@ function mapInternalSalesOrder(item: Record<string, any>) {
     dueDate: item.dueDate ?? null,
     deliveryCount: item.deliveryCount ?? 0,
     totalUnits: item.totalUnits ?? 0,
+    ...(typeof item.createdAt === 'string' ? { createdAt: item.createdAt } : {}),
+    ...(typeof item.createdBy === 'string' ? { createdBy: item.createdBy } : {}),
     ...mapDocumentPreview(item, 'sales-orders', item.id),
     projects: (item.projects ?? []) as InternalProjectRef[],
   };
+}
+
+async function enrichDocumentCreationMetadata(
+  items: Array<Record<string, any>>,
+  apiKey: string,
+  documentType: 'sales-order' | 'waybill',
+): Promise<Array<Record<string, any>>> {
+  return Promise.all(items.map(async (item) => {
+    if (!item.id || (typeof item.createdAt === 'string' && typeof item.createdBy === 'string')) {
+      return item;
+    }
+
+    try {
+      const events = await internalApiGet<{
+        items?: Array<Record<string, any>>;
+      }>(`/documents/${documentType}/${encodeURIComponent(String(item.id))}/events`, apiKey, {
+        query: { limit: '50' },
+      });
+      const createdEvent = (events.items ?? []).find((event) => event.type === 'document.created');
+      const createdAt = typeof createdEvent?.occurredAt === 'string' ? createdEvent.occurredAt : null;
+      const createdBy = typeof createdEvent?.user?.name === 'string' ? createdEvent.user.name : null;
+      if (!createdAt && !createdBy) return item;
+      return {
+        ...item,
+        ...(createdAt ? { createdAt } : {}),
+        ...(createdBy ? { createdBy } : {}),
+      };
+    } catch {
+      // Creation metadata is supplemental; a failed event lookup must not hide the order.
+      return item;
+    }
+  }));
 }
 
 function mapInternalWaybill(item: Record<string, any>) {
@@ -191,6 +225,8 @@ function mapInternalWaybill(item: Record<string, any>) {
     issueDate: item.issueDate ?? null,
     workflowStatus: item.workflowStatus ?? null,
     approvedAt: item.approvedAt ?? null,
+    ...(typeof item.createdAt === 'string' ? { createdAt: item.createdAt } : {}),
+    ...(typeof item.createdBy === 'string' ? { createdBy: item.createdBy } : {}),
     ...mapDocumentPreview(item, 'waybills', item.id),
     sourceOrder: (item.sourceOrder ?? null) as InternalSourceOrderRef | null,
     projects: (item.projects ?? []) as InternalProjectRef[],
@@ -743,13 +779,20 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
         sourcesResult.value.waybills,
       );
       const start = (requestedPage - 1) * V2_PAGE_SIZE;
+      const pageResults = results.slice(start, start + V2_PAGE_SIZE);
+      const enrichedSalesOrders = await enrichDocumentCreationMetadata(
+        pageResults.filter((item) => item.type === 'sales-orders'),
+        apiKey,
+        'sales-order',
+      );
+      const creationById = new Map(enrichedSalesOrders.map((item) => [item.id, item]));
       return jsonResponse({
         type,
         scope,
         page: requestedPage,
         pageSize: V2_PAGE_SIZE,
         hasMore: start + V2_PAGE_SIZE < results.length,
-        results: results.slice(start, start + V2_PAGE_SIZE),
+        results: pageResults.map((item) => creationById.get(item.id) ?? item),
         ...(purchaseOrdersResult.status === 'rejected' ? { purchaseOrdersError: true } : {}),
         ...(sourcesResult.value.waybillsError ? { waybillsError: true } : {}),
       });
@@ -763,13 +806,16 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
         category,
         requestedPage,
       );
+      const enrichedItems = category === 'work'
+        ? await enrichDocumentCreationMetadata(categoryPage.items, apiKey, 'waybill')
+        : categoryPage.items;
       return jsonResponse({
         type,
         scope,
         page: requestedPage,
         pageSize: V2_PAGE_SIZE,
         hasMore: categoryPage.hasMore,
-        results: categoryPage.items.map(mapInternalWaybill),
+        results: enrichedItems.map(mapInternalWaybill),
       });
     }
 
@@ -784,7 +830,8 @@ async function handleV2DocumentsSearch(url: URL, env: Env): Promise<Response> {
     });
 
     if (type === 'sales-orders') {
-      const salesOrders = (page.items ?? []).map(mapInternalSalesOrder);
+      const enrichedItems = await enrichDocumentCreationMetadata(page.items ?? [], apiKey, 'sales-order');
+      const salesOrders = enrichedItems.map(mapInternalSalesOrder);
       const [purchaseOrdersResult, waybillsResult] = await Promise.allSettled([
         fetchCustomerPurchaseOrders(apiKey, contactId, effectiveProjectId),
         fetchCustomerWaybills(apiKey, contactId, effectiveProjectId),
