@@ -270,6 +270,7 @@ describe('popup search behavior', () => {
     expect(JSON.parse(dom.window.localStorage.getItem('holdedPendingContact:card-1'))).toEqual({
       contactId: 'contact-1',
       contactName: 'Cliente Uno',
+      email: 'cliente@example.com',
       billAddress: {
         address: 'C/ Major 1',
         city: 'Palma',
@@ -351,7 +352,8 @@ describe('popup search behavior', () => {
     expect(description).toContain(
       '/pedido/nuevo?projectId=project-1&customerId=customer-1'
     );
-    expect(description.endsWith('{{ project: Obra Norte }}')).toBe(true);
+    expect(description.startsWith('## Cliente y proyecto\n\n')).toBe(true);
+    expect(description.endsWith('Nota de montaje.')).toBe(true);
 
     dom.window.close();
   });
@@ -466,6 +468,8 @@ describe('address selection behavior', () => {
     const pending = {
       contactId: 'customer-1',
       contactName: 'Cliente Uno',
+      email: 'cliente@example.com',
+      phone: '971 123 456',
       billAddress: {
         address: 'C/ Major 1',
         city: 'Palma',
@@ -503,8 +507,11 @@ describe('address selection behavior', () => {
     expect(description).toContain(
       '**Dirección:** [C/ Major 1, 07001 Palma, Illes Balears, España ↗](https://www.google.com/maps/search/?api=1&query=C%2F%20Major%201%2C%2007001%20Palma%2C%20Illes%20Balears%2C%20Espa%C3%B1a)'
     );
+    expect(description).toContain('**Teléfono:** [971 123 456 ↗](tel:971123456)');
+    expect(description).toContain('**Email:** [cliente@example.com ↗](mailto:cliente%40example.com)');
     expect(description).toContain('{{ contact: Cliente Uno | C/ Major 1, Palma }}');
-    expect(description.endsWith('{{ project: Obra Norte }}')).toBe(true);
+    expect(description.startsWith('## Cliente y proyecto\n\n')).toBe(true);
+    expect(description.endsWith('Nota de montaje.')).toBe(true);
     const saved = trello.set.mock.calls.find((call) => call[2] === 'holdedData')?.[3];
     expect(saved.addressMapQuery).toBe('C/ Major 1, 07001 Palma, Illes Balears, España');
 

@@ -28,6 +28,8 @@ export function buildPendingContactSelection(contact: HoldedContact, contactName
   return {
     contactId: contact.id,
     contactName,
+    email: clean(contact.email) || undefined,
+    phone: clean(contact.phone) || clean(contact.mobile) || undefined,
     billAddress: {
       address: clean(contact.billAddress?.address),
       city: clean(contact.billAddress?.city),

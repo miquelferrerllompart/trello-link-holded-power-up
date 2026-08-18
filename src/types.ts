@@ -159,6 +159,8 @@ export interface HoldedSalesOrder {
 export interface CardHoldedData {
   contactId?: string;
   contactName?: string;
+  email?: string;
+  phone?: string;
   /** Short label for the selected address (shipping name or "street, city") */
   addressLabel?: string;
   /** Complete selected address used for the Google Maps destination. */
@@ -175,6 +177,8 @@ export type PendingShippingAddress = Pick<HoldedShippingAddress, 'name' | 'addre
 export interface PendingContactSelection {
   contactId: string;
   contactName: string;
+  email?: string;
+  phone?: string;
   billAddress: PendingBillAddress;
   shippingAddresses: PendingShippingAddress[];
 }

@@ -39,6 +39,26 @@ describe('removeTag', () => {
 });
 
 describe('syncDescriptionSection', () => {
+  it('puts the generated section first and links the customer contact details', () => {
+    const result = syncDescriptionSection('Revisar medidas antes de empezar.', {
+      contactId: 'customer-1',
+      contactName: 'Hotel Mar Blau',
+      email: 'cliente@example.com',
+      phone: '+34 971 123 456',
+    });
+
+    expect(result).toBe(
+      '## Cliente y proyecto\n\n' +
+      '_Sincronizado automáticamente con Eléctrica Ferrer._\n\n' +
+      '**Cliente:** [Hotel Mar Blau ↗](https://app.electricaferrer.es/contacto/customer-1)\n\n' +
+      '**Teléfono:** [+34 971 123 456 ↗](tel:+34971123456)\n\n' +
+      '**Email:** [cliente@example.com ↗](mailto:cliente%40example.com)\n\n' +
+      '{{ contact: Hotel Mar Blau }}\n\n' +
+      '---\n\n' +
+      'Revisar medidas antes de empezar.'
+    );
+  });
+
   it('links the complete selected address to Google Maps', () => {
     const result = syncDescriptionSection('', {
       contactId: 'customer-1',
@@ -63,8 +83,6 @@ describe('syncDescriptionSection', () => {
     });
 
     expect(result).toBe(
-      'Revisar medidas antes de empezar.\n\n' +
-      '---\n\n' +
       '## Cliente y proyecto\n\n' +
       '_Sincronizado automáticamente con Eléctrica Ferrer._\n\n' +
       '**Cliente:** [Hotel Mar Blau ↗](https://app.electricaferrer.es/contacto/customer-1)\n\n' +
@@ -74,7 +92,9 @@ describe('syncDescriptionSection', () => {
       '- **[⚡ Crear albarán extra ↗](https://app.electricaferrer.es/albaran-trabajo-extra/nuevo?projectId=project-1&customerId=customer-1)**\n' +
       '- **[📦 Crear pedido de material ↗](https://app.electricaferrer.es/pedido/nuevo?projectId=project-1&customerId=customer-1)**\n\n' +
       '{{ contact: Hotel Mar Blau | Passeig Marítim 8 }}\n' +
-      '{{ project: Renovación del cuadro general }}'
+      '{{ project: Renovación del cuadro general }}\n\n' +
+      '---\n\n' +
+      'Revisar medidas antes de empezar.'
     );
   });
 
@@ -111,7 +131,8 @@ describe('syncDescriptionSection', () => {
     expect(result).not.toContain('project-old');
     expect(result).toContain('Nota original.');
     expect(result).toContain('Nota añadida después.');
-    expect(result.endsWith('{{ project: Proyecto nuevo }}')).toBe(true);
+    expect(result.startsWith('## Cliente y proyecto\n\n')).toBe(true);
+    expect(result.endsWith('Nota original.\n\nNota añadida después.')).toBe(true);
   });
 
   it('preserves user text and tags appended after the generated section', () => {
@@ -188,7 +209,8 @@ describe('syncDescriptionSection', () => {
     expect(result.match(/\{\{ project:/g)).toHaveLength(1);
     expect(result).not.toContain('Cliente anterior');
     expect(result).not.toContain('Proyecto anterior');
-    expect(result.startsWith('Texto del usuario.\n\n---')).toBe(true);
+    expect(result.startsWith('## Cliente y proyecto\n\n')).toBe(true);
+    expect(result.endsWith('Texto del usuario.')).toBe(true);
   });
 
   it('removes the whole generated suffix when neither entity remains linked', () => {

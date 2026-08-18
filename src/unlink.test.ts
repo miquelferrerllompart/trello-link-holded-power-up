@@ -26,6 +26,8 @@ describe('unlinkField', () => {
     const data = {
       contactId: 'c1',
       contactName: 'Cliente',
+      email: 'cliente@example.com',
+      phone: '971 123 456',
       addressLabel: 'Calle Mayor 1',
       addressMapQuery: 'Calle Mayor 1, 07001 Palma, Illes Balears',
       projectId: 'p1',
@@ -48,6 +50,8 @@ describe('unlinkField', () => {
     const saved = t.set.mock.calls[t.set.mock.calls.length - 1][3];
     expect(saved.contactId).toBeUndefined();
     expect(saved.contactName).toBeUndefined();
+    expect(saved.email).toBeUndefined();
+    expect(saved.phone).toBeUndefined();
     expect(saved.addressLabel).toBeUndefined();
     expect(saved.addressMapQuery).toBeUndefined();
     expect(saved.projectId).toBe('p1'); // project link preserved

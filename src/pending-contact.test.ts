@@ -3,9 +3,23 @@ import { buildPendingContactSelection, savePendingContactSelection } from './pen
 import type { HoldedContact, PendingContactSelection, TrelloContext } from './types';
 
 describe('buildPendingContactSelection', () => {
+  it('falls back to a mobile number when the contact has no phone number', () => {
+    const contact = {
+      id: 'contact-1',
+      phone: null,
+      mobile: '600 123 456',
+      billAddress: {},
+      shippingAddresses: [],
+    } as unknown as HoldedContact;
+
+    expect(buildPendingContactSelection(contact, 'Cliente').phone).toBe('600 123 456');
+  });
+
   it('keeps only the address fields needed by the address popup', () => {
     const contact = {
       id: 'contact-1',
+      email: 'cliente@example.com',
+      phone: '971 123 456',
       billAddress: {
         address: '  C/ Mayor 1  ',
         city: '  Palma  ',
@@ -36,6 +50,8 @@ describe('buildPendingContactSelection', () => {
     expect(pending).toEqual({
       contactId: 'contact-1',
       contactName: 'Cliente',
+      email: 'cliente@example.com',
+      phone: '971 123 456',
       billAddress: {
         address: 'C/ Mayor 1',
         city: 'Palma',

@@ -59,6 +59,8 @@ async function selectAddress(
   const data = await getCardData(t);
   data.contactId = pending.contactId;
   data.contactName = contactName;
+  data.email = pending.email;
+  data.phone = pending.phone;
   data.addressLabel = addressLabel;
   data.addressMapQuery = addressMapQuery || undefined;
   await setCardData(t, data);

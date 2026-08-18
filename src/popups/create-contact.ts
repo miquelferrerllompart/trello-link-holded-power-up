@@ -154,6 +154,8 @@ submitBtn.addEventListener('click', async (event) => {
     await savePendingContactSelection(t, {
       contactId: result.id,
       contactName,
+      email: payload.email,
+      phone: payload.phone,
       billAddress: {
         address: billAddress.address,
         city: billAddress.city,

@@ -57,9 +57,13 @@ function stripGeneratedSection(desc: string): { description: string; found: bool
   const removalStart = prefix.endsWith(separator)
     ? sectionStart - separator.length
     : sectionStart;
+  const suffix = desc.slice(sectionStart + sectionEnd);
+  const suffixWithoutSeparator = !prefix && suffix.startsWith(separator)
+    ? suffix.slice(separator.length)
+    : suffix;
 
   return {
-    description: `${desc.slice(0, removalStart)}${desc.slice(sectionStart + sectionEnd)}`,
+    description: `${desc.slice(0, removalStart)}${suffixWithoutSeparator}`,
     found: true,
   };
 }
@@ -72,6 +76,8 @@ export function syncDescriptionSection(desc: string, data: CardHoldedData): stri
   const contactId = data.contactId?.trim();
   const projectId = data.projectId?.trim();
   const contactName = data.contactName?.trim();
+  const email = data.email?.trim();
+  const phone = data.phone?.trim();
   const projectName = data.projectName?.trim();
   const addressMapQuery = data.addressMapQuery?.replace(/\s+/g, ' ').trim();
   const hasContact = Boolean(contactId && contactName);
@@ -90,6 +96,20 @@ export function syncDescriptionSection(desc: string, data: CardHoldedData): stri
       '',
       `**Cliente:** [${escapeMarkdownLabel(contactName!)} ↗](${contactUrl})`
     );
+
+    if (phone) {
+      lines.push(
+        '',
+        `**Teléfono:** [${escapeMarkdownLabel(phone)} ↗](tel:${phone.replace(/[^\d+]/g, '')})`
+      );
+    }
+
+    if (email) {
+      lines.push(
+        '',
+        `**Email:** [${escapeMarkdownLabel(email)} ↗](mailto:${encodeURIComponent(email)})`
+      );
+    }
 
     if (addressMapQuery) {
       lines.push(
@@ -131,5 +151,5 @@ export function syncDescriptionSection(desc: string, data: CardHoldedData): stri
   }
 
   const section = lines.join('\n');
-  return cleaned ? `${cleaned}\n\n---\n\n${section}` : section;
+  return cleaned ? `${section}\n\n---\n\n${cleaned}` : section;
 }
