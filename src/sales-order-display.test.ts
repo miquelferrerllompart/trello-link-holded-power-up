@@ -19,9 +19,9 @@ describe('document status pills (internal-API normalized statuses)', () => {
     expect(getSalesOrderStatusPill('cancelled')).toEqual({ label: 'Cancelado', className: 'cancelled' });
   });
 
-  it('shows the waybill approval label, never Preparado/Entregado', () => {
-    expect(getWaybillStatusPill('prepared')).toEqual({ label: 'Sin aprobar', className: 'pending' });
-    expect(getWaybillStatusPill('delivered')).toEqual({ label: 'Aprobado', className: 'done' });
+  it('maps waybill workflow statuses to delivery labels', () => {
+    expect(getWaybillStatusPill('prepared')).toEqual({ label: 'Por entregar', className: 'pending' });
+    expect(getWaybillStatusPill('delivered')).toEqual({ label: 'Entregado', className: 'done' });
     expect(getWaybillStatusPill('cancelled')).toEqual({ label: 'Cancelado', className: 'cancelled' });
   });
 
@@ -62,7 +62,7 @@ describe('document status pills (internal-API normalized statuses)', () => {
     expect(getDocumentStatusPill({ type: 'sales-orders', internalStatus: 'prepared' }))
       .toEqual({ label: 'Preparado', className: 'done' });
     expect(getDocumentStatusPill({ type: 'waybills', workflowStatus: 'delivered' }))
-      .toEqual({ label: 'Aprobado', className: 'done' });
+      .toEqual({ label: 'Entregado', className: 'done' });
     expect(getDocumentStatusPill({ type: 'estimates', displayStatus: 'rejected' }))
       .toEqual({ label: 'Denegado', className: 'cancelled' });
     expect(getDocumentStatusPill({ type: 'invoices', displayStatus: 'overdue' }))

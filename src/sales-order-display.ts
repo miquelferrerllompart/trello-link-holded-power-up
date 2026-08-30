@@ -17,10 +17,10 @@ const SALES_ORDER_STATUS: Record<string, StatusPill> = {
   cancelled: { label: 'Cancelado', className: 'cancelled' },
 };
 
-// The waybill pill shows the approval label, deliberately NOT Preparado/Entregado.
+// The waybill workflow status is a delivery projection derived from approvedAt.
 const WAYBILL_STATUS: Record<string, StatusPill> = {
-  prepared: { label: 'Sin aprobar', className: 'pending' },
-  delivered: { label: 'Aprobado', className: 'done' },
+  prepared: { label: 'Por entregar', className: 'pending' },
+  delivered: { label: 'Entregado', className: 'done' },
   cancelled: { label: 'Cancelado', className: 'cancelled' },
 };
 
