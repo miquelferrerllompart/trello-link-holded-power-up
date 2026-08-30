@@ -14,12 +14,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
         env:
           VITE_TRELLO_APP_KEY: ${{ secrets.VITE_TRELLO_APP_KEY }}
           VITE_HOLDED_PROXY_URL: ${{ vars.VITE_HOLDED_PROXY_URL }}

@@ -13,7 +13,7 @@ sales orders, purchase orders, waybills, invoices, estimates). Internal tool; UI
 
 - **TDD, always.** Develop every feature or bug fix test-first: name the public behavior under test,
   write the **failing test first** when practical, then the smallest change to make it pass, then
-  refactor. Use the **`/tdd`** skill when available. Keep `npm test` green.
+  refactor. Use the **`/tdd`** skill when available. Keep `pnpm test` green.
 - **UI/UX via `/frontend-design`.** For any new or reshaped interface — layout, typography, visual
   direction, empty/loading/error states — use the **`/frontend-design`** skill. Vanilla CSS, dark-mode
   aware, distinctive but disciplined.
@@ -23,7 +23,7 @@ sales orders, purchase orders, waybills, invoices, estimates). Internal tool; UI
   pagination) — only entrances/loads.
 - **Cloudflare/Wrangler via the wrangler/cloudflare skill** for any Workers, Pages, secrets, or deploy
   work. Never pass secrets on the CLI or via `echo` when a file/stdin path exists.
-- **Gate before done:** `npm test` and `npm run build` (`tsc && vite build`) must pass.
+- **Gate before done:** `pnpm test` and `pnpm run build` (`tsc && vite build`) must pass.
 
 ## Architecture
 
@@ -51,11 +51,11 @@ no direct Holded API call and no Cloudflare KV store anywhere.
 
 ```bash
 # Frontend (Pages)
-npm run build          # tsc && vite build → dist/
-npx wrangler pages deploy dist --project-name trello-link-holded-power-up --branch main
+pnpm run build         # tsc && vite build → dist/
+pnpm exec wrangler pages deploy dist --project-name trello-link-holded-power-up --branch main
 
 # Worker
-cd worker && npx wrangler deploy
+pnpm exec wrangler deploy --config worker/wrangler.toml
 ```
 
 Note: Cloudflare edge propagation can lag a few seconds after deploy — cache-bust with `?cb=…` when
@@ -66,7 +66,7 @@ verifying, and prefer the deployment-specific URL to bypass the root-domain cach
 One secret — the internal API key:
 
 ```bash
-echo "efk_..." | npx wrangler secret put EF_INTERNAL_API_KEY --name holded-proxy
+echo "efk_..." | pnpm exec wrangler secret put EF_INTERNAL_API_KEY --name holded-proxy
 ```
 
 Must pipe via `echo` — non-interactive `wrangler secret put` otherwise sends an empty string. The key
