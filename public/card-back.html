@@ -694,8 +694,11 @@
       font-size: 11px;
       font-weight: 700;
     }
-    .document-preview-date {
-      display: block;
+    .document-preview-footer {
+      display: flex;
+      align-items: baseline;
+      justify-content: flex-end;
+      gap: 8px;
       margin-top: 10px;
       padding-top: 7px;
       border-top: 1px solid #091e420f;
@@ -705,6 +708,16 @@
       font-weight: 600;
       line-height: 14px;
       text-align: right;
+    }
+    .document-preview-date {
+      display: block;
+    }
+    .document-preview-creator {
+      color: #8c9bab;
+      font-variant-numeric: normal;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .document-preview:not([data-static-motion="true"])
       .document-preview-attachments-slot[data-state="loaded"]
@@ -754,11 +767,34 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .purchase-order-arrival {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      line-height: 13px;
+      vertical-align: middle;
+    }
+    .purchase-order-arrival-dot {
+      display: block;
+      flex: 0 0 6px;
+      width: 6px;
+      height: 6px;
+      align-self: center;
+      border-radius: 50%;
+      background: #de350b;
+    }
+    .purchase-order-arrival-dot--today {
+      background: #f6c344;
+    }
     .document-meta {
       display: flex;
       min-width: 0;
       gap: 4px;
+      justify-content: flex-start;
       flex-wrap: wrap;
+    }
+    .document-meta > .document-pill {
+      margin-left: auto;
     }
     .document-pill {
       display: inline-block;
@@ -858,7 +894,7 @@
       color: #5e4db2;
     }
     .purchase-order-row > .document-pill {
-      justify-self: start;
+      justify-self: end;
     }
     .related-waybill-row {
       --relation-color: #b8d7ee;
@@ -911,10 +947,12 @@
       display: flex;
       min-width: 0;
       align-items: center;
+      justify-content: flex-start;
       gap: 8px;
     }
     .related-waybill-main .document-pill {
       flex: none;
+      margin-left: auto;
     }
     .related-waybill-number {
       color: #44546f;
@@ -1129,9 +1167,9 @@
       .document-preview-attachments-state,
       .document-preview-file-open { color: #8c9bab; }
       .document-preview-date {
-        border-top-color: #a6c5e214;
         color: #8c9bab;
       }
+      .document-preview-footer { border-top-color: #a6c5e214; color: #8c9bab; }
       .document-preview-attachments-retry { background: #2c333a; color: #85b8ff; }
       .document-preview-attachments-retry:hover { background: #38414a; }
       .document-preview-text { color: #b6c2cf; }
@@ -1484,20 +1522,22 @@
     function formatDocumentDayLabel(date) {
       var now = new Date();
       if (isSameCalendarDay(date, now)) {
-        return 'Hoy, ' + date.toLocaleDateString('es-ES', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        });
+        return 'Hoy';
       }
       var yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
       if (isSameCalendarDay(date, yesterday)) {
-        return 'Ayer, ' + date.toLocaleDateString('es-ES', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric'
-        });
+        return 'Ayer';
       }
+      var options = {
+        weekday: 'long',
+        day: 'numeric',
+        month: 'short'
+      };
+      if (date.getFullYear() !== now.getFullYear()) options.year = 'numeric';
+      return capitalizeFirst(date.toLocaleDateString('es-ES', options));
+    }
+
+    function formatFullDocumentDayLabel(date) {
       return capitalizeFirst(date.toLocaleDateString('es-ES', {
         weekday: 'long',
         day: 'numeric',
@@ -1531,6 +1571,7 @@
           return {
             dayKey: isoDate[1] + '-' + isoDate[2] + '-' + isoDate[3],
             dayLabel: formatDocumentDayLabel(localDate),
+            fullDayLabel: formatFullDocumentDayLabel(localDate),
             dateTime: text,
             timeLabel: isoTime ? isoTime[1] + ':' + isoTime[2] : ''
           };
@@ -1553,6 +1594,7 @@
       return {
         dayKey: fallbackYear + '-' + fallbackMonth + '-' + fallbackDay,
         dayLabel: formatDocumentDayLabel(date),
+        fullDayLabel: formatFullDocumentDayLabel(date),
         dateTime: text,
         timeLabel: date.toLocaleTimeString('es-ES', {
           hour: '2-digit',
@@ -1619,18 +1661,38 @@
     }
 
     function renderDocumentCreator(documentItem) {
-      var isSalesOrder = documentItem.type === 'sales-orders';
       var isWorkReport = documentItem.type === 'waybills' &&
         ['labour', 'mixed', 'extra', 'unclassified'].includes(documentItem.kind || 'unclassified');
-      if (!isSalesOrder && !isWorkReport) return '';
       var createdBy = String(documentItem.createdBy || '').trim();
-      var createdAt = formatCreationDateLabel(documentItem.createdAt);
-      if (!createdBy && !createdAt) return '';
-      var verb = isWorkReport ? 'Realizado' : 'Creado';
-      var text = createdBy ? verb + ' por ' + createdBy : verb + ' el ' + createdAt;
-      if (createdBy && createdAt) text += ' · ' + createdAt;
-      return '<span class="document-creator" title="' + escapeHtml(text) + '">' +
+      if (!createdBy) return '';
+      var text = (isWorkReport ? 'Realizado' : 'Creado') + ' por ' + createdBy;
+      return '<span class="document-preview-creator" title="' + escapeHtml(text) + '">' +
         escapeHtml(text) +
+      '</span>';
+    }
+
+    function getPurchaseOrderArrivalStatus(value) {
+      if (!value) return '';
+      var text = String(value);
+      var isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!isoDate) return '';
+      var today = new Date();
+      var todayKey = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+      var arrivalKey = isoDate[1] + '-' + isoDate[2] + '-' + isoDate[3];
+      if (arrivalKey < todayKey) return 'overdue';
+      if (arrivalKey === todayKey) return 'today';
+      return 'due';
+    }
+
+    function renderPurchaseOrderArrival(purchaseOrder) {
+      var arrivalDate = formatCreationDateLabel(purchaseOrder.dueDate);
+      var arrivalStatus = getPurchaseOrderArrivalStatus(purchaseOrder.dueDate);
+      if (!arrivalDate || !arrivalStatus) return '';
+      return '<span class="document-creator purchase-order-arrival" title="Llegada estimada: ' +
+        escapeHtml(arrivalDate) + '">' +
+        '<span class="purchase-order-arrival-dot purchase-order-arrival-dot--' + arrivalStatus + '" aria-hidden="true"></span>' +
+        'Llegada estimada: ' +
+        escapeHtml(arrivalDate) +
       '</span>';
     }
 
@@ -1934,9 +1996,12 @@
         escapeHtml(getDocumentNumber(documentItem)) + '"' + (isExpanded ? '' : ' hidden') + '>' +
           (notes ? '<div class="document-preview-copy document-preview-notes">' + notes + '</div>' : '') +
           attachments +
-          '<time class="document-preview-date">' +
-            escapeHtml(getDocumentDateText(documentItem)) +
-          '</time>' +
+          '<div class="document-preview-footer">' +
+            '<time class="document-preview-date">' +
+              escapeHtml(getDocumentDateText(documentItem)) +
+            '</time>' +
+            renderDocumentCreator(documentItem) +
+          '</div>' +
       '</div>';
     }
 
@@ -2130,20 +2195,18 @@
         ? '<span class="document-waybill-identity">' +
             '<span class="document-number">' + escapeHtml(number) + '</span>' +
             renderWaybillKind(documentItem.kind) +
-            renderDocumentCreator(documentItem) +
           '</span>'
         : '<span class="document-identity">' +
             '<span class="document-number">' + escapeHtml(number) + '</span>' +
-            renderDocumentCreator(documentItem) +
           '</span>';
       return '<div class="document-row' + (isWaybill ? ' document-row--waybill' : '') +
         (hasPreview ? ' document-row--has-preview' : '') + '">' +
         renderDocumentKindIcon(documentItem, false) +
         identity +
         '<span class="document-meta">' +
-          renderPill(getDocumentPill(documentItem)) +
           renderProjectChip(documentItem, data, scope) +
           renderDocumentAmounts(documentItem) +
+          renderPill(getDocumentPill(documentItem)) +
         '</span>' +
         renderDocumentTime(documentItem) +
         renderDocumentActions(documentItem, number, isPreviewExpanded) +
@@ -2160,6 +2223,7 @@
         '<span class="purchase-order-identity">' +
           '<span class="purchase-order-number">' + escapeHtml(number) + '</span>' +
           '<span class="purchase-order-supplier">' + escapeHtml(supplier) + '</span>' +
+          renderPurchaseOrderArrival(purchaseOrder) +
         '</span>' +
         renderPill(getDocumentPill(purchaseOrder)) +
         renderDocumentTime(purchaseOrder) +
@@ -2237,7 +2301,8 @@
         var headingId = 'relation-day-' + orderId + '-' + groupIndex;
         var headingContent = group.moment.dateTime
           ? '<time class="relation-day-label" datetime="' +
-              escapeHtml(group.moment.dayKey) + '">' +
+              escapeHtml(group.moment.dayKey) + '" title="' +
+              escapeHtml(group.moment.fullDayLabel || group.moment.dayLabel) + '">' +
               escapeHtml(group.moment.dayLabel) +
             '</time>'
           : '<span class="relation-day-label">' + escapeHtml(group.moment.dayLabel) + '</span>';
@@ -2285,7 +2350,8 @@
         var shouldExpandPreviews = tab.key === 'waybills' && (result.page || 1) === 1 && groupIndex === 0;
         var headingContent = group.moment.dateTime
           ? '<time class="document-day-label" datetime="' +
-              escapeHtml(group.moment.dayKey) + '">' +
+              escapeHtml(group.moment.dayKey) + '" title="' +
+              escapeHtml(group.moment.fullDayLabel || group.moment.dayLabel) + '">' +
               escapeHtml(group.moment.dayLabel) +
             '</time>'
           : '<span class="document-day-label">' + escapeHtml(group.moment.dayLabel) + '</span>';

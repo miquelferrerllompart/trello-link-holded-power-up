@@ -352,7 +352,7 @@ describe('Worker /v2 internal-API document routes', () => {
       if (input.includes('/documents/waybill/wb-creator/events')) {
         return internalJson({
           items: [{
-            type: 'document.created',
+            type: 'work.registered',
             occurredAt: '2026-08-18T13:25:44.078Z',
             user: { name: 'Marta Ferrer' },
           }],
@@ -398,6 +398,112 @@ describe('Worker /v2 internal-API document routes', () => {
     expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
       `${INTERNAL_BASE}/documents/waybill/wb-creator/events?limit=50`,
     );
+  });
+
+  it('maps purchase-order arrival date and enriches its creator from document events', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/documents/purchase-order/po-creator/events')) {
+        return internalJson({
+          items: [{
+            type: 'document.created',
+            occurredAt: '2026-08-18T13:25:44.078Z',
+            user: { name: 'Joan Ferrer' },
+          }],
+          hasMore: false,
+          nextCursor: null,
+        });
+      }
+      if (input.includes('/purchase-orders')) {
+        return internalJson({
+          items: [{
+            id: 'po-creator',
+            docNumber: 'PC-26-001102',
+            issueDate: '2026-08-18',
+            dueDate: '2026-08-25',
+            approvedAt: null,
+            supplier: { id: 'supplier-1', name: 'Rexel' },
+            projects: [],
+            sourceOrder: { id: 'so-creator', docNumber: 'PV-26-008784' },
+            internalStatus: 'review',
+          }],
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+          readiness: 'ready',
+        });
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false }, readiness: 'ready' });
+      }
+      return internalJson({
+        items: [{
+          id: 'so-creator',
+          docNumber: 'PV-26-008784',
+          issueDate: '2026-08-18',
+          dueDate: null,
+          approvedAt: null,
+          projects: [],
+          internalStatus: 'requested',
+        }],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+        readiness: 'ready',
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&page=1&scope=matched'),
+      envV2,
+    );
+    const body = await response.json() as {
+      results: Array<{ purchaseOrders: Array<Record<string, unknown>> }>;
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.results[0].purchaseOrders[0]).toMatchObject({
+      id: 'po-creator',
+      dueDate: '2026-08-25',
+      createdAt: '2026-08-18T13:25:44.078Z',
+      createdBy: 'Joan Ferrer',
+    });
+    expect(fetchImpl.mock.calls.map((call) => call[0])).toContain(
+      `${INTERNAL_BASE}/documents/purchase-order/po-creator/events?limit=50`,
+    );
+  });
+
+  it('maps creation metadata on invoice and estimate summaries', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/estimates')) {
+        return internalJson({
+          items: [{
+            id: 'estimate-creator', docNumber: 'PRE-CREATOR', issueDate: '2026-08-18',
+            createdAt: '2026-08-18T13:25:44.078Z', createdBy: 'Creador PRE', projects: [],
+          }],
+          hasMore: false, nextCursor: null, readiness: 'ready',
+        });
+      }
+      return internalJson({
+        items: [{
+          id: 'invoice-creator', docNumber: 'F-CREATOR', issueDate: '2026-08-18',
+          createdAt: '2026-08-18T13:25:44.078Z', createdBy: 'Creador FAC', projects: [],
+        }],
+        pagination: { page: 1, pageSize: 10, hasMore: false },
+        readiness: 'ready',
+      });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const invoiceResponse = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=invoices&page=1&scope=matched'),
+      envV2,
+    );
+    const estimateResponse = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=estimates&scope=matched'),
+      envV2,
+    );
+    const invoiceBody = await invoiceResponse.json() as { results: Array<Record<string, unknown>> };
+    const estimateBody = await estimateResponse.json() as { results: Array<Record<string, unknown>> };
+
+    expect(invoiceBody.results[0]).toMatchObject({ createdAt: '2026-08-18T13:25:44.078Z', createdBy: 'Creador FAC' });
+    expect(estimateBody.results[0]).toMatchObject({ createdAt: '2026-08-18T13:25:44.078Z', createdBy: 'Creador PRE' });
   });
 
   it('nests purchase orders under their source sales order and drops orphan/off-page POs', async () => {
@@ -513,6 +619,17 @@ describe('Worker /v2 internal-API document routes', () => {
     });
 
     const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/documents/waybill/wb-1/events')) {
+        return internalJson({
+          items: [{
+            type: 'document.created',
+            occurredAt: '2026-08-18T13:25:44.078Z',
+            user: { name: 'Creador ALB' },
+          }],
+          hasMore: false,
+          nextCursor: null,
+        });
+      }
       if (input.includes('/purchase-orders')) {
         return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
       }
@@ -558,6 +675,8 @@ describe('Worker /v2 internal-API document routes', () => {
         issueDate: '2026-07-15',
         workflowStatus: 'delivered',
         approvedAt: '2026-07-16',
+        createdAt: '2026-08-18T13:25:44.078Z',
+        createdBy: 'Creador ALB',
         sourceOrder: { id: 'so-1', docNumber: 'PV-26-008005' },
         projects: [],
       },
