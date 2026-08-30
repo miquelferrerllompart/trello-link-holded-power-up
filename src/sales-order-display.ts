@@ -4,22 +4,23 @@ export interface StatusPill {
 }
 
 // Pill colour vocabulary (maps to CSS classes on `.document-pill`):
-//   done = green, partial = yellow, pending = neutral, cancelled = red.
+//   review = black, warning = yellow, info = blue, done = green,
+//   pending = neutral, cancelled = red.
 // Labels are the canonical Spanish strings from the internal-API contract.
 
 const SALES_ORDER_STATUS: Record<string, StatusPill> = {
-  requested: { label: 'A revisar', className: 'pending' },
-  in_process: { label: 'Pendiente preparar', className: 'pending' },
-  partially_prepared: { label: 'Parcialmente preparado', className: 'partial' },
-  prepared: { label: 'Preparado', className: 'done' },
-  partially_delivered: { label: 'Parcialmente entregado', className: 'partial' },
+  requested: { label: 'A revisar', className: 'review' },
+  in_process: { label: 'Pendiente preparar', className: 'warning' },
+  partially_prepared: { label: 'Parcialmente preparado', className: 'info' },
+  prepared: { label: 'Preparado', className: 'info' },
+  partially_delivered: { label: 'Parcialmente entregado', className: 'info' },
   all_delivered: { label: 'Totalmente entregado', className: 'done' },
   cancelled: { label: 'Cancelado', className: 'cancelled' },
 };
 
 // The waybill workflow status is a delivery projection derived from approvedAt.
 const WAYBILL_STATUS: Record<string, StatusPill> = {
-  prepared: { label: 'Por entregar', className: 'pending' },
+  prepared: { label: 'Por entregar', className: 'warning' },
   delivered: { label: 'Entregado', className: 'done' },
   cancelled: { label: 'Cancelado', className: 'cancelled' },
 };
@@ -43,11 +44,11 @@ const INVOICE_STATUS: Record<string, StatusPill> = {
 };
 
 const PURCHASE_ORDER_STATUS: Record<string, StatusPill> = {
-  review: { label: 'A revisar', className: 'pending' },
-  awaiting_receipt: { label: 'Pendiente recibir', className: 'pending' },
-  partially_received_unconfirmed: { label: 'Recepción parcial sin confirmar', className: 'partial' },
-  received_unconfirmed: { label: 'Recepción completa sin confirmar', className: 'partial' },
-  partially_received: { label: 'Parcialmente recibido', className: 'partial' },
+  review: { label: 'A revisar', className: 'review' },
+  awaiting_receipt: { label: 'Pendiente recibir', className: 'warning' },
+  partially_received_unconfirmed: { label: 'Recepción parcial sin confirmar', className: 'info' },
+  received_unconfirmed: { label: 'Recepción completa sin confirmar', className: 'info' },
+  partially_received: { label: 'Parcialmente recibido', className: 'info' },
   all_received: { label: 'Totalmente recibido', className: 'done' },
   cancelled: { label: 'Cancelado', className: 'cancelled' },
 };

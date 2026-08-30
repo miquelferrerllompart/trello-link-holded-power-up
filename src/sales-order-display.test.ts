@@ -10,17 +10,17 @@ import {
 
 describe('document status pills (internal-API normalized statuses)', () => {
   it('maps every sales-order internalStatus to its canonical Spanish pill', () => {
-    expect(getSalesOrderStatusPill('requested')).toEqual({ label: 'A revisar', className: 'pending' });
-    expect(getSalesOrderStatusPill('in_process')).toEqual({ label: 'Pendiente preparar', className: 'pending' });
-    expect(getSalesOrderStatusPill('partially_prepared')).toEqual({ label: 'Parcialmente preparado', className: 'partial' });
-    expect(getSalesOrderStatusPill('prepared')).toEqual({ label: 'Preparado', className: 'done' });
-    expect(getSalesOrderStatusPill('partially_delivered')).toEqual({ label: 'Parcialmente entregado', className: 'partial' });
+    expect(getSalesOrderStatusPill('requested')).toEqual({ label: 'A revisar', className: 'review' });
+    expect(getSalesOrderStatusPill('in_process')).toEqual({ label: 'Pendiente preparar', className: 'warning' });
+    expect(getSalesOrderStatusPill('partially_prepared')).toEqual({ label: 'Parcialmente preparado', className: 'info' });
+    expect(getSalesOrderStatusPill('prepared')).toEqual({ label: 'Preparado', className: 'info' });
+    expect(getSalesOrderStatusPill('partially_delivered')).toEqual({ label: 'Parcialmente entregado', className: 'info' });
     expect(getSalesOrderStatusPill('all_delivered')).toEqual({ label: 'Totalmente entregado', className: 'done' });
     expect(getSalesOrderStatusPill('cancelled')).toEqual({ label: 'Cancelado', className: 'cancelled' });
   });
 
   it('maps waybill workflow statuses to delivery labels', () => {
-    expect(getWaybillStatusPill('prepared')).toEqual({ label: 'Por entregar', className: 'pending' });
+    expect(getWaybillStatusPill('prepared')).toEqual({ label: 'Por entregar', className: 'warning' });
     expect(getWaybillStatusPill('delivered')).toEqual({ label: 'Entregado', className: 'done' });
     expect(getWaybillStatusPill('cancelled')).toEqual({ label: 'Cancelado', className: 'cancelled' });
   });
@@ -44,11 +44,11 @@ describe('document status pills (internal-API normalized statuses)', () => {
   });
 
   it('maps purchase-order reception statuses', () => {
-    expect(getPurchaseOrderStatusPill('review')).toEqual({ label: 'A revisar', className: 'pending' });
-    expect(getPurchaseOrderStatusPill('awaiting_receipt')).toEqual({ label: 'Pendiente recibir', className: 'pending' });
-    expect(getPurchaseOrderStatusPill('partially_received_unconfirmed')).toEqual({ label: 'Recepción parcial sin confirmar', className: 'partial' });
-    expect(getPurchaseOrderStatusPill('received_unconfirmed')).toEqual({ label: 'Recepción completa sin confirmar', className: 'partial' });
-    expect(getPurchaseOrderStatusPill('partially_received')).toEqual({ label: 'Parcialmente recibido', className: 'partial' });
+    expect(getPurchaseOrderStatusPill('review')).toEqual({ label: 'A revisar', className: 'review' });
+    expect(getPurchaseOrderStatusPill('awaiting_receipt')).toEqual({ label: 'Pendiente recibir', className: 'warning' });
+    expect(getPurchaseOrderStatusPill('partially_received_unconfirmed')).toEqual({ label: 'Recepción parcial sin confirmar', className: 'info' });
+    expect(getPurchaseOrderStatusPill('received_unconfirmed')).toEqual({ label: 'Recepción completa sin confirmar', className: 'info' });
+    expect(getPurchaseOrderStatusPill('partially_received')).toEqual({ label: 'Parcialmente recibido', className: 'info' });
     expect(getPurchaseOrderStatusPill('all_received')).toEqual({ label: 'Totalmente recibido', className: 'done' });
     expect(getPurchaseOrderStatusPill('cancelled')).toEqual({ label: 'Cancelado', className: 'cancelled' });
   });
@@ -60,7 +60,7 @@ describe('document status pills (internal-API normalized statuses)', () => {
 
   it('reads the server-derived enum appropriate to each document type', () => {
     expect(getDocumentStatusPill({ type: 'sales-orders', internalStatus: 'prepared' }))
-      .toEqual({ label: 'Preparado', className: 'done' });
+      .toEqual({ label: 'Preparado', className: 'info' });
     expect(getDocumentStatusPill({ type: 'waybills', workflowStatus: 'delivered' }))
       .toEqual({ label: 'Entregado', className: 'done' });
     expect(getDocumentStatusPill({ type: 'estimates', displayStatus: 'rejected' }))

@@ -286,7 +286,9 @@ describe('card-back document view (internal API v2)', () => {
     selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
+    const statusPill = dom.window.document.querySelector('.document-row .document-pill');
     expect(contentText(dom)).toContain('Parcialmente preparado');
+    expect(statusPill?.classList.contains('info')).toBe(true);
     expect(contentText(dom)).not.toContain('Completado');
   });
 
@@ -1415,6 +1417,8 @@ describe('card-back document view (internal API v2)', () => {
       expect(dom.window.getComputedStyle(metadata).justifyContent).toBe('flex-start');
       expect(metadata?.lastElementChild?.classList.contains('document-pill')).toBe(true);
       expect(dom.window.getComputedStyle(metadata?.lastElementChild).marginLeft).toBe('auto');
+      if (tab === 'waybills') expect(metadata?.lastElementChild?.classList.contains('warning')).toBe(true);
+      if (tab === 'salesOrders') expect(metadata?.lastElementChild?.classList.contains('info')).toBe(true);
     }
   });
 
@@ -1684,6 +1688,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(identity?.children[1].classList.contains('purchase-order-supplier')).toBe(true);
     expect(identity?.children[1].textContent).toBe('Rexel');
     expect(identity?.nextElementSibling?.classList.contains('document-pill')).toBe(true);
+    expect(identity?.nextElementSibling?.classList.contains('warning')).toBe(true);
     expect(identity?.nextElementSibling?.textContent).toBe('Pendiente recibir');
     expect(dom.window.getComputedStyle(identity?.nextElementSibling).justifySelf).toBe('end');
     expect(subRow.querySelector('.document-time')?.textContent).toBe('09:17');
