@@ -585,6 +585,7 @@ describe('Worker /v2 internal-API document routes', () => {
         url: 'https://app.holded.com/sales/orders#open:order-po-1',
         internalStatus: 'awaiting_receipt',
         issueDate: '2026-07-13',
+        dueDate: null,
         approvedAt: '2026-07-13T10:15:00Z',
         supplier: { id: 'supplier-1', name: 'Rexel' },
         total: 250,

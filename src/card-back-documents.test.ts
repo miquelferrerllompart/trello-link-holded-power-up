@@ -286,7 +286,9 @@ describe('card-back document view (internal API v2)', () => {
     selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
+    const statusPill = dom.window.document.querySelector('.document-row .document-pill');
     expect(contentText(dom)).toContain('Parcialmente preparado');
+    expect(statusPill?.classList.contains('info')).toBe(true);
     expect(contentText(dom)).not.toContain('Completado');
   });
 
@@ -649,7 +651,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(css).toContain('.document-time { padding-right: 76px; }');
   });
 
-  it('shows waybill approval labels (Sin aprobar / Aprobado)', async () => {
+  it('shows waybill delivery labels (Por entregar / Entregado)', async () => {
     const { dom } = loadCardBack({
       salesOrders: [],
       estimates: [],
@@ -664,8 +666,8 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     const text = contentText(dom);
-    expect(text).toContain('Sin aprobar');
-    expect(text).toContain('Aprobado');
+    expect(text).toContain('Por entregar');
+    expect(text).toContain('Entregado');
     expect(text).not.toContain('Preparado');
   });
 
@@ -1415,6 +1417,8 @@ describe('card-back document view (internal API v2)', () => {
       expect(dom.window.getComputedStyle(metadata).justifyContent).toBe('flex-start');
       expect(metadata?.lastElementChild?.classList.contains('document-pill')).toBe(true);
       expect(dom.window.getComputedStyle(metadata?.lastElementChild).marginLeft).toBe('auto');
+      if (tab === 'waybills') expect(metadata?.lastElementChild?.classList.contains('warning')).toBe(true);
+      if (tab === 'salesOrders') expect(metadata?.lastElementChild?.classList.contains('info')).toBe(true);
     }
   });
 
@@ -1684,6 +1688,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(identity?.children[1].classList.contains('purchase-order-supplier')).toBe(true);
     expect(identity?.children[1].textContent).toBe('Rexel');
     expect(identity?.nextElementSibling?.classList.contains('document-pill')).toBe(true);
+    expect(identity?.nextElementSibling?.classList.contains('warning')).toBe(true);
     expect(identity?.nextElementSibling?.textContent).toBe('Pendiente recibir');
     expect(dom.window.getComputedStyle(identity?.nextElementSibling).justifySelf).toBe('end');
     expect(subRow.querySelector('.document-time')?.textContent).toBe('09:17');
@@ -1744,14 +1749,14 @@ describe('card-back document view (internal API v2)', () => {
     expect(materialMain?.children[0].classList.contains('related-waybill-identity')).toBe(true);
     expect(materialMain?.children[1].classList.contains('document-pill')).toBe(true);
     expect(dom.window.getComputedStyle(materialMain?.children[1]).marginLeft).toBe('auto');
-    expect(materialMain?.children[1].textContent).toBe('Aprobado');
+    expect(materialMain?.children[1].textContent).toBe('Entregado');
     const materialIdentity = materialMain?.children[0];
     expect(materialIdentity?.children[0].classList.contains('related-waybill-number')).toBe(true);
     expect(materialIdentity?.children[0].textContent).toContain('ALB-1');
     expect(materialIdentity?.children[1].classList.contains('waybill-kind--material')).toBe(true);
     expect(materialIdentity?.children[1].textContent).toContain('Material');
     expect(dom.window.getComputedStyle(materialIdentity?.children[1]).color).toBe('rgb(107, 119, 140)');
-    expect(rows[0].textContent).toContain('Aprobado');
+    expect(rows[0].textContent).toContain('Entregado');
     expect(dom.window.document.querySelector('.relation-day-label')?.textContent)
       .toBe('Jueves, 16 jul');
     expect(rows[0].querySelector('.document-time')?.textContent).toBe('14:25');
@@ -1763,13 +1768,13 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.getComputedStyle(refundMain).justifyContent).toBe('flex-start');
     expect(refundMain?.children[1].classList.contains('document-pill')).toBe(true);
     expect(dom.window.getComputedStyle(refundMain?.children[1]).marginLeft).toBe('auto');
-    expect(refundMain?.children[1].textContent).toBe('Sin aprobar');
+    expect(refundMain?.children[1].textContent).toBe('Por entregar');
     const refundIdentity = refundMain?.children[0];
     expect(refundIdentity?.children[0].textContent).toContain('ALB-2');
     expect(refundIdentity?.children[1].classList.contains('waybill-kind--refund')).toBe(true);
     expect(refundIdentity?.children[1].textContent).toContain('Devolución');
     expect(dom.window.getComputedStyle(refundIdentity?.children[1]).color).toBe('rgb(107, 119, 140)');
-    expect(rows[1].textContent).toContain('Sin aprobar');
+    expect(rows[1].textContent).toContain('Por entregar');
     expect(rows[1].querySelector('.document-time')?.textContent).toBe('');
     expect(rows[1].querySelector('.document-time')?.getAttribute('aria-hidden')).toBe('true');
   });

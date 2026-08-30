@@ -245,7 +245,7 @@ function mapInternalPurchaseOrder(item: Record<string, any>) {
     url: buildDocumentUrl('purchase-orders', item.id),
     internalStatus: item.internalStatus ?? null,
     issueDate: item.issueDate ?? null,
-    ...(typeof item.dueDate === 'string' ? { dueDate: item.dueDate } : {}),
+    dueDate: typeof item.dueDate === 'string' ? item.dueDate : null,
     approvedAt: item.approvedAt ?? null,
     ...(typeof item.createdAt === 'string' ? { createdAt: item.createdAt } : {}),
     ...(typeof item.createdBy === 'string' ? { createdBy: item.createdBy } : {}),
