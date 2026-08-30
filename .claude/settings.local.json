@@ -1,9 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm install)",
-      "Bash(npx tsc --noEmit)",
-      "Bash(npx vite build)",
+      "Bash(pnpm install)",
+      "Bash(pnpm exec tsc --noEmit)",
+      "Bash(pnpm exec vite build)",
       "Bash(git init)",
       "Bash(git add -A)",
       "Bash(git commit -m \"Initial scaffold: Trello Link Holded Power-Up:*)",
@@ -14,11 +14,11 @@
       "Bash(gh api repos/miquelferrerllompart/trello-link-holded-power-up/pages -X POST -f \"build_type=workflow\")",
       "Bash(git commit -m \"Add GitHub Pages deploy workflow and configure base path:*)",
       "Bash(git push)",
-      "Bash(npx wrangler --version)",
-      "Bash(npx wrangler deploy)",
-      "Bash(npx wrangler pages deploy dist --project-name trello-link-holded-power-up --commit-dirty=true)",
-      "Bash(npm run build)",
-      "Bash(npx wrangler pages deploy dist --project-name trello-link-holded-power-up)",
+      "Bash(pnpm exec wrangler --version)",
+      "Bash(pnpm exec wrangler deploy)",
+      "Bash(pnpm exec wrangler pages deploy dist --project-name trello-link-holded-power-up --commit-dirty=true)",
+      "Bash(pnpm run build)",
+      "Bash(pnpm exec wrangler pages deploy dist --project-name trello-link-holded-power-up)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://trello-link-holded-power-up.pages.dev/icons/contact.svg\")"
     ]
   }

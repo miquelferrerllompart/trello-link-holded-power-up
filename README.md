@@ -79,13 +79,13 @@ Esto permite usar la **búsqueda nativa de Trello** para encontrar tarjetas por 
 ```bash
 git clone https://github.com/miquelferrerllompart/trello-link-holded-power-up.git
 cd trello-link-holded-power-up
-npm install
+pnpm install
 ```
 
 ## Desarrollo local
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Abre `http://localhost:5173` — aunque para probar el Power-Up necesitas registrarlo en Trello apuntando a esa URL (o usar un túnel como ngrok).
@@ -142,7 +142,7 @@ trello-link-holded-power-up/
 ### 1. Configurar las API keys de Holded en el Worker
 
 ```bash
-echo "TU_API_KEY_V2_DE_HOLDED" | npx wrangler secret put HOLDED_API_V2 --name holded-proxy
+echo "TU_API_KEY_V2_DE_HOLDED" | pnpm exec wrangler secret put HOLDED_API_V2 --name holded-proxy
 ```
 
 `HOLDED_API_KEY` se mantiene para llamadas legacy V1 si se necesita actualizar direcciones de envío existentes.
@@ -150,9 +150,7 @@ echo "TU_API_KEY_V2_DE_HOLDED" | npx wrangler secret put HOLDED_API_V2 --name ho
 ### 2. Desplegar el Worker
 
 ```bash
-cd worker
-npx wrangler deploy
-cd ..
+pnpm exec wrangler deploy --config worker/wrangler.toml
 ```
 
 El worker queda en `https://holded-proxy.electricaferrer.workers.dev`.
@@ -160,8 +158,8 @@ El worker queda en `https://holded-proxy.electricaferrer.workers.dev`.
 ### 3. Build y deploy del frontend
 
 ```bash
-npm run build
-npx wrangler pages deploy dist --project-name trello-link-holded-power-up
+pnpm run build
+pnpm exec wrangler pages deploy dist --project-name trello-link-holded-power-up
 ```
 
 El frontend queda en `https://trello-link-holded-power-up.pages.dev`.
