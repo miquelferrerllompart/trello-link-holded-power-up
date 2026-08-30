@@ -70,6 +70,7 @@ Esto permite usar la **búsqueda nativa de Trello** para encontrar tarjetas por 
 ## Requisitos previos
 
 - [Node.js](https://nodejs.org/) >= 18
+- pnpm 10 (incluido y activable mediante Corepack)
 - Cuenta de [Cloudflare](https://www.cloudflare.com/) (gratuita)
 - API key de [Holded](https://app.holded.com/api)
 - Acceso a un tablero de Trello para crear el Power-Up
@@ -79,6 +80,7 @@ Esto permite usar la **búsqueda nativa de Trello** para encontrar tarjetas por 
 ```bash
 git clone https://github.com/miquelferrerllompart/trello-link-holded-power-up.git
 cd trello-link-holded-power-up
+corepack enable pnpm
 pnpm install
 ```
 
