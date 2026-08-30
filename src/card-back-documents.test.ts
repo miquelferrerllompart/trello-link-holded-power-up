@@ -290,11 +290,12 @@ describe('card-back document view (internal API v2)', () => {
     expect(contentText(dom)).not.toContain('Completado');
   });
 
-  it('shows who created a sales order and when it was created', async () => {
+  it('shows the sales-order creator in the preview footer', async () => {
     const { dom } = loadCardBack({
       salesOrders: [salesOrder('so-creator', 'PV-26-008783', {
         createdAt: '2026-08-18T13:25:44.078Z',
         createdBy: 'Andrés Gamundí Campomar',
+        notes: 'Detalle del pedido',
       })],
       waybills: [],
       estimates: [],
@@ -304,12 +305,84 @@ describe('card-back document view (internal API v2)', () => {
     selectDocumentTab(dom, 'salesOrders');
     await waitForRender();
 
-    const creator = dom.window.document.querySelector('.document-creator');
-    expect(creator?.textContent).toContain('Creado por Andrés Gamundí Campomar');
-    expect(creator?.textContent).toContain('18/08/2026');
+    const creator = dom.window.document.querySelector('.document-preview-creator');
+    expect(creator?.textContent).toBe('Creado por Andrés Gamundí Campomar');
+    expect(dom.window.document.querySelector('.document-preview-footer')?.lastElementChild).toBe(creator);
   });
 
-  it('shows who completed a work report and when it was created', async () => {
+  it('shows the estimated purchase-order arrival and its creator', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-purchase-meta', 'PV-26-008784', {
+        purchaseOrders: [{
+          id: 'po-meta',
+          type: 'purchase-orders',
+          documentNumber: 'PC-26-001102',
+          internalStatus: 'awaiting_receipt',
+          issueDate: '2026-08-18',
+          dueDate: '2026-08-25',
+          createdAt: '2026-08-18T13:25:44.078Z',
+          createdBy: 'Joan Ferrer',
+          notes: 'Detalle de la compra',
+          supplier: { id: 'supplier-1', name: 'Rexel' },
+          projects: [],
+        }],
+      })],
+      waybills: [],
+      estimates: [],
+    });
+    await waitForRender();
+    expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    const purchaseOrder = dom.window.document.querySelector('.purchase-order-row');
+    expect(purchaseOrder?.nextElementSibling?.querySelector('.document-preview-creator')?.textContent)
+      .toBe('Creado por Joan Ferrer');
+    expect(purchaseOrder?.querySelector('.purchase-order-arrival')?.textContent)
+      .toBe('Llegada estimada: 25/08/2026');
+  });
+
+  it('colors the purchase-order arrival dot by due-date state', async () => {
+    const now = new Date();
+    const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-arrival-states', 'PV-26-008785', {
+        purchaseOrders: [
+          {
+            id: 'po-due', type: 'purchase-orders', documentNumber: 'PC-DUE', dueDate: '2999-01-01',
+            supplier: { id: 'supplier-1', name: 'Rexel' }, projects: [],
+          },
+          {
+            id: 'po-today', type: 'purchase-orders', documentNumber: 'PC-TODAY', dueDate: today,
+            supplier: { id: 'supplier-1', name: 'Rexel' }, projects: [],
+          },
+          {
+            id: 'po-overdue', type: 'purchase-orders', documentNumber: 'PC-OVERDUE', dueDate: '2000-01-01',
+            supplier: { id: 'supplier-1', name: 'Rexel' }, projects: [],
+          },
+        ],
+      })],
+      waybills: [],
+      estimates: [],
+    });
+    await waitForRender();
+    expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    const rows = Array.from(dom.window.document.querySelectorAll('.purchase-order-row'));
+    const rowFor = (number: string) => rows.find((row) => row.querySelector('.purchase-order-number')?.textContent === number);
+    expect(rowFor('PC-DUE')?.querySelector('.purchase-order-arrival-dot')?.className)
+      .toContain('purchase-order-arrival-dot--due');
+    expect(rowFor('PC-TODAY')?.querySelector('.purchase-order-arrival-dot')?.className)
+      .toContain('purchase-order-arrival-dot--today');
+    expect(rowFor('PC-OVERDUE')?.querySelector('.purchase-order-arrival-dot')?.className)
+      .toContain('purchase-order-arrival-dot--overdue');
+    expect(dom.window.getComputedStyle(rowFor('PC-TODAY')?.querySelector('.purchase-order-arrival-dot')).width)
+      .toBe('6px');
+  });
+
+  it('shows the work-report creator in the preview footer', async () => {
     const { dom } = loadCardBack({
       salesOrders: [],
       waybills: [{
@@ -321,6 +394,7 @@ describe('card-back document view (internal API v2)', () => {
         issueDate: '2026-08-18',
         createdAt: '2026-08-18T13:25:44.078Z',
         createdBy: 'Marta Ferrer',
+        notes: 'Detalle del parte',
         projects: [],
       }],
       estimates: [],
@@ -329,9 +403,51 @@ describe('card-back document view (internal API v2)', () => {
     expand(dom);
     await waitForRender();
 
-    const creator = dom.window.document.querySelector('.document-creator');
-    expect(creator?.textContent).toContain('Realizado por Marta Ferrer');
-    expect(creator?.textContent).toContain('18/08/2026');
+    const creator = dom.window.document.querySelector('.document-preview-creator');
+    expect(creator?.textContent).toBe('Realizado por Marta Ferrer');
+  });
+
+  it('shows the creator in the preview footer for every document tab', async () => {
+    const preview = { notes: 'Detalle', createdAt: '2026-08-18T13:25:44.078Z' };
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-all-creators', 'PV-ALL-CREATORS', {
+        ...preview, createdBy: 'Creador PV',
+        purchaseOrders: [{
+          id: 'po-all-creators', type: 'purchase-orders', documentNumber: 'PC-ALL-CREATORS',
+          supplier: { id: 'supplier-1', name: 'Rexel' }, projects: [],
+          ...preview, createdBy: 'Creador PC',
+        }],
+      })],
+      waybills: [{
+        id: 'wb-all-creators', type: 'waybills', documentNumber: 'ALB-ALL-CREATORS',
+        kind: 'labour', workflowStatus: 'prepared', issueDate: '2026-08-18',
+        ...preview, createdBy: 'Creador ALB', projects: [],
+      }],
+      invoices: [{
+        id: 'invoice-all-creators', type: 'invoices', documentNumber: 'F-ALL-CREATORS',
+        displayStatus: 'paid', issueDate: '2026-08-18', ...preview, createdBy: 'Creador FAC', projects: [],
+      }],
+      estimates: [{
+        id: 'estimate-all-creators', type: 'estimates', documentNumber: 'PRE-ALL-CREATORS',
+        displayStatus: 'sent', issueDate: '2026-08-18', ...preview, createdBy: 'Creador PRE', projects: [],
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+
+    const expectCreator = async (tab: string, text: string) => {
+      selectDocumentTab(dom, tab);
+      await waitForRender();
+      expect(Array.from(dom.window.document.querySelectorAll('.document-preview-creator'))
+        .map((creator) => creator.textContent)).toContain(text);
+    };
+
+    await expectCreator('waybills', 'Realizado por Creador ALB');
+    await expectCreator('salesOrders', 'Creado por Creador PV');
+    expect(Array.from(dom.window.document.querySelectorAll('.document-preview-creator'))
+      .map((creator) => creator.textContent)).toContain('Creado por Creador PC');
+    await expectCreator('invoices', 'Creado por Creador FAC');
+    await expectCreator('estimates', 'Creado por Creador PRE');
   });
 
   it('fetches fresh document data whenever a tab is activated again', async () => {
@@ -562,8 +678,8 @@ describe('card-back document view (internal API v2)', () => {
     expect(groups).toHaveLength(2);
     expect(Array.from(groups).map((group) => group.querySelector('.document-day-label')?.textContent))
       .toEqual([
-        'Miércoles, 15 de julio de 2026',
-        'Martes, 14 de julio de 2026',
+        'Miércoles, 15 jul',
+        'Martes, 14 jul',
       ]);
     expect(Array.from(groups).map((group) => group.querySelectorAll('.document-row').length))
       .toEqual([2, 1]);
@@ -591,7 +707,7 @@ describe('card-back document view (internal API v2)', () => {
 
     const groups = dom.window.document.querySelectorAll('.document-day-group');
     expect(Array.from(groups).map((group) => group.querySelector('.document-day-label')?.textContent))
-      .toEqual(['Miércoles, 15 de julio de 2026', 'Martes, 14 de julio de 2026']);
+      .toEqual(['Miércoles, 15 jul', 'Martes, 14 jul']);
     expect(Array.from(groups[1].querySelectorAll('.document-number')).map((item) => item.textContent))
       .toEqual(['ALB-SEGUNDO-14', 'ALB-PRIMERO-14']);
   });
@@ -778,7 +894,7 @@ describe('card-back document view (internal API v2)', () => {
     const relationGroups = dom.window.document.querySelectorAll('.relation-day-group');
     expect(relationGroups).toHaveLength(2);
     expect(Array.from(relationGroups).map((group) => group.querySelector('.relation-day-heading')?.textContent))
-      .toEqual(['Jueves, 16 de julio de 2026', 'Martes, 14 de julio de 2026']);
+      .toEqual(['Jueves, 16 jul', 'Martes, 14 jul']);
     expect(relationGroups[1]?.classList.contains('relation-day-group--same-parent-day')).toBe(false);
     expect(relationGroups[1]?.querySelector('.related-waybill-number')?.textContent).toBe('ALB-14');
   });
@@ -844,7 +960,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(css).toContain('.document-day-heading { color: #8c9bab; }');
   });
 
-  it('calls the previous calendar day Ayer while keeping its full date', async () => {
+  it('uses the relative Ayer label for the previous calendar day', async () => {
     const now = new Date();
     const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
     const issueDate = [
@@ -852,11 +968,6 @@ describe('card-back document view (internal API v2)', () => {
       String(yesterday.getMonth() + 1).padStart(2, '0'),
       String(yesterday.getDate()).padStart(2, '0'),
     ].join('-');
-    const expectedDate = yesterday.toLocaleDateString('es-ES', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
     const { dom } = loadCardBack({
       salesOrders: [],
       estimates: [],
@@ -874,21 +985,16 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     expect(dom.window.document.querySelector('.document-day-label')?.textContent)
-      .toBe(`Ayer, ${expectedDate}`);
+      .toBe('Ayer');
   });
 
-  it('calls the current calendar day Hoy while keeping its full date', async () => {
+  it('uses the relative Hoy label for the current calendar day', async () => {
     const today = new Date();
     const issueDate = [
       today.getFullYear(),
       String(today.getMonth() + 1).padStart(2, '0'),
       String(today.getDate()).padStart(2, '0'),
     ].join('-');
-    const expectedDate = today.toLocaleDateString('es-ES', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
     const { dom } = loadCardBack({
       salesOrders: [],
       estimates: [],
@@ -906,7 +1012,7 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
 
     expect(dom.window.document.querySelector('.document-day-label')?.textContent)
-      .toBe(`Hoy, ${expectedDate}`);
+      .toBe('Hoy');
   });
 
   it('shows every work-report kind as a subtitle beneath its number', async () => {
@@ -1066,7 +1172,8 @@ describe('card-back document view (internal API v2)', () => {
     expect(rowTime?.textContent).toBe('');
     expect(rowTime?.getAttribute('aria-hidden')).toBe('true');
     expect(previewDate?.textContent).toBe('10/07/2026');
-    expect(preview?.lastElementChild).toBe(previewDate);
+    expect(preview?.lastElementChild?.classList.contains('document-preview-footer')).toBe(true);
+    expect(preview?.lastElementChild?.firstElementChild).toBe(previewDate);
 
     toggle?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, detail: 1 }));
     expect(preview?.getAttribute('data-static-motion')).toBe('false');
@@ -1210,7 +1317,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.getComputedStyle(salesOrderRow?.querySelector('.document-number')).color)
       .toBe('rgb(68, 84, 111)');
     expect(dom.window.document.querySelector('.document-day-label')?.textContent)
-      .toBe('Martes, 14 de julio de 2026');
+      .toBe('Martes, 14 jul');
     expect(salesOrderRow?.querySelector('.document-time')?.textContent).toBe('08:45');
 
     const relatedWaybillRow = dom.window.document.querySelector('.related-waybill-row');
@@ -1229,6 +1336,8 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.getComputedStyle(purchaseOrderRow).minHeight).toBe('34px');
     expect(dom.window.getComputedStyle(purchaseOrderRow?.querySelector('.purchase-order-number')).color)
       .toBe('rgb(68, 84, 111)');
+    expect(dom.window.getComputedStyle(purchaseOrderRow?.querySelector('.document-pill')).justifySelf)
+      .toBe('end');
 
     dom.window.document.querySelector('[data-tab="waybills"]')?.click();
     await waitForRender();
@@ -1246,6 +1355,35 @@ describe('card-back document view (internal API v2)', () => {
     await waitForRender();
     expect(dom.window.document.querySelector('.document-row .document-kind-icon')?.getAttribute('src'))
       .toBe('/icons/document-kinds/estimate.svg');
+  });
+
+  it('keeps status pills at the right edge beside the hour on every document tab', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-status', 'PV-STATUS', { internalStatus: 'prepared' })],
+      waybills: [{
+        id: 'wb-status', type: 'waybills', documentNumber: 'ALB-STATUS', kind: 'labour',
+        workflowStatus: 'prepared', issueDate: '2026-07-15', projects: [],
+      }],
+      invoices: [{
+        id: 'invoice-status', type: 'invoices', documentNumber: 'F-STATUS',
+        displayStatus: 'paid', issueDate: '2026-07-15', projects: [],
+      }],
+      estimates: [{
+        id: 'estimate-status', type: 'estimates', documentNumber: 'PRE-STATUS',
+        displayStatus: 'sent', issueDate: '2026-07-15', projects: [],
+      }],
+    });
+    await waitForRender();
+    expand(dom);
+
+    for (const tab of ['waybills', 'salesOrders', 'invoices', 'estimates']) {
+      dom.window.document.querySelector(`[data-tab="${tab}"]`)?.click();
+      await waitForRender();
+      const metadata = dom.window.document.querySelector('.document-meta');
+      expect(dom.window.getComputedStyle(metadata).justifyContent).toBe('flex-start');
+      expect(metadata?.lastElementChild?.classList.contains('document-pill')).toBe(true);
+      expect(dom.window.getComputedStyle(metadata?.lastElementChild).marginLeft).toBe('auto');
+    }
   });
 
   it('uses a solid light-blue background for the sales-order icon', () => {
@@ -1275,7 +1413,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(text).toContain('1.234,56 €');
     expect(text).not.toContain('Completado');
     expect(Array.from(dom.window.document.querySelectorAll('.document-day-label')).map((label) => label.textContent))
-      .toEqual(['Jueves, 2 de julio de 2026', 'Miércoles, 1 de julio de 2026']);
+      .toEqual(['Jueves, 2 jul', 'Miércoles, 1 jul']);
     expect(Array.from(dom.window.document.querySelectorAll('.document-row .document-time')).map((time) => time.textContent))
       .toEqual(['', '12:05']);
   });
@@ -1343,7 +1481,7 @@ describe('card-back document view (internal API v2)', () => {
     expect(row?.textContent).toContain('1.210,00 €');
     expect(row?.textContent).toContain('Pendiente 1.000,00 €');
     expect(dom.window.document.querySelector('.document-day-label')?.textContent)
-      .toBe('Miércoles, 15 de julio de 2026');
+      .toBe('Miércoles, 15 jul');
     expect(row?.querySelector('.document-time')?.textContent).toBe('09:00');
 
     const invoiceCall = urls.find((url) => url.includes('type=invoices'));
@@ -1515,10 +1653,10 @@ describe('card-back document view (internal API v2)', () => {
     expect(identity?.children[1].textContent).toBe('Rexel');
     expect(identity?.nextElementSibling?.classList.contains('document-pill')).toBe(true);
     expect(identity?.nextElementSibling?.textContent).toBe('Pendiente recibir');
-    expect(dom.window.getComputedStyle(identity?.nextElementSibling).justifySelf).toBe('start');
+    expect(dom.window.getComputedStyle(identity?.nextElementSibling).justifySelf).toBe('end');
     expect(subRow.querySelector('.document-time')?.textContent).toBe('09:17');
     expect(dom.window.document.querySelector('.relation-day-label')?.textContent)
-      .toBe('Lunes, 13 de julio de 2026');
+      .toBe('Lunes, 13 jul');
     const text = contentText(dom);
     expect(text).toContain('PC-1');
     expect(text).toContain('Rexel');
@@ -1570,8 +1708,10 @@ describe('card-back document view (internal API v2)', () => {
     const rows = dom.window.document.querySelectorAll('.related-waybill-row');
     expect(rows).toHaveLength(2);
     const materialMain = rows[0].querySelector('.related-waybill-main');
+    expect(dom.window.getComputedStyle(materialMain).justifyContent).toBe('flex-start');
     expect(materialMain?.children[0].classList.contains('related-waybill-identity')).toBe(true);
     expect(materialMain?.children[1].classList.contains('document-pill')).toBe(true);
+    expect(dom.window.getComputedStyle(materialMain?.children[1]).marginLeft).toBe('auto');
     expect(materialMain?.children[1].textContent).toBe('Aprobado');
     const materialIdentity = materialMain?.children[0];
     expect(materialIdentity?.children[0].classList.contains('related-waybill-number')).toBe(true);
@@ -1581,14 +1721,16 @@ describe('card-back document view (internal API v2)', () => {
     expect(dom.window.getComputedStyle(materialIdentity?.children[1]).color).toBe('rgb(107, 119, 140)');
     expect(rows[0].textContent).toContain('Aprobado');
     expect(dom.window.document.querySelector('.relation-day-label')?.textContent)
-      .toBe('Jueves, 16 de julio de 2026');
+      .toBe('Jueves, 16 jul');
     expect(rows[0].querySelector('.document-time')?.textContent).toBe('14:25');
     expect(rows[0].querySelector('.document-link--ef')?.getAttribute('href'))
       .toBe('https://app.electricaferrer.es/albaran/wb-1');
     expect(rows[0].querySelector('.document-link--holded')?.getAttribute('href'))
       .toBe('https://app.holded.com/sales/waybills#open:waybill-wb-1');
     const refundMain = rows[1].querySelector('.related-waybill-main');
+    expect(dom.window.getComputedStyle(refundMain).justifyContent).toBe('flex-start');
     expect(refundMain?.children[1].classList.contains('document-pill')).toBe(true);
+    expect(dom.window.getComputedStyle(refundMain?.children[1]).marginLeft).toBe('auto');
     expect(refundMain?.children[1].textContent).toBe('Sin aprobar');
     const refundIdentity = refundMain?.children[0];
     expect(refundIdentity?.children[0].textContent).toContain('ALB-2');
