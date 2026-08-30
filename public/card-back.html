@@ -1675,8 +1675,8 @@
       '</span>';
     }
 
-    function getPurchaseOrderArrivalStatus(value) {
-      if (!value) return '';
+    function getPurchaseOrderArrivalStatus(value, internalStatus) {
+      if (!value || internalStatus === 'all_received' || internalStatus === 'cancelled') return '';
       var text = String(value);
       var isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (!isoDate) return '';
@@ -1690,7 +1690,7 @@
 
     function renderPurchaseOrderArrival(purchaseOrder) {
       var arrivalDate = formatCreationDateLabel(purchaseOrder.dueDate);
-      var arrivalStatus = getPurchaseOrderArrivalStatus(purchaseOrder.dueDate);
+      var arrivalStatus = getPurchaseOrderArrivalStatus(purchaseOrder.dueDate, purchaseOrder.internalStatus);
       if (!arrivalDate || !arrivalStatus) return '';
       return '<span class="document-creator purchase-order-arrival" title="Llegada estimada: ' +
         escapeHtml(arrivalDate) + '">' +

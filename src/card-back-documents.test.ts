@@ -384,6 +384,36 @@ describe('card-back document view (internal API v2)', () => {
       .toBe('6px');
   });
 
+  it('hides arrival indicators for completed and cancelled purchase orders', async () => {
+    const { dom } = loadCardBack({
+      salesOrders: [salesOrder('so-terminal-arrivals', 'PV-26-008786', {
+        purchaseOrders: [
+          {
+            id: 'po-received', type: 'purchase-orders', documentNumber: 'PC-RECEIVED',
+            internalStatus: 'all_received', dueDate: '2000-01-01',
+            supplier: { id: 'supplier-1', name: 'Rexel' }, projects: [],
+          },
+          {
+            id: 'po-cancelled', type: 'purchase-orders', documentNumber: 'PC-CANCELLED',
+            internalStatus: 'cancelled', dueDate: '2000-01-01',
+            supplier: { id: 'supplier-1', name: 'Rexel' }, projects: [],
+          },
+        ],
+      })],
+      waybills: [],
+      estimates: [],
+    });
+    await waitForRender();
+    expand(dom);
+    selectDocumentTab(dom, 'salesOrders');
+    await waitForRender();
+
+    const rows = Array.from(dom.window.document.querySelectorAll('.purchase-order-row'));
+    const rowFor = (number: string) => rows.find((row) => row.querySelector('.purchase-order-number')?.textContent === number);
+    expect(rowFor('PC-RECEIVED')?.querySelector('.purchase-order-arrival')).toBeNull();
+    expect(rowFor('PC-CANCELLED')?.querySelector('.purchase-order-arrival')).toBeNull();
+  });
+
   it('shows the work-report creator in the preview footer', async () => {
     const { dom } = loadCardBack({
       salesOrders: [],
