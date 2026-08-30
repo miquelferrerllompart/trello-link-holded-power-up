@@ -378,6 +378,8 @@ describe('card-back document view (internal API v2)', () => {
       .toContain('purchase-order-arrival-dot--today');
     expect(rowFor('PC-OVERDUE')?.querySelector('.purchase-order-arrival-dot')?.className)
       .toContain('purchase-order-arrival-dot--overdue');
+    expect(dom.window.getComputedStyle(rowFor('PC-DUE')?.querySelector('.purchase-order-arrival-dot')).backgroundColor)
+      .toBe('rgb(33, 110, 78)');
     expect(dom.window.getComputedStyle(rowFor('PC-TODAY')?.querySelector('.purchase-order-arrival-dot')).width)
       .toBe('6px');
   });
