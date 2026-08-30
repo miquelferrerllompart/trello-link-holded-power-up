@@ -352,6 +352,10 @@ describe('Worker /v2 internal-API document routes', () => {
       if (input.includes('/documents/waybill/wb-creator/events')) {
         return internalJson({
           items: [{
+            type: 'document.created',
+            occurredAt: '2026-08-17T09:15:00.000Z',
+            user: { name: 'Creador del documento' },
+          }, {
             type: 'work.registered',
             occurredAt: '2026-08-18T13:25:44.078Z',
             user: { name: 'Marta Ferrer' },
@@ -694,6 +698,54 @@ describe('Worker /v2 internal-API document routes', () => {
       },
     ]);
     expect(body.results[1].waybills).toEqual([]);
+  });
+
+  it('preserves creators for unclassified warehouse waybills in Pedidos', async () => {
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input.includes('/documents/waybill/wb-unclassified/events')) {
+        return internalJson({
+          items: [{
+            type: 'document.created',
+            occurredAt: '2026-08-18T13:25:44.078Z',
+            user: { name: 'Creador del almacén' },
+          }],
+          hasMore: false,
+          nextCursor: null,
+        });
+      }
+      if (input.includes('/purchase-orders')) {
+        return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+      }
+      if (input.includes('/waybills')) {
+        return internalJson({
+          items: [{
+            id: 'wb-unclassified',
+            docNumber: 'ALB-SIN-CLASIFICAR',
+            kind: 'unclassified',
+            issueDate: '2026-08-18',
+            workflowStatus: 'prepared',
+            sourceOrder: null,
+            projects: [],
+          }],
+          pagination: { page: 1, pageSize: 100, hasMore: false },
+        });
+      }
+      return internalJson({ items: [], pagination: { page: 1, pageSize: 100, hasMore: false } });
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const response = await worker.fetch(
+      new Request('https://proxy.test/v2/documents/search?contactId=contact-1&type=sales-orders&view=orders&page=1&scope=all'),
+      envV2,
+    );
+    const body = await response.json() as { results: Array<Record<string, unknown>> };
+
+    expect(response.status).toBe(200);
+    expect(body.results[0]).toMatchObject({
+      id: 'wb-unclassified',
+      createdAt: '2026-08-18T13:25:44.078Z',
+      createdBy: 'Creador del almacén',
+    });
   });
 
   it('combines linked warehouse movements and standalone returns in the Pedidos view', async () => {
