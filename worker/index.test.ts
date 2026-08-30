@@ -352,6 +352,10 @@ describe('Worker /v2 internal-API document routes', () => {
       if (input.includes('/documents/waybill/wb-creator/events')) {
         return internalJson({
           items: [{
+            type: 'document.created',
+            occurredAt: '2026-08-17T09:15:00.000Z',
+            user: { name: 'Creador del documento' },
+          }, {
             type: 'work.registered',
             occurredAt: '2026-08-18T13:25:44.078Z',
             user: { name: 'Marta Ferrer' },

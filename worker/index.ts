@@ -199,8 +199,11 @@ async function enrichDocumentCreationMetadata(
       }>(`/documents/${documentType}/${encodeURIComponent(String(item.id))}/events`, apiKey, {
         query: { limit: '50' },
       });
-      const createdEvent = (events.items ?? []).find((event) =>
-        event.type === 'document.created' || event.type === 'work.registered');
+      const eventType = documentType === 'waybill' &&
+        WAYBILL_CATEGORY_KINDS.work.includes(item.kind ?? 'unclassified')
+        ? 'work.registered'
+        : 'document.created';
+      const createdEvent = (events.items ?? []).find((event) => event.type === eventType);
       const createdAt = typeof createdEvent?.occurredAt === 'string' ? createdEvent.occurredAt : null;
       const createdBy = typeof createdEvent?.user?.name === 'string' ? createdEvent.user.name : null;
       if (!createdAt && !createdBy) return item;
